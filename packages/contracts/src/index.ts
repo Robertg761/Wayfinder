@@ -137,6 +137,16 @@ export interface AgentBriefStep {
   evidencePath: string | null;
 }
 
+export interface AgentModelUsage {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+  latencyMs: number;
+  estimatedCostUsd: number;
+}
+
 export type AgentIntent = "orientation" | "installation" | "file-find" | "contribution";
 export type AgentMode = "free" | "gpt-5.6";
 
@@ -147,6 +157,8 @@ interface AgentAnswerBase {
   intent: AgentIntent;
   mode: AgentMode;
   model?: string;
+  reasoningEffort?: "low" | "medium" | "high";
+  usage?: AgentModelUsage;
   summary: string;
   explanation?: string;
   evidencePaths?: string[];

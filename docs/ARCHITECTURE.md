@@ -62,8 +62,9 @@ A missing README is an allowed repository shape. GitHub rate limits, authenticat
 
 The OpenAI key exists only in the Worker environment. The model request uses the Responses API with:
 
-- model `gpt-5.6` by default
-- medium reasoning effort
+- model fixed to `gpt-5.6-luna`
+- low reasoning effort by default, with medium and high available for controlled evaluation
+- paid synthesis only for contribution Trail Plans
 - strict JSON Schema output
 - `store: false`
 - the deterministic answer as the only repository evidence
@@ -72,6 +73,8 @@ The OpenAI key exists only in the Worker environment. The model request uses the
 - a Cloudflare rate-limit allowance before any paid request
 
 The Worker parses the structured result and rejects the entire synthesis if any model citation or field-brief path is absent from the tool output. It also falls back when the key is missing, the API is unavailable, the response is refused or malformed, or local validation fails.
+
+Successful model answers include token counts, latency, reasoning tokens, and an estimated Luna API cost. Focused orientation, installation, and file-location questions never request a model allowance. Their deterministic tools already answer the job directly.
 
 Paid synthesis is fail-closed behind `MODEL_RATE_LIMITER`. The binding permits 10 attempts per connecting-IP key per minute in each Cloudflare location. A denied or unavailable allowance skips the model and returns the completed deterministic answer. The health route reports secret configuration, protection availability, and effective model enablement separately.
 

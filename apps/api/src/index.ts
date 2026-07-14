@@ -1,15 +1,16 @@
 import type { RepoMap, WayfinderErrorCode } from "@wayfinder/contracts";
 import { z } from "zod";
-import { createAgentAnswer } from "./agent";
+import { classifyAgentIntent, createAgentAnswer } from "./agent";
 import { createRepoMap, GitHubApiError } from "./github";
 import { createFileFind } from "./find";
 import { createInstallGuide } from "./install";
 import { generateTour } from "./tour";
+import { WAYFINDER_MODEL, type ReasoningEffort } from "./model";
 
 interface Env {
   GITHUB_TOKEN?: string;
   OPENAI_API_KEY?: string;
-  OPENAI_MODEL?: string;
+  OPENAI_REASONING_EFFORT?: string;
   MODEL_RATE_LIMITER?: RateLimit;
 }
 
@@ -90,7 +91,7 @@ function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 
 
 async function modelOptions(request: Request, env: Env): Promise<{
   apiKey: string;
-  model?: string;
+  reasoningEffort: ReasoningEffort;
 } | undefined> {
   const apiKey = env.OPENAI_API_KEY?.trim();
   if (!apiKey || !env.MODEL_RATE_LIMITER) return undefined;
@@ -98,7 +99,11 @@ async function modelOptions(request: Request, env: Env): Promise<{
   const clientKey = request.headers.get("cf-connecting-ip")?.trim() || "unknown-client";
   try {
     const { success } = await env.MODEL_RATE_LIMITER.limit({ key: "agent:" + clientKey });
-    return success ? { apiKey, model: env.OPENAI_MODEL } : undefined;
+    const configuredEffort = env.OPENAI_REASONING_EFFORT?.trim();
+    const reasoningEffort: ReasoningEffort = configuredEffort === "medium" || configuredEffort === "high"
+      ? configuredEffort
+      : "low";
+    return success ? { apiKey, reasoningEffort } : undefined;
   } catch {
     return undefined;
   }
@@ -118,7 +123,10 @@ export default {
         modelConfigured,
         modelProtected,
         modelEnabled: modelConfigured && modelProtected,
-        model: env.OPENAI_MODEL?.trim() || "gpt-5.6",
+        model: WAYFINDER_MODEL,
+        reasoningEffort: env.OPENAI_REASONING_EFFORT === "medium" || env.OPENAI_REASONING_EFFORT === "high"
+          ? env.OPENAI_REASONING_EFFORT
+          : "low",
       });
     }
 
@@ -161,7 +169,9 @@ export default {
     if (request.method === "POST" && url.pathname === "/agent") {
       try {
         const input = agentRequestSchema.parse(await request.json());
-        const allowedModel = await modelOptions(request, env);
+        const allowedModel = classifyAgentIntent(input.query) === "contribution"
+          ? await modelOptions(request, env)
+          : undefined;
         return json(await createAgentAnswer(
           input.map as RepoMap,
           input.query,

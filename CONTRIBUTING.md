@@ -18,7 +18,7 @@ Both tokens are optional for local public-repository development:
 ```text
 GITHUB_TOKEN=
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.6
+OPENAI_REASONING_EFFORT=low
 ```
 
 Start the Worker:

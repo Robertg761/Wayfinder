@@ -135,7 +135,7 @@ export async function createAgentAnswer(
       generatedAt,
       tour,
     };
-    return modelOptions ? synthesizeAgentAnswer(answer, modelOptions) : answer;
+    return answer;
   }
 
   if (intent === "installation") {
@@ -151,7 +151,7 @@ export async function createAgentAnswer(
       generatedAt,
       guide,
     };
-    return modelOptions ? synthesizeAgentAnswer(answer, modelOptions) : answer;
+    return answer;
   }
 
   const finder = await createFileFind(map, query, currentPath, token);
@@ -166,5 +166,5 @@ export async function createAgentAnswer(
     generatedAt,
     finder,
   };
-  return modelOptions ? synthesizeAgentAnswer(answer, modelOptions) : answer;
+  return answer;
 }

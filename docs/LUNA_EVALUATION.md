@@ -1,0 +1,65 @@
+# Luna Evaluation
+
+Wayfinder uses only `gpt-5.6-luna`. The production default is low reasoning. Medium is tested only when low misses a quality gate, and high is tested only when medium still misses it.
+
+## Spend boundary
+
+Paid synthesis runs only for contribution Trail Plans. Orientation, installation, and file-location questions remain deterministic. The existing Cloudflare binding permits 10 model attempts per connecting IP per minute in each Cloudflare location, and a denied or unavailable allowance returns the free answer.
+
+Each successful response records:
+
+- input, cached input, output, reasoning, and total tokens
+- end-to-end model latency
+- estimated API cost using Luna standard rates of $1 per million uncached input tokens, $0.10 per million cached input tokens, and $6 per million output tokens
+
+The dollar value is an estimate from response usage. The OpenAI credit balance remains the billing source of truth.
+
+## Evaluation cases
+
+The live harness uses three repository shapes and contribution goals:
+
+1. TypeScript: speech generation in `openai/openai-node`
+2. Python: request routing in `pallets/flask`
+3. Go: authentication in `cli/cli`
+
+For every case, the model must:
+
+- return `mode: gpt-5.6` and `model: gpt-5.6-luna`
+- produce at least one ordered field-brief action
+- cite only paths supplied by the deterministic Trail Plan
+- report nonzero usage
+- explain a credible route from setup to implementation and verification
+
+The automated checks enforce the first four requirements. Review the last requirement manually because it is the actual quality comparison.
+
+## Commands
+
+Run low reasoning first. This makes exactly three live model calls:
+
+```bash
+OPENAI_API_KEY="$(security find-generic-password -w -s wayfinder-openai 2>/dev/null)" pnpm eval:luna
+```
+
+If the key is already exported in the current terminal, use:
+
+```bash
+pnpm eval:luna
+```
+
+Test only the next reasoning level when low is not good enough:
+
+```bash
+LUNA_EFFORTS=medium pnpm eval:luna
+```
+
+Do not use `LUNA_EFFORTS=low,medium,high` during routine development. That makes nine calls at once and weakens the purpose of the staged gate.
+
+## Decision record
+
+| Case | Low quality | Low tokens | Low cost | Low latency | Escalation needed |
+| --- | --- | ---: | ---: | ---: | --- |
+| TypeScript speech | Pending | Pending | Pending | Pending | Pending |
+| Python routing | Pending | Pending | Pending | Pending | Pending |
+| Go authentication | Pending | Pending | Pending | Pending | Pending |
+
+Production stays at the lowest reasoning level that passes all three cases. Any later prompt or schema change requires rerunning low reasoning before raising the default.

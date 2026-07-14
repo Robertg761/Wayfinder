@@ -1,9 +1,12 @@
-import type { AgentAnswer } from "@wayfinder/contracts";
+import type { AgentAnswer, AgentModelUsage } from "@wayfinder/contracts";
 import { z } from "zod";
+
+export const WAYFINDER_MODEL = "gpt-5.6-luna";
+export type ReasoningEffort = "low" | "medium" | "high";
 
 export interface ModelOptions {
   apiKey: string;
-  model?: string;
+  reasoningEffort?: ReasoningEffort;
   fetcher?: typeof fetch;
 }
 
@@ -27,6 +30,17 @@ const responseSchema = z.object({
       text: z.string().optional(),
     }).passthrough()).optional(),
   }).passthrough()).optional(),
+  usage: z.object({
+    input_tokens: z.number().int().nonnegative(),
+    output_tokens: z.number().int().nonnegative(),
+    total_tokens: z.number().int().nonnegative(),
+    input_tokens_details: z.object({
+      cached_tokens: z.number().int().nonnegative().optional(),
+    }).passthrough().optional(),
+    output_tokens_details: z.object({
+      reasoning_tokens: z.number().int().nonnegative().optional(),
+    }).passthrough().optional(),
+  }).passthrough().optional(),
 }).passthrough();
 
 const outputJsonSchema = {
@@ -116,16 +130,41 @@ function cleanModelText(value: string): string {
   return value.replaceAll("\u2014", ", ").replaceAll(/\s{2,}/g, " ").trim();
 }
 
+function modelUsage(body: unknown, latencyMs: number): AgentModelUsage | undefined {
+  const parsed = responseSchema.safeParse(body);
+  const usage = parsed.success ? parsed.data.usage : undefined;
+  if (!usage) return undefined;
+
+  const cachedInputTokens = Math.min(usage.input_tokens_details?.cached_tokens ?? 0, usage.input_tokens);
+  const billableInputTokens = usage.input_tokens - cachedInputTokens;
+  const estimatedCostUsd = (
+    billableInputTokens * 1 +
+    cachedInputTokens * 0.1 +
+    usage.output_tokens * 6
+  ) / 1_000_000;
+
+  return {
+    inputTokens: usage.input_tokens,
+    cachedInputTokens,
+    outputTokens: usage.output_tokens,
+    reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+    totalTokens: usage.total_tokens,
+    latencyMs,
+    estimatedCostUsd,
+  };
+}
+
 export async function synthesizeAgentAnswer(
   answer: AgentAnswer,
   options: ModelOptions,
 ): Promise<AgentAnswer> {
   if (!options.apiKey.trim()) return answer;
 
-  const model = options.model?.trim() || "gpt-5.6";
+  const reasoningEffort = options.reasoningEffort ?? "low";
   const fetcher = options.fetcher ?? fetch;
 
   try {
+    const startedAt = Date.now();
     const response = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -133,10 +172,10 @@ export async function synthesizeAgentAnswer(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model,
+        model: WAYFINDER_MODEL,
         store: false,
         max_output_tokens: 800,
-        reasoning: { effort: "medium" },
+        reasoning: { effort: reasoningEffort },
         instructions: [
           "You are Wayfinder, an evidence-first guide for unfamiliar GitHub repositories.",
           "Answer the user's question using only the deterministic repository evidence supplied in the input.",
@@ -164,7 +203,8 @@ export async function synthesizeAgentAnswer(
     });
 
     if (!response.ok) return answer;
-    const text = outputText(await response.json());
+    const body: unknown = await response.json();
+    const text = outputText(body);
     if (!text) return answer;
 
     const synthesis = synthesisSchema.safeParse(JSON.parse(text));
@@ -177,7 +217,9 @@ export async function synthesizeAgentAnswer(
     return {
       ...answer,
       mode: "gpt-5.6",
-      model,
+      model: WAYFINDER_MODEL,
+      reasoningEffort,
+      usage: modelUsage(body, Date.now() - startedAt),
       summary: cleanModelText(synthesis.data.summary),
       explanation: cleanModelText(synthesis.data.explanation),
       evidencePaths: synthesis.data.evidencePaths,

@@ -10,6 +10,7 @@
     "build": "pnpm -r build",
     "dev:api": "pnpm --filter @wayfinder/api dev",
     "dev:extension": "pnpm --filter @wayfinder/extension dev",
+    "eval:luna": "pnpm --filter @wayfinder/api test:luna",
     "smoke:public": "node scripts/verify-public.mjs",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

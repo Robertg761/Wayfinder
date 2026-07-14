@@ -86,15 +86,19 @@ describe("public API request boundaries", () => {
       modelConfigured: true,
       modelProtected: false,
       modelEnabled: false,
+      model: "gpt-5.6-luna",
+      reasoningEffort: "low",
     });
     await expect(protectedModel.json()).resolves.toMatchObject({
       modelConfigured: true,
       modelProtected: true,
       modelEnabled: true,
+      model: "gpt-5.6-luna",
+      reasoningEffort: "low",
     });
   });
 
-  it("falls back to deterministic mode when the model allowance is exhausted", async () => {
+  it("does not spend a model allowance on a focused deterministic question", async () => {
     const limiter = rateLimiter(false);
     const response = await worker.fetch(new Request("https://wayfinder.test/agent", {
       method: "POST",
@@ -110,6 +114,37 @@ describe("public API request boundaries", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "orientation" });
+    expect(limiter.limit).not.toHaveBeenCalled();
+  });
+
+  it("checks the model allowance for contribution planning", async () => {
+    const limiter = rateLimiter(false);
+    const response = await worker.fetch(new Request("https://wayfinder.test/agent", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "cf-connecting-ip": "203.0.113.10",
+      },
+      body: JSON.stringify({ map: validMap(), query: "Help me make my first contribution", currentPath: null }),
+    }), {
+      OPENAI_API_KEY: "secret",
+      MODEL_RATE_LIMITER: limiter,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "contribution" });
     expect(limiter.limit).toHaveBeenCalledWith({ key: "agent:203.0.113.10" });
+  });
+
+  it("uses the configured Luna reasoning level only when it is supported", async () => {
+    const medium = await worker.fetch(new Request("https://wayfinder.test/health"), {
+      OPENAI_REASONING_EFFORT: "medium",
+    });
+    const unsupported = await worker.fetch(new Request("https://wayfinder.test/health"), {
+      OPENAI_REASONING_EFFORT: "max",
+    });
+
+    await expect(medium.json()).resolves.toMatchObject({ reasoningEffort: "medium" });
+    await expect(unsupported.json()).resolves.toMatchObject({ reasoningEffort: "low" });
   });
 });

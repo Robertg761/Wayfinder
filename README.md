@@ -1,6 +1,6 @@
 # Wayfinder
 
-Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and plan a first contribution with confidence. Deterministic repository tools provide a useful free baseline, while an optional GPT-5.6 synthesis layer turns verified evidence into a practical field brief.
+Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and plan a first contribution with confidence. Deterministic repository tools provide a useful free baseline, while GPT-5.6 Luna can turn a verified contribution trail into a practical field brief.
 
 ## Product documentation
 
@@ -25,7 +25,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Context-aware natural-language file finder exposed through `POST /find`
 - Deterministic agent router exposed through `POST /agent`
 - Multi-tool Trail Plan for contribution goals, setup, implementation, and verification
-- Optional GPT-5.6 synthesis through the OpenAI Responses API
+- Budget-controlled GPT-5.6 Luna synthesis for contribution Trail Plans through the OpenAI Responses API
 - Strict structured model output with evidence-grounded action plans, exact-path validation, and automatic free-mode fallback
 - Filtered GitHub tree, README, metadata, language, and star count
 - Package-manager, runtime, setup-command, and environment evidence detection
@@ -66,7 +66,7 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars
 
 Add a GitHub token to `apps/api/.dev.vars` for a higher API rate limit. Public repositories also work without one at GitHub's unauthenticated rate limit.
 
-Add an OpenAI API key to the same file to enable GPT-5.6 synthesis. The key stays in the Worker and is never exposed to the extension. Without it, the deterministic agent remains fully functional.
+Add an OpenAI API key to the same file to enable GPT-5.6 Luna synthesis for contribution Trail Plans. The key stays in the Worker and is never exposed to the extension. Without it, the deterministic agent remains fully functional. Luna is fixed in source, reasoning defaults to `low`, and `OPENAI_REASONING_EFFORT` can temporarily select `medium` or `high` for controlled evaluation.
 
 The Worker also requires its Cloudflare model rate-limit binding before it enables paid synthesis. The binding allows 10 model attempts per client per minute in each Cloudflare location. Exhausted or unavailable allowances fall back to the deterministic answer instead of failing the request. Wrangler simulates the configured binding during local development.
 
@@ -94,7 +94,7 @@ curl -X POST http://localhost:8787/map \
   -d '{"owner":"openai","repo":"openai-node"}'
 ```
 
-`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes a focused question through the tour, installation guide, or file finder. Contribution goals invoke all three capabilities to build a Trail Plan. When an OpenAI key is configured, GPT-5.6 receives the typed evidence and produces a structured synthesis plus an ordered field brief. Any unverified path, invalid response, API failure, or missing key returns the deterministic answer instead.
+`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes a focused question through the tour, installation guide, or file finder. Contribution goals invoke all three capabilities to build a Trail Plan. When an OpenAI key is configured, Luna receives that typed contribution evidence and produces a structured synthesis plus an ordered field brief. Focused questions stay deterministic and free. Any unverified path, invalid response, API failure, exhausted allowance, or missing key returns the deterministic answer instead.
 
 GitHub access errors use typed response codes so the extension can distinguish a public API rate limit from a private or missing repository. A GitHub token remains optional for public repositories and can be added to `apps/api/.dev.vars` for a higher rate limit.
 
@@ -106,7 +106,10 @@ The public Worker is deployed at [wayfinder-api.hopit-robert.workers.dev](https:
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm eval:luna
 ```
+
+The live Luna evaluation is opt-in and requires `OPENAI_API_KEY`. It runs three representative contribution cases at low reasoning by default. See [Luna evaluation](docs/LUNA_EVALUATION.md) before increasing the reasoning level.
 
 The extension build is written to `apps/extension/.output/chrome-mv3`. The Worker dry-run bundle is written to `apps/api/dist`.
 

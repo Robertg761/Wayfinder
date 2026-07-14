@@ -23,7 +23,7 @@ Updated July 14, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 68 automated tests pass
+- [x] All 71 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification
@@ -38,9 +38,11 @@ Updated July 14, 2026.
 - [x] Devpost story draft
 - [x] Public privacy statement and contributor guide
 
-## Needs credits
+## Needs live model verification
 
 - [ ] Add `OPENAI_API_KEY` as a Cloudflare Worker secret
+- [ ] Run the three-case low-reasoning Luna evaluation and record usage, latency, and quality
+- [ ] Try medium reasoning only for any case that fails the low-reasoning quality gate
 - [ ] Confirm `/health` reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`
 - [ ] Run one live GPT-5.6 question through the deployed `/agent` endpoint
 - [ ] Confirm the response has `mode: gpt-5.6`, the expected model name, and only valid evidence paths
@@ -52,7 +54,7 @@ Add the secret with:
 pnpm --filter @wayfinder/api exec wrangler secret put OPENAI_API_KEY
 ```
 
-No source change or redeploy should be required after the secret is added.
+No source change or redeploy should be required after the secret is added. Luna is fixed in source. See `docs/LUNA_EVALUATION.md` for the budget gate and commands.
 
 ## Needs manual Chrome verification
 

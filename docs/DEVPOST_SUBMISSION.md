@@ -55,7 +55,7 @@ A TypeScript Cloudflare Worker provides explicit repository tools:
 
 The mapper reads GitHub metadata, the current commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. The install tool extracts documented commands with line references and uses manifests only for clearly labeled inference.
 
-GPT-5.6 is connected through the OpenAI Responses API. The model receives the user's question and the completed typed evidence, uses medium reasoning, and must return strict structured output containing a direct answer, explanation, citations, and up to four ordered actions. Responses are not stored. Before the answer reaches the extension, the Worker verifies that every model evidence path and action coordinate occurs in the deterministic result.
+GPT-5.6 Luna is connected through the OpenAI Responses API for contribution Trail Plans. The model receives the user's question and the completed typed evidence, uses the lowest reasoning level that passes our evaluation, and must return strict structured output containing a direct answer, explanation, citations, and up to four ordered actions. Responses are not stored. Before the answer reaches the extension, the Worker verifies that every model evidence path and action coordinate occurs in the deterministic result. Focused questions stay on the deterministic route, and successful model calls report token usage, latency, and estimated cost.
 
 ## Challenges we ran into
 
@@ -73,7 +73,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 68 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, feature-aware test pairing, file ranking, and model fallback.
+- The test suite covers 71 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, feature-aware test pairing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -117,6 +117,6 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 - Current Worker version: `ace31ff6-e34a-4469-98f9-d6f80fc358e0`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `bd0811b3cb73ca4fef9e1461f3259b268620acbe5dae7c080e2c30e733856b13`
-- Automated checks: 68 tests, typecheck, extension production build, Worker dry run
+- Automated checks: 71 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: pending

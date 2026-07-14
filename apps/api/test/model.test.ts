@@ -29,17 +29,24 @@ const freeAnswer: AgentAnswer = {
   },
 };
 
-function modelResponse(value: unknown): Response {
+function modelResponse(value: unknown, usage = {
+  input_tokens: 3_000,
+  output_tokens: 500,
+  total_tokens: 3_500,
+  input_tokens_details: { cached_tokens: 1_000 },
+  output_tokens_details: { reasoning_tokens: 120 },
+}): Response {
   return Response.json({
     output: [{
       type: "message",
       content: [{ type: "output_text", text: JSON.stringify(value) }],
     }],
+    usage,
   });
 }
 
 describe("synthesizeAgentAnswer", () => {
-  it("uses the Responses API and returns a grounded GPT-5.6 synthesis", async () => {
+  it("uses Luna at low reasoning and returns a grounded GPT-5.6 synthesis", async () => {
     const fetcher = vi.fn(async () => modelResponse({
       summary: "Authentication is handled in src/auth/session.ts.",
       explanation: "Start with the exported session logic, then follow its callers.",
@@ -51,8 +58,17 @@ describe("synthesizeAgentAnswer", () => {
 
     expect(answer).toMatchObject({
       mode: "gpt-5.6",
-      model: "gpt-5.6",
+      model: "gpt-5.6-luna",
+      reasoningEffort: "low",
       evidencePaths: ["src/auth/session.ts"],
+      usage: {
+        inputTokens: 3_000,
+        cachedInputTokens: 1_000,
+        outputTokens: 500,
+        reasoningTokens: 120,
+        totalTokens: 3_500,
+        estimatedCostUsd: 0.0051,
+      },
     });
     expect(fetcher).toHaveBeenCalledOnce();
 
@@ -61,11 +77,30 @@ describe("synthesizeAgentAnswer", () => {
     expect(url).toBe("https://api.openai.com/v1/responses");
     expect(init?.headers).toMatchObject({ Authorization: "Bearer test-key" });
     expect(body).toMatchObject({
-      model: "gpt-5.6",
+      model: "gpt-5.6-luna",
       store: false,
-      reasoning: { effort: "medium" },
+      reasoning: { effort: "low" },
       text: { format: { type: "json_schema", strict: true } },
     });
+  });
+
+  it("allows an explicit higher reasoning level without changing the Luna model", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Authentication is handled in src/auth/session.ts.",
+      explanation: "Start with the exported session logic.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    const answer = await synthesizeAgentAnswer(freeAnswer, {
+      apiKey: "test-key",
+      reasoningEffort: "medium",
+      fetcher,
+    });
+    const body = JSON.parse(String(vi.mocked(fetcher).mock.calls[0][1]?.body));
+
+    expect(answer).toMatchObject({ model: "gpt-5.6-luna", reasoningEffort: "medium" });
+    expect(body).toMatchObject({ model: "gpt-5.6-luna", reasoning: { effort: "medium" } });
   });
 
   it("rejects a model path that was not supplied by a deterministic tool", async () => {
