@@ -42,9 +42,7 @@ jobs:
       - name: Package Chrome extension
         run: pnpm --filter @wayfinder/extension zip
 
-      - name: Upload Chrome extension
-        uses: actions/upload-artifact@v7
-        with:
-          name: wayfinder-chrome
-          path: apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
-          if-no-files-found: error
+      - name: Inspect Chrome archive
+        run: |
+          unzip -t apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
+          sha256sum apps/extension/.output/wayfinderextension-0.1.0-chrome.zip

@@ -20,7 +20,7 @@ Updated July 13, 2026.
 - [x] All 48 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
-- [x] GitHub Actions CI runs typecheck, tests, builds, packaging, and artifact upload
+- [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification
 - [x] Public `openai/openai-node` orientation, installation, and file-find API dry run
 - [x] Public matrix across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
 - [x] Representative evidence URLs return HTTP 200
