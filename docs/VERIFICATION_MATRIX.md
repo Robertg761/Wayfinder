@@ -1,10 +1,10 @@
 # Public Verification Matrix
 
-Updated July 13, 2026.
+Updated July 14, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Worker version: `caa4fe63-2c93-46a0-85f7-f35c328d6613`
+Worker version: `e3a41878-3674-46de-8a5a-7191e7665fee`
 
 The matrix runs through the public Worker without an OpenAI key or GitHub token. Each case maps the current default-branch commit, requests orientation, requests installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
 
@@ -16,9 +16,11 @@ The matrix runs through the public Worker without an OpenAI key or GitHub token.
 | Python framework | `pallets/flask@36e4a824f340fdee7ed50937ba8e7f6bc7d17f81` | 6 stops | 1 step | Where is request routing implemented? | `src/flask/sansio/app.py` | Pass, strong |
 | Rust CLI | `BurntSushi/ripgrep@d5b85d44057ff729a89be9c6549958c45d95aa99` | 6 stops | 12 steps | Which file defines the command line executable? | `crates/core/main.rs` | Pass, strong |
 | Go CLI | `cli/cli@c14cbaa24a75272958161751240fd538a68e6c04` | 6 stops | 2 steps | Where is authentication handled? | `pkg/cmd/auth/login/login.go` | Pass, strong |
-| Truncated monorepo | `vercel/next.js@1ecd8f1b63a29ccda8c4febb51e1dfa148a9c1dc` | 6 stops | 10 steps | Where is routing implemented? | `packages/next/src/shared/lib/router/routes/app.ts` | Pass, likely |
+| Truncated monorepo | `vercel/next.js@303f7ffd4a0db19948a71eba73cd85f366625a65` | 6 stops | 10 steps | Where is routing implemented? | `packages/next/src/shared/lib/router/routes/app.ts` | Pass, likely |
 
 Flask and GitHub CLI correctly warn that their inspected setup instructions are structural inferences rather than explicit contributor commands. The warning is part of the expected result.
+
+The full matrix passed again after deploying unauthenticated GitHub subrequest caching.
 
 ## Defects found and fixed
 
