@@ -33,7 +33,7 @@ When the Worker has an OpenAI API key configured, it sends the user question and
 - Requests set `store: false`.
 - The model receives selected public repository evidence, not a full repository clone.
 - Every returned evidence path is validated against deterministic tool output.
-- A missing key, unavailable API, or invalid response falls back to local deterministic prose.
+- A missing key, unavailable API, or invalid response falls back to the Worker's deterministic answer.
 
 The current public Worker reports whether model processing is configured through `GET /health`.
 

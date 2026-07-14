@@ -19,6 +19,7 @@ import {
   setCached,
   type CacheStorage,
 } from '@/lib/cache';
+import { copyText } from '@/lib/copy-text';
 import { parseGitHubUrl } from '@/lib/github-url';
 
 type LoadState =
@@ -123,11 +124,38 @@ async function openStop(map: RepoMap, stop: TourStop): Promise<void> {
 
 function EvidenceLink({ map, evidence }: { map: RepoMap; evidence: InstallEvidence }) {
   return (
-    <button type="button" className="evidence-link" onClick={() => void openFile(map, evidence.path, evidence.lines)}>
+    <button
+      type="button"
+      className="evidence-link"
+      title={`Open ${evidence.path}`}
+      onClick={() => void openFile(map, evidence.path, evidence.lines)}
+    >
       <span>{evidence.path}</span>
       {evidence.lines && <small>L{evidence.lines[0]}</small>}
       <i aria-hidden="true">↗</i>
     </button>
+  );
+}
+
+function CopyableCommand({ command }: { command: string }) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  const handleCopy = async () => {
+    const copied = await copyText(command);
+    setStatus(copied ? 'copied' : 'failed');
+    window.setTimeout(() => setStatus('idle'), 1_800);
+  };
+
+  return (
+    <div className="copyable-command">
+      <code>{command}</code>
+      <button type="button" onClick={() => void handleCopy()} aria-label={`Copy command: ${command}`}>
+        {status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : 'Copy'}
+      </button>
+      <span className="visually-hidden" aria-live="polite">
+        {status === 'copied' ? 'Command copied to clipboard.' : status === 'failed' ? 'Command could not be copied.' : ''}
+      </span>
+    </div>
   );
 }
 
@@ -192,6 +220,9 @@ function AgentAnswerView({
               </li>
             ))}
           </ol>
+          {answer.tour.stops.length === 0 && (
+            <p className="answer-empty">No readable source landmarks were found in this repository.</p>
+          )}
         </div>
       )}
 
@@ -219,21 +250,25 @@ function AgentAnswerView({
             </section>
           )}
 
-          <ol className="install-steps">
-            {answer.guide.steps.map((step) => (
-              <li key={`${step.order}-${step.command}`}>
-                <span className="step-number">{String(step.order).padStart(2, '0')}</span>
-                <div className="step-body">
-                  <div className="step-title">
-                    <strong>{step.title}</strong>
-                    <span className={`confidence ${step.confidence}`}>{step.confidence}</span>
+          {answer.guide.steps.length > 0 ? (
+            <ol className="install-steps">
+              {answer.guide.steps.map((step) => (
+                <li key={`${step.order}-${step.command}`}>
+                  <span className="step-number">{String(step.order).padStart(2, '0')}</span>
+                  <div className="step-body">
+                    <div className="step-title">
+                      <strong>{step.title}</strong>
+                      <span className={`confidence ${step.confidence}`}>{step.confidence}</span>
+                    </div>
+                    <CopyableCommand command={step.command} />
+                    <EvidenceLink map={map} evidence={step.evidence} />
                   </div>
-                  <code>{step.command}</code>
-                  <EvidenceLink map={map} evidence={step.evidence} />
-                </div>
-              </li>
-            ))}
-          </ol>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="answer-empty">No installation command was found. Check the evidence and field notes before choosing a setup path.</p>
+          )}
 
           {answer.guide.warnings.length > 0 && (
             <div className="guide-warnings">
@@ -246,27 +281,31 @@ function AgentAnswerView({
 
       {answer.intent === 'file-find' && (
         <div className="coordinate-answer">
-          <ol>
-            {answer.finder.results.map((result, index) => (
-              <li key={result.path}>
-                <div className="result-rank">{String(index + 1).padStart(2, '0')}</div>
-                <div className="result-body">
-                  <div className="result-heading">
-                    <strong>{result.path}</strong>
-                    <span className={`match-confidence ${result.confidence}`}>{result.confidence}</span>
+          {answer.finder.results.length > 0 ? (
+            <ol>
+              {answer.finder.results.map((result, index) => (
+                <li key={result.path}>
+                  <div className="result-rank">{String(index + 1).padStart(2, '0')}</div>
+                  <div className="result-body">
+                    <div className="result-heading">
+                      <strong title={result.path}>{result.path}</strong>
+                      <span className={`match-confidence ${result.confidence}`}>{result.confidence}</span>
+                    </div>
+                    <p>{result.reason}</p>
+                    {result.snippet && <code>{result.snippet}</code>}
+                    <div className="result-signals">
+                      {result.signals.slice(0, 4).map((signal) => <span key={signal}>{signal}</span>)}
+                    </div>
+                    <button type="button" className="result-open" onClick={() => void openFile(map, result.path, result.lines)}>
+                      Open coordinate <i aria-hidden="true">↗</i>
+                    </button>
                   </div>
-                  <p>{result.reason}</p>
-                  {result.snippet && <code>{result.snippet}</code>}
-                  <div className="result-signals">
-                    {result.signals.slice(0, 4).map((signal) => <span key={signal}>{signal}</span>)}
-                  </div>
-                  <button type="button" className="result-open" onClick={() => void openFile(map, result.path, result.lines)}>
-                    Open coordinate <i aria-hidden="true">↗</i>
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ol>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="answer-empty">No credible coordinate was found. Try a filename, symbol, or more specific feature description.</p>
+          )}
           {answer.finder.warnings.length > 0 && (
             <div className="finder-warnings">
               {answer.finder.warnings.map((warning) => <p key={warning}>{warning}</p>)}
@@ -275,11 +314,13 @@ function AgentAnswerView({
         </div>
       )}
 
-      <div className="answer-followups" aria-label="Suggested follow-up questions">
-        {answer.suggestions.map((suggestion) => (
-          <button key={suggestion} type="button" onClick={() => onAsk(suggestion)}>{suggestion}</button>
-        ))}
-      </div>
+      {answer.suggestions.length > 0 && (
+        <div className="answer-followups" aria-label="Suggested follow-up questions">
+          {answer.suggestions.map((suggestion) => (
+            <button key={suggestion} type="button" onClick={() => onAsk(suggestion)}>{suggestion}</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -517,7 +558,7 @@ function App() {
           <section className="location-strip" aria-label="Current GitHub location">
             <div>
               <p className="eyebrow">Current coordinates</p>
-              <strong>{location.owner} / {location.repo}</strong>
+              <strong title={`${location.owner}/${location.repo}`}>{location.owner} / {location.repo}</strong>
             </div>
             <div className="coordinate-tools">
               <span>{locationLabel(location)}</span>
@@ -654,12 +695,19 @@ function App() {
                       placeholder="How do I run it? Where is authentication? What should I read first?"
                       rows={2}
                       minLength={2}
+                      maxLength={240}
+                      aria-describedby="wayfinder-query-meta"
                     />
                     <button type="submit" disabled={agentQuery.trim().length < 2}>
                       Dispatch <i aria-hidden="true">↗</i>
                     </button>
                   </div>
-                  {location.path && <small className="context-hint">Current context: {location.path}</small>}
+                  <div className="query-meta" id="wayfinder-query-meta">
+                    <small className="context-hint" title={location.path ?? undefined}>
+                      {location.path ? `Current context: ${location.path}` : 'Searching the full repository'}
+                    </small>
+                    <small>{agentQuery.length}/240</small>
+                  </div>
                   <div className="agent-prompts" aria-label="Suggested repository questions">
                     {['What does this project do?', 'How do I install and run it?', 'Where are the tests?'].map((prompt) => (
                       <button key={prompt} type="button" onClick={() => void askAgent(loadState.map, prompt)}>{prompt}</button>

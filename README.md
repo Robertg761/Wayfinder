@@ -30,6 +30,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Package-manager, runtime, setup-command, and environment evidence detection
 - Clickable tour stops that open real files and line ranges on GitHub
 - Installation checklist with documented and inferred confidence labels
+- One-click copying for sourced installation commands
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
 - Unified question composer with a persistent evidence timeline and suggested follow-ups
 - Commit-aware repository and answer caching in `chrome.storage.local`
@@ -37,7 +38,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Manual repository refresh and active GitHub context sync controls
 - Shared TypeScript contracts across the extension and Worker
 - Editorial field-guide interface with loading, empty, ready, and error states
-- Unit tests for URL parsing, repository filtering, installation guidance, and file finding
+- Unit tests for URL parsing, caching, clipboard behavior, repository filtering, installation guidance, and file finding
 
 The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, or file discovery, then renders the appropriate typed tool result in one timeline. Recent maps and answers remain available during temporary GitHub or network failures, with visible cache timestamps and manual refresh controls.
 
