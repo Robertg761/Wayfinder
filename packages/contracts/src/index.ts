@@ -119,13 +119,18 @@ export interface FileFindResponse {
 }
 
 export type AgentIntent = "orientation" | "installation" | "file-find";
+export type AgentMode = "free" | "gpt-5.6";
 
 interface AgentAnswerBase {
   repo: string;
   sha: string;
   query: string;
   intent: AgentIntent;
+  mode: AgentMode;
+  model?: string;
   summary: string;
+  explanation?: string;
+  evidencePaths?: string[];
   suggestions: string[];
   generatedAt: string;
 }

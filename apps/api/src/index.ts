@@ -8,6 +8,8 @@ import { generateTour } from "./tour";
 
 interface Env {
   GITHUB_TOKEN?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_MODEL?: string;
 }
 
 const mapRequestSchema = z.object({
@@ -75,7 +77,12 @@ export default {
 
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "wayfinder-api" });
+      return json({
+        ok: true,
+        service: "wayfinder-api",
+        modelConfigured: Boolean(env.OPENAI_API_KEY),
+        model: env.OPENAI_MODEL?.trim() || "gpt-5.6",
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/map") {
@@ -117,7 +124,13 @@ export default {
     if (request.method === "POST" && url.pathname === "/agent") {
       try {
         const input = agentRequestSchema.parse(await request.json());
-        return json(await createAgentAnswer(input.map as RepoMap, input.query, input.currentPath ?? null, env.GITHUB_TOKEN));
+        return json(await createAgentAnswer(
+          input.map as RepoMap,
+          input.query,
+          input.currentPath ?? null,
+          env.GITHUB_TOKEN,
+          env.OPENAI_API_KEY ? { apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL } : undefined,
+        ));
       } catch (error) {
         return requestFailure(error, "agent_answer_failed");
       }

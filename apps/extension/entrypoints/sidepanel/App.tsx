@@ -157,7 +157,21 @@ function AgentAnswerView({
         </div>
       </header>
       {notice && <p className="cache-notice">{notice}</p>}
+      <div className={`answer-mode ${answer.mode === 'gpt-5.6' ? 'model' : 'free'}`}>
+        <span>{answer.mode === 'gpt-5.6' ? 'GPT-5.6 synthesis' : 'Deterministic route'}</span>
+        <small>{answer.mode === 'gpt-5.6' ? 'Grounded in verified repository evidence' : 'Works without model credits'}</small>
+      </div>
       <p className="answer-summary">{answer.summary}</p>
+      {answer.explanation && <p className="answer-explanation">{answer.explanation}</p>}
+
+      {answer.evidencePaths && answer.evidencePaths.length > 0 && (
+        <div className="model-evidence" aria-label="Evidence used by the model">
+          <small>Verified evidence</small>
+          {answer.evidencePaths.map((path) => (
+            <button key={path} type="button" onClick={() => void openFile(map, path)}>{path}<i aria-hidden="true">↗</i></button>
+          ))}
+        </div>
+      )}
 
       {answer.intent === 'orientation' && (
         <div className="orientation-answer">
@@ -702,8 +716,8 @@ function App() {
               )}
 
               <footer className="panel-footer">
-                <span>Free route</span>
-                <p>Generated locally from repository structure. No model credits used.</p>
+                <span>Evidence first</span>
+                <p>Deterministic repository tools with optional GPT-5.6 synthesis.</p>
               </footer>
             </>
           )}

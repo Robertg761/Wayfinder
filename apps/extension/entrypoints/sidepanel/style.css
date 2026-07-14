@@ -535,6 +535,90 @@ textarea {
   line-height: 1.45;
 }
 
+.answer-mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(90, 105, 72, 0.08);
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.answer-mode span,
+.answer-mode small {
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.answer-mode span {
+  color: var(--moss);
+  font-weight: 700;
+}
+
+.answer-mode small {
+  color: var(--lichen);
+  text-align: right;
+}
+
+.answer-mode.model {
+  background: rgba(192, 141, 49, 0.14);
+}
+
+.answer-mode.model span {
+  color: var(--rust);
+}
+
+.answer-explanation {
+  margin: 0;
+  padding: 0 14px 14px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--lichen);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.model-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.model-evidence > small {
+  width: 100%;
+  color: var(--lichen);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.model-evidence button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 1px solid var(--moss);
+  background: transparent;
+  color: var(--moss);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 7px;
+  cursor: pointer;
+}
+
+.model-evidence button:hover {
+  background: var(--moss);
+  color: var(--paper);
+}
+
+.model-evidence i {
+  font-style: normal;
+}
+
 .answer-stack {
   display: flex;
   flex-wrap: wrap;

@@ -2,6 +2,7 @@ import type { AgentAnswer, AgentIntent, RepoMap } from "@wayfinder/contracts";
 import { createFileFind } from "./find";
 import { createInstallGuide } from "./install";
 import { generateTour } from "./tour";
+import { synthesizeAgentAnswer, type ModelOptions } from "./model";
 
 const fileQuestion = /\b(where|which|locate|find|file|directory|folder|implementation|implemented|defined|definition|source)\b/i;
 const testLocationQuestion = /\bwhere\b.*\b(tests?|specs?|fixtures?)\b|\b(tests?|specs?|fixtures?)\b.*\b(where|located|live)\b/i;
@@ -36,47 +37,54 @@ export async function createAgentAnswer(
   query: string,
   currentPath: string | null,
   token?: string,
+  modelOptions?: ModelOptions,
 ): Promise<AgentAnswer> {
   const intent = classifyAgentIntent(query);
   const generatedAt = new Date().toISOString();
 
   if (intent === "orientation") {
     const tour = generateTour(map);
-    return {
+    const answer: AgentAnswer = {
       repo: map.repo,
       sha: map.sha,
       query,
       intent,
+      mode: "free",
       summary: tour.summary,
       suggestions: ["How do I install and run this?", "Where is the main entry point?"],
       generatedAt,
       tour,
     };
+    return modelOptions ? synthesizeAgentAnswer(answer, modelOptions) : answer;
   }
 
   if (intent === "installation") {
     const guide = await createInstallGuide(map, token);
-    return {
+    const answer: AgentAnswer = {
       repo: map.repo,
       sha: map.sha,
       query,
       intent,
+      mode: "free",
       summary: installationSummary(guide.steps.length, guide.warnings.length),
       suggestions: ["Where is the configuration?", "Where are the tests?"],
       generatedAt,
       guide,
     };
+    return modelOptions ? synthesizeAgentAnswer(answer, modelOptions) : answer;
   }
 
   const finder = await createFileFind(map, query, currentPath, token);
-  return {
+  const answer: AgentAnswer = {
     repo: map.repo,
     sha: map.sha,
     query,
     intent,
+    mode: "free",
     summary: finderSummary(finder.results.length, finder.results[0]?.path),
     suggestions: ["What does this repository do?", "How do I install and run this?"],
     generatedAt,
     finder,
   };
+  return modelOptions ? synthesizeAgentAnswer(answer, modelOptions) : answer;
 }
