@@ -29,21 +29,25 @@ Say: "These are not generated file names. Each landmark is mapped from the curre
 
 ### 0:45 to 1:55, the Trail Plan moment
 
-Ask: `I want to add pagination support. Plan my first contribution.`
+Ask: `I want to change speech generation. Plan my first contribution.`
 
 Show:
 
 - the repository landmark in Survey
 - sourced setup commands in Prepare
-- `src/core/pagination.ts` in Trace
-- the strongest related test coordinate in Prove
+- `src/resources/audio/speech.ts` in Trace
+- `tests/api-resources/audio/speech.test.ts` in Prove
 - the ordered GPT-5.6 field brief when model mode is available
 
 Say: "A new contributor does not need another repository summary. They need a route from intention to a safe first edit. Wayfinder orchestrates its repository tools, then GPT-5.6 turns the evidence into an ordered field brief: establish a baseline, open the real implementation, and follow the verification path."
 
-Open the implementation coordinate.
+Open the implementation and verification coordinates.
 
-Say: "Every command and coordinate remains inspectable. In this repository, Wayfinder detects that the obvious pagination file is a deprecated forwarding wrapper and leads me to the core implementation instead."
+Say: "Every command and coordinate remains inspectable. I can move from the contribution goal to the source and its proof without leaving GitHub or guessing a path."
+
+Ask: `Where is pagination implemented?` Open `src/core/pagination.ts`.
+
+Say: "The finder also detects that the obvious pagination file is a deprecated forwarding wrapper and leads me to the core implementation instead."
 
 ### 1:55 to 2:35, trust boundary
 
@@ -76,5 +80,5 @@ Capture at least these four frames at a consistent panel width:
 
 1. Repository orientation and reading route
 2. Trail Plan showing Survey, Prepare, Trace, and Prove
-3. `src/core/pagination.ts` as the implementation coordinate
+3. Speech implementation and test coordinates, plus `src/core/pagination.ts` from the follow-up
 4. GPT-5.6 field brief and verified evidence, only after the live model check passes

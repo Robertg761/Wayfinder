@@ -4,7 +4,7 @@ Updated July 14, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Worker version: `b413ee5b-e983-43e1-af42-e00d56604f49`
+Worker version: `ace31ff6-e34a-4469-98f9-d6f80fc358e0`
 
 The matrix runs through the public Worker without an OpenAI key or GitHub token. Each case maps the current default-branch commit, requests orientation, requests installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
 
@@ -22,6 +22,8 @@ Flask and GitHub CLI correctly warn that their inspected setup instructions are 
 
 The full matrix passed again after deploying unauthenticated GitHub subrequest caching.
 
+Trail Plan was also exercised through the public Worker on `openai/openai-node`. The goal `I want to change speech generation. Plan my first contribution.` returned `src/resources/audio/speech.ts` for implementation and `tests/api-resources/audio/speech.test.ts` for verification. The post-propagation check used Worker version `ace31ff6-e34a-4469-98f9-d6f80fc358e0` and returned HTTP 200 in deterministic mode.
+
 The public boundary also rejects malformed JSON and normalized-path violations with HTTP 400. Health reports model configuration, protection, and effective enablement separately.
 
 ## Defects found and fixed
@@ -34,6 +36,7 @@ The matrix caught concrete errors that smaller fixtures did not expose:
 4. Go `_test.go` files were not recognized as tests.
 5. A Rust CLI helper outranked the literal `main.rs` executable entry.
 6. Next.js eval, example, and benchmark code outranked framework router source.
+7. Generic files named `test.ts` outranked tests that matched the actual contribution feature.
 
 Each fix now has regression coverage in `apps/api/test/find.test.ts`.
 

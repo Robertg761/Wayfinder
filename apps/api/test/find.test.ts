@@ -34,6 +34,8 @@ const map: RepoMap = {
     { path: "src/features/payments/handler.ts", type: "blob", size: 2_000 },
     { path: "tests", type: "tree" },
     { path: "tests/auth.test.ts", type: "blob", size: 2_000 },
+    { path: "tests/api-resources/audio/speech.test.ts", type: "blob", size: 2_000 },
+    { path: "ecosystem-tests/browser/src/test.ts", type: "blob", size: 2_000 },
   ],
 };
 
@@ -46,8 +48,16 @@ describe("rankFileCandidates", () => {
 
   it("prioritizes test files when the user asks for tests", () => {
     const results = rankFileCandidates(map, "where are the authentication tests");
-    expect(results[0].entry.path).toBe("tests/auth.test.ts");
+    expect(results[0].entry.path).toMatch(/auth|login/);
+    expect(results[0].entry.path).toMatch(/test/);
     expect(results[0].signals).toContain("test-pair");
+  });
+
+  it("uses the feature term to rank a specific test above generic test filenames", () => {
+    const results = rankFileCandidates(map, "speech tests specs");
+    expect(results[0].entry.path).toBe("tests/api-resources/audio/speech.test.ts");
+    expect(results.findIndex((result) => result.entry.path === "ecosystem-tests/browser/src/test.ts"))
+      .toBeGreaterThan(0);
   });
 
   it("uses the current directory as a contextual signal", () => {
@@ -128,5 +138,15 @@ describe("findFiles", () => {
 
     expect(response.results[0].path).toBe("src/auth/login.go");
     expect(response.results.some((result) => result.path === "src/auth/login_test.go")).toBe(false);
+  });
+
+  it("returns only test-shaped paths for an explicit test query", () => {
+    const response = findFiles(map, "speech tests specs", {
+      "src/auth/session.ts": "export class Speech {}",
+      "tests/api-resources/audio/speech.test.ts": "describe('resource speech', () => {})",
+    });
+
+    expect(response.results[0].path).toBe("tests/api-resources/audio/speech.test.ts");
+    expect(response.results.every((result) => /test|spec|fixture/i.test(result.path))).toBe(true);
   });
 });

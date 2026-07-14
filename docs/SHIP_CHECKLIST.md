@@ -23,7 +23,7 @@ Updated July 14, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 64 automated tests pass
+- [x] All 68 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification
@@ -88,7 +88,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-c5ed4be0b3151bc31f9d426111a7ff8ec86f09d53689865b16529a0fed61d779
+bd0811b3cb73ca4fef9e1461f3259b268620acbe5dae7c080e2c30e733856b13
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

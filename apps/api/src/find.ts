@@ -90,6 +90,7 @@ const sourceExtensions = new Set([
 ]);
 
 const implementationQuestion = /\b(implementation|implemented|source|defined|definition|handled|handles)\b/i;
+const testVocabulary = new Set(["fixture", "fixtures", "spec", "specs", "test", "tests", "testing"]);
 
 function isTestPath(path: string): boolean {
   return /(^|\/)(__tests__|test|tests|spec|specs|fixtures?)(\/|$)|\.(test|spec)\.|(^|\/)test_[^/]+\.[^.]+$|_test\.[^.]+$/i.test(path);
@@ -141,9 +142,11 @@ function addSignal(signals: FileMatchSignal[], signal: FileMatchSignal): void {
 export function rankFileCandidates(map: RepoMap, query: string, currentPath: string | null = null): RankedCandidate[] {
   const direct = directTerms(query);
   const expanded = expandedTerms(direct);
-  const directSet = new Set(direct);
   const currentDir = currentDirectory(currentPath);
-  const askingForTests = expanded.some((term) => ["test", "tests", "testing", "spec", "specs"].includes(term));
+  const askingForTests = expanded.some((term) => testVocabulary.has(term));
+  const scoringDirect = askingForTests ? direct.filter((term) => !testVocabulary.has(term)) : direct;
+  const scoringExpanded = askingForTests ? expanded.filter((term) => !testVocabulary.has(term)) : expanded;
+  const directSet = new Set(scoringDirect);
   const askingForImplementation = implementationQuestion.test(query);
   const askingForDocumentation = /\b(readme|documentation|docs?|guide|template|issue)\b/i.test(query);
   const askingForExecutable = /\b(executable|binary|command line|cli)\b/i.test(query);
@@ -161,7 +164,7 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
       const matchedTerms = new Set<string>();
       let score = 0;
 
-      for (const term of direct) {
+      for (const term of scoringDirect) {
         if (fileWords.has(term) || baseName === term) {
           score += 52;
           matchedTerms.add(term);
@@ -177,7 +180,7 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
         }
       }
 
-      for (const term of expanded) {
+      for (const term of scoringExpanded) {
         if (directSet.has(term)) continue;
         if (fileWords.has(term) || pathWords.has(term)) {
           score += 15;
@@ -190,6 +193,8 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
       if (askingForTests && isTest) {
         score += 34;
         addSignal(signals, "test-pair");
+      } else if (askingForTests) {
+        score -= 45;
       } else if (!askingForTests && isTest) {
         score -= askingForImplementation ? 52 : 18;
       }
@@ -326,11 +331,14 @@ export function findFiles(
 ): FileFindResponse {
   const direct = directTerms(query);
   const expanded = expandedTerms(direct);
+  const askingForTests = expanded.some((term) => testVocabulary.has(term));
+  const evidenceDirect = askingForTests ? direct.filter((term) => !testVocabulary.has(term)) : direct;
+  const evidenceExpanded = askingForTests ? expanded.filter((term) => !testVocabulary.has(term)) : expanded;
   const candidates = rankFileCandidates(map, query, currentPath);
 
   const results: FileMatch[] = candidates.map((candidate) => {
     const inspected = files[candidate.entry.path]
-      ? contentEvidence(files[candidate.entry.path], direct, expanded)
+      ? contentEvidence(files[candidate.entry.path], evidenceDirect, evidenceExpanded)
       : { score: 0, signals: [] as FileMatchSignal[], matched: [] as string[] };
     const rawScore = candidate.rawScore + inspected.score;
     const signals = [...candidate.signals];
@@ -341,7 +349,7 @@ export function findFiles(
       path: candidate.entry.path,
       score: Number(Math.min(0.99, Math.max(0.05, 0.18 + rawScore / 120)).toFixed(2)),
       confidence: signals.includes("symbol") && signals.includes("content") ? "strong" : confidence(rawScore),
-      reason: reasonFor(signals, matched.length ? matched : direct),
+      reason: reasonFor(signals, matched.length ? matched : evidenceDirect),
       signals,
       ...(inspected.lines ? { lines: inspected.lines } : {}),
       ...(inspected.snippet ? { snippet: inspected.snippet } : {}),
@@ -349,17 +357,19 @@ export function findFiles(
   });
 
   results.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
+  const scopedResults = askingForTests ? results.filter((result) => isTestPath(result.path)) : results;
   const productionResults = implementationQuestion.test(query) && !/\b(tests?|specs?|fixtures?)\b/i.test(query)
-    ? results.filter((result) =>
+    ? scopedResults.filter((result) =>
       !isTestPath(result.path) &&
       !isAuxiliaryPath(result.path) &&
       sourceExtensions.has(extension(result.path)),
     )
-    : results;
-  const eligibleResults = productionResults.length > 0 ? productionResults : results;
+    : scopedResults;
+  const eligibleResults = productionResults.length > 0 ? productionResults : scopedResults;
   const usefulResults = eligibleResults.filter((result, index) => result.confidence !== "possible" || index < 3).slice(0, 5);
   const warnings: string[] = [];
   if (direct.length === 0) warnings.push("The query did not contain a specific repository concept, so results rely on architectural landmarks.");
+  if (askingForTests && usefulResults.length === 0) warnings.push("No test-shaped repository path matched this query.");
   if (usefulResults.every((result) => result.confidence === "possible")) {
     warnings.push("No direct filename, path, or content match was found. These are structural suggestions, not confirmed implementations.");
   }

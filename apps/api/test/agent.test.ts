@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifyAgentIntent } from "../src/agent";
+import type { FileFindResponse } from "@wayfinder/contracts";
+import { classifyAgentIntent, keepGoalLinkedVerification } from "../src/agent";
 
 describe("classifyAgentIntent", () => {
   it.each([
@@ -19,5 +20,31 @@ describe("classifyAgentIntent", () => {
     ["Help me fix the authentication bug", "contribution"],
   ] as const)("routes %s to %s", (query, intent) => {
     expect(classifyAgentIntent(query)).toBe(intent);
+  });
+});
+
+describe("keepGoalLinkedVerification", () => {
+  const finder: FileFindResponse = {
+    repo: "example/trail",
+    sha: "abc1234",
+    query: "pagination tests specs",
+    currentPath: null,
+    results: [
+      { path: "ecosystem/browser/src/test.ts", score: 0.99, confidence: "strong", reason: "Generic test file.", signals: ["test-pair"] },
+      { path: "tests/pagination.test.ts", score: 0.8, confidence: "strong", reason: "Goal-linked test file.", signals: ["filename", "test-pair"] },
+    ],
+    warnings: [],
+    generatedAt: "2026-07-14T00:00:00.000Z",
+  };
+
+  it("removes unrelated generic tests from a contribution trail", () => {
+    expect(keepGoalLinkedVerification(finder, "I want to add pagination support").results.map((result) => result.path))
+      .toEqual(["tests/pagination.test.ts"]);
+  });
+
+  it("claims no verification coordinate when none matches the goal", () => {
+    const filtered = keepGoalLinkedVerification({ ...finder, results: finder.results.slice(0, 1) }, "Fix pagination");
+    expect(filtered.results).toEqual([]);
+    expect(filtered.warnings.at(-1)).toContain("no verification coordinate was claimed");
   });
 });

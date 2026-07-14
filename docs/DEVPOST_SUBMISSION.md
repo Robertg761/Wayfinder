@@ -30,7 +30,7 @@ It can:
 - extract installation, development, test, and build commands from repository evidence
 - label commands as documented, inferred, or conflicting
 - find likely source files from a natural-language question
-- turn a goal such as "I want to add pagination support" into a setup, implementation, and verification route
+- turn a goal such as "I want to change speech generation" into a setup, implementation, and verification route
 - use the active GitHub directory as ranking context
 - open every recommended file at the mapped commit and known line range
 - keep recent evidence available through temporary network or GitHub failures
@@ -73,7 +73,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 64 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, file ranking, and model fallback.
+- The test suite covers 68 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, feature-aware test pairing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -114,9 +114,9 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `b413ee5b-e983-43e1-af42-e00d56604f49`
+- Current Worker version: `ace31ff6-e34a-4469-98f9-d6f80fc358e0`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `c5ed4be0b3151bc31f9d426111a7ff8ec86f09d53689865b16529a0fed61d779`
-- Automated checks: 64 tests, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `bd0811b3cb73ca4fef9e1461f3259b268620acbe5dae7c080e2c30e733856b13`
+- Automated checks: 68 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: pending
