@@ -1,5 +1,6 @@
 import type { RepoMap } from "@wayfinder/contracts";
 import { z } from "zod";
+import { createAgentAnswer } from "./agent";
 import { createRepoMap } from "./github";
 import { createFileFind } from "./find";
 import { createInstallGuide } from "./install";
@@ -40,6 +41,7 @@ const findRequestSchema = z.object({
   query: z.string().trim().min(2).max(240),
   currentPath: z.string().max(1_000).nullable().optional(),
 });
+const agentRequestSchema = findRequestSchema;
 
 const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
@@ -101,6 +103,17 @@ export default {
         if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
         const message = error instanceof Error ? error.message : "Unknown error";
         return json({ error: "file_find_failed", message }, 500);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/agent") {
+      try {
+        const input = agentRequestSchema.parse(await request.json());
+        return json(await createAgentAnswer(input.map as RepoMap, input.query, input.currentPath ?? null, env.GITHUB_TOKEN));
+      } catch (error) {
+        if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
+        const message = error instanceof Error ? error.message : "Unknown error";
+        return json({ error: "agent_answer_failed", message }, 500);
       }
     }
 

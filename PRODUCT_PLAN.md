@@ -409,7 +409,7 @@ Cache behavior:
 
 ### Phase 4: Agent conversation shell
 
-**Status:** Next.
+**Status:** Complete in free mode.
 
 - Add a compact question composer
 - Route install, find, and orientation intents
@@ -417,7 +417,11 @@ Cache behavior:
 - Preserve repository context while navigating
 - Add suggested follow-up actions
 
+The free router recognizes orientation, installation, command, architecture, and file-location language. It keeps the last six dispatches visible, carries the active GitHub path into each tool request, and exposes answer-specific follow-up prompts. The timeline is session-local and resets when the user changes repositories.
+
 ### Phase 5: Context and resilience
+
+**Status:** Next.
 
 - Use the current directory and file as ranking context
 - Add rate-limit and private-repository messages

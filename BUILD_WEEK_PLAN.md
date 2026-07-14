@@ -103,6 +103,18 @@ Shared rules:
 - Unit coverage for aliases, tests, context, symbols, and vague queries
 - Live verification on `openai/openai-node`
 
+### Free agent shell complete
+
+- `POST /agent`
+- Deterministic routing across orientation, installation, and file-discovery intents
+- One contextual question composer instead of separate tool controls
+- Persistent dispatch timeline with typed evidence cards
+- Tool-specific loading, error, warning, and retry states
+- Suggested starting prompts and answer-specific follow-ups
+- Current GitHub file or directory passed into every dispatch
+- Unit coverage for nine representative routing questions
+- Live narrow-panel verification on `openai/openai-node`
+
 ## 4. Build Schedule
 
 ### Day 2: Installation guide (complete)
@@ -130,7 +142,7 @@ Shared rules:
 
 **Ship gate:** asking "How do I install and run this?" returns a trustworthy, sourced guide on four test repositories without model access.
 
-### Day 3: File finder complete, agent shell next
+### Day 3: File finder and agent shell (complete)
 
 #### Morning: structural search (complete)
 
@@ -146,7 +158,7 @@ Shared rules:
 - Re-rank candidates using exact symbol and content matches.
 - Add `POST /find` with a typed response.
 
-#### Evening: conversational shell (next)
+#### Evening: conversational shell (complete)
 
 - Add a compact question composer.
 - Route orientation, installation, and file-finding questions deterministically.

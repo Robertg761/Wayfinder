@@ -16,16 +16,18 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Free deterministic tour engine exposed through `POST /tour`
 - Evidence-backed installation guide exposed through `POST /guide/install`
 - Context-aware natural-language file finder exposed through `POST /find`
+- Deterministic agent router exposed through `POST /agent`
 - Filtered GitHub tree, README, metadata, language, and star count
 - Package-manager, runtime, setup-command, and environment evidence detection
 - Clickable tour stops that open real files and line ranges on GitHub
 - Installation checklist with documented and inferred confidence labels
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
+- Unified question composer with a persistent evidence timeline and suggested follow-ups
 - Shared TypeScript contracts across the extension and Worker
 - Editorial field-guide interface with loading, empty, ready, and error states
 - Unit tests for URL parsing, repository filtering, installation guidance, and file finding
 
-The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The tour, installation guide, and file finder are tools in the broader repository agent. A unified conversational shell is the next implementation phase.
+The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, or file discovery, then renders the appropriate typed tool result in one timeline. Context resilience and caching are the next implementation phase.
 
 ## Workspace
 
@@ -72,7 +74,7 @@ curl -X POST http://localhost:8787/map \
   -d '{"owner":"openai","repo":"openai-node"}'
 ```
 
-`POST /find` accepts a repository map, a natural-language query, and an optional current path. The side panel builds the map automatically and opens each result at its evidence lines on GitHub.
+`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes the question through the tour, installation guide, or file finder without model credits. The side panel builds the map automatically and opens each evidence result on GitHub.
 
 ## Checks
 

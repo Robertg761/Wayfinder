@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
-  FileFindResponse,
+  AgentAnswer,
   InstallEvidence,
-  InstallGuide,
   RepoLocation,
   RepoMap,
   RepoTour,
@@ -17,17 +16,10 @@ type LoadState =
   | { status: 'ready'; map: RepoMap; tour: RepoTour }
   | { status: 'error'; message: string };
 
-type InstallState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; guide: InstallGuide }
-  | { status: 'error'; message: string };
-
-type FindState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; response: FileFindResponse }
-  | { status: 'error'; message: string };
+type AgentTurn =
+  | { id: string; question: string; status: 'loading' }
+  | { id: string; question: string; status: 'ready'; answer: AgentAnswer }
+  | { id: string; question: string; status: 'error'; message: string };
 
 const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL ?? 'http://localhost:8787';
 const extensionBrowser = typeof browser !== 'undefined' && browser.runtime?.id ? browser : null;
@@ -75,13 +67,139 @@ function EvidenceLink({ map, evidence }: { map: RepoMap; evidence: InstallEviden
   );
 }
 
+function AgentAnswerView({
+  map,
+  answer,
+  onAsk,
+}: {
+  map: RepoMap;
+  answer: AgentAnswer;
+  onAsk: (question: string) => void;
+}) {
+  return (
+    <div className={`agent-answer ${answer.intent}`}>
+      <header className="answer-heading">
+        <span>{answer.intent === 'file-find' ? 'coordinates' : answer.intent}</span>
+        <small>Free evidence route</small>
+      </header>
+      <p className="answer-summary">{answer.summary}</p>
+
+      {answer.intent === 'orientation' && (
+        <div className="orientation-answer">
+          {answer.tour.stack.length > 0 && (
+            <div className="answer-stack">
+              {answer.tour.stack.map((item) => <span key={item}>{item}</span>)}
+            </div>
+          )}
+          <ol className="answer-route">
+            {answer.tour.stops.slice(0, 4).map((stop) => (
+              <li key={stop.path}>
+                <button type="button" onClick={() => void openStop(map, stop)}>
+                  <span>{String(stop.order).padStart(2, '0')}</span>
+                  <div><strong>{stop.title}</strong><small>{stop.path}</small></div>
+                  <i aria-hidden="true">↗</i>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {answer.intent === 'installation' && (
+        <div className="installation-answer">
+          <div className="guide-meta">
+            <span><small>Package manager</small>{answer.guide.packageManager ?? 'Not detected'}</span>
+            <span><small>Runtime</small>{answer.guide.runtimes.join(', ') || 'Not specified'}</span>
+          </div>
+
+          {answer.guide.prerequisites.length > 0 && (
+            <section className="prerequisites">
+              <p className="eyebrow">Before you begin</p>
+              <ul>
+                {answer.guide.prerequisites.map((item) => (
+                  <li key={item.text}>
+                    <div>
+                      <span className={`confidence ${item.confidence}`}>{item.confidence}</span>
+                      <p>{item.text}</p>
+                    </div>
+                    <EvidenceLink map={map} evidence={item.evidence} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <ol className="install-steps">
+            {answer.guide.steps.map((step) => (
+              <li key={`${step.order}-${step.command}`}>
+                <span className="step-number">{String(step.order).padStart(2, '0')}</span>
+                <div className="step-body">
+                  <div className="step-title">
+                    <strong>{step.title}</strong>
+                    <span className={`confidence ${step.confidence}`}>{step.confidence}</span>
+                  </div>
+                  <code>{step.command}</code>
+                  <EvidenceLink map={map} evidence={step.evidence} />
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          {answer.guide.warnings.length > 0 && (
+            <div className="guide-warnings">
+              <p className="eyebrow">Field notes</p>
+              {answer.guide.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {answer.intent === 'file-find' && (
+        <div className="coordinate-answer">
+          <ol>
+            {answer.finder.results.map((result, index) => (
+              <li key={result.path}>
+                <div className="result-rank">{String(index + 1).padStart(2, '0')}</div>
+                <div className="result-body">
+                  <div className="result-heading">
+                    <strong>{result.path}</strong>
+                    <span className={`match-confidence ${result.confidence}`}>{result.confidence}</span>
+                  </div>
+                  <p>{result.reason}</p>
+                  {result.snippet && <code>{result.snippet}</code>}
+                  <div className="result-signals">
+                    {result.signals.slice(0, 4).map((signal) => <span key={signal}>{signal}</span>)}
+                  </div>
+                  <button type="button" className="result-open" onClick={() => void openFile(map, result.path, result.lines)}>
+                    Open coordinate <i aria-hidden="true">↗</i>
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+          {answer.finder.warnings.length > 0 && (
+            <div className="finder-warnings">
+              {answer.finder.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="answer-followups" aria-label="Suggested follow-up questions">
+        {answer.suggestions.map((suggestion) => (
+          <button key={suggestion} type="button" onClick={() => onAsk(suggestion)}>{suggestion}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [location, setLocation] = useState<RepoLocation | null>(null);
   const [loadState, setLoadState] = useState<LoadState>({ status: 'idle' });
   const [selectedStop, setSelectedStop] = useState(0);
-  const [installState, setInstallState] = useState<InstallState>({ status: 'idle' });
-  const [findQuery, setFindQuery] = useState('');
-  const [findState, setFindState] = useState<FindState>({ status: 'idle' });
+  const [agentQuery, setAgentQuery] = useState('');
+  const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([]);
 
   useEffect(() => {
     if (!extensionBrowser) {
@@ -142,9 +260,8 @@ function App() {
       })
       .then(({ map, tour }) => {
         setSelectedStop(0);
-        setInstallState({ status: 'idle' });
-        setFindQuery('');
-        setFindState({ status: 'idle' });
+        setAgentQuery('');
+        setAgentTurns([]);
         setLoadState({ status: 'ready', map, tour });
       })
       .catch((error: unknown) => {
@@ -163,42 +280,31 @@ function App() {
     [loadState, selectedStop],
   );
 
-  const loadInstallGuide = async (map: RepoMap) => {
-    setInstallState({ status: 'loading' });
-    try {
-      const response = await fetch(apiUrl + '/guide/install', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map }),
-      });
-      if (!response.ok) throw new Error('Installation evidence could not be assembled.');
-      setInstallState({ status: 'ready', guide: (await response.json()) as InstallGuide });
-    } catch (error) {
-      setInstallState({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Installation evidence could not be assembled.',
-      });
-    }
-  };
+  const askAgent = async (map: RepoMap, question: string, retryId?: string) => {
+    const trimmedQuestion = question.trim();
+    if (trimmedQuestion.length < 2) return;
+    const id = retryId ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setAgentQuery('');
+    setAgentTurns((turns) => retryId
+      ? turns.map((turn) => turn.id === retryId ? { id, question: trimmedQuestion, status: 'loading' } : turn)
+      : [...turns.slice(-5), { id, question: trimmedQuestion, status: 'loading' }]);
 
-  const findFiles = async (map: RepoMap, query: string) => {
-    const trimmedQuery = query.trim();
-    if (trimmedQuery.length < 2) return;
-    setFindQuery(trimmedQuery);
-    setFindState({ status: 'loading' });
     try {
-      const response = await fetch(apiUrl + '/find', {
+      const response = await fetch(apiUrl + '/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map, query: trimmedQuery, currentPath: location?.path ?? null }),
+        body: JSON.stringify({ map, query: trimmedQuestion, currentPath: location?.path ?? null }),
       });
-      if (!response.ok) throw new Error('The repository coordinates could not be searched.');
-      setFindState({ status: 'ready', response: (await response.json()) as FileFindResponse });
+      if (!response.ok) throw new Error('The guide could not complete that dispatch.');
+      const answer = (await response.json()) as AgentAnswer;
+      setAgentTurns((turns) => turns.map((turn) => turn.id === id
+        ? { id, question: trimmedQuestion, status: 'ready', answer }
+        : turn));
     } catch (error) {
-      setFindState({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'The repository coordinates could not be searched.',
-      });
+      const message = error instanceof Error ? error.message : 'The guide could not complete that dispatch.';
+      setAgentTurns((turns) => turns.map((turn) => turn.id === id
+        ? { id, question: trimmedQuestion, status: 'error', message }
+        : turn));
     }
   };
 
@@ -291,182 +397,76 @@ function App() {
                 <div className="section-title compact">
                   <div>
                     <p className="eyebrow">Ask the guide</p>
-                    <h3>Prepare an expedition</h3>
+                    <h3>Field dispatches</h3>
                   </div>
                   <span>02</span>
                 </div>
 
-                {installState.status === 'idle' && (
-                  <button type="button" className="install-trigger" onClick={() => void loadInstallGuide(loadState.map)}>
-                    <span>
-                      <small>Suggested question</small>
-                      How do I install and run this?
-                    </span>
-                    <i aria-hidden="true">→</i>
-                  </button>
-                )}
+                {agentTurns.length > 0 && (
+                  <ol className="agent-timeline" aria-live="polite">
+                    {agentTurns.map((turn, index) => (
+                      <li key={turn.id} className={`agent-turn ${turn.status}`}>
+                        <div className="dispatch-question">
+                          <span>{String(index + 1).padStart(2, '0')}</span>
+                          <p>{turn.question}</p>
+                        </div>
 
-                {installState.status === 'loading' && (
-                  <div className="install-loading" aria-live="polite">
-                    <div className="survey-line"><i /></div>
-                    <p className="plate-number">Checking supplies</p>
-                    <strong>Reading setup evidence</strong>
-                    <small>Documentation, manifests, toolchains, and environment examples</small>
-                  </div>
-                )}
-
-                {installState.status === 'error' && (
-                  <div className="install-error" role="alert">
-                    <p>{installState.message}</p>
-                    <button type="button" onClick={() => void loadInstallGuide(loadState.map)}>Try again</button>
-                  </div>
-                )}
-
-                {installState.status === 'ready' && (
-                  <article className="install-guide" aria-live="polite">
-                    <header className="guide-heading">
-                      <div>
-                        <p className="plate-number">Field checklist</p>
-                        <h3>Installation route</h3>
-                      </div>
-                      <button type="button" onClick={() => void loadInstallGuide(loadState.map)} aria-label="Refresh installation guide">↻</button>
-                    </header>
-
-                    <div className="guide-meta">
-                      <span><small>Package manager</small>{installState.guide.packageManager ?? 'Not detected'}</span>
-                      <span><small>Runtime</small>{installState.guide.runtimes.join(', ') || 'Not specified'}</span>
-                    </div>
-
-                    {installState.guide.prerequisites.length > 0 && (
-                      <section className="prerequisites">
-                        <p className="eyebrow">Before you begin</p>
-                        <ul>
-                          {installState.guide.prerequisites.map((item) => (
-                            <li key={item.text}>
-                              <div>
-                                <span className={`confidence ${item.confidence}`}>{item.confidence}</span>
-                                <p>{item.text}</p>
-                              </div>
-                              <EvidenceLink map={loadState.map} evidence={item.evidence} />
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    )}
-
-                    <ol className="install-steps">
-                      {installState.guide.steps.map((step) => (
-                        <li key={`${step.order}-${step.command}`}>
-                          <span className="step-number">{String(step.order).padStart(2, '0')}</span>
-                          <div className="step-body">
-                            <div className="step-title">
-                              <strong>{step.title}</strong>
-                              <span className={`confidence ${step.confidence}`}>{step.confidence}</span>
-                            </div>
-                            <code>{step.command}</code>
-                            <EvidenceLink map={loadState.map} evidence={step.evidence} />
+                        {turn.status === 'loading' && (
+                          <div className="dispatch-loading">
+                            <span className="locator-pulse" aria-hidden="true" />
+                            <div><strong>Consulting the field notes</strong><small>Choosing an evidence route for this question</small></div>
                           </div>
-                        </li>
-                      ))}
-                    </ol>
+                        )}
 
-                    {installState.guide.warnings.length > 0 && (
-                      <div className="guide-warnings">
-                        <p className="eyebrow">Field notes</p>
-                        {installState.guide.warnings.map((warning) => <p key={warning}>{warning}</p>)}
-                      </div>
-                    )}
-                  </article>
+                        {turn.status === 'error' && (
+                          <div className="install-error" role="alert">
+                            <p>{turn.message}</p>
+                            <button type="button" onClick={() => void askAgent(loadState.map, turn.question, turn.id)}>Retry dispatch</button>
+                          </div>
+                        )}
+
+                        {turn.status === 'ready' && (
+                          <AgentAnswerView map={loadState.map} answer={turn.answer} onAsk={(question) => void askAgent(loadState.map, question)} />
+                        )}
+                      </li>
+                    ))}
+                  </ol>
                 )}
-
-                <div className="finder-divider"><span>or mark a coordinate</span></div>
 
                 <form
-                  className="file-finder"
+                  className="agent-composer"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void findFiles(loadState.map, findQuery);
+                    void askAgent(loadState.map, agentQuery);
                   }}
                 >
-                  <label htmlFor="wayfinder-query">Where does something live?</label>
-                  <div className="finder-input">
-                    <input
+                  <label htmlFor="wayfinder-query">Ask about this repository</label>
+                  <div className="composer-field">
+                    <textarea
                       id="wayfinder-query"
-                      value={findQuery}
-                      onChange={(event) => setFindQuery(event.target.value)}
-                      placeholder="authentication, routing, tests..."
+                      value={agentQuery}
+                      onChange={(event) => setAgentQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          void askAgent(loadState.map, agentQuery);
+                        }
+                      }}
+                      placeholder="How do I run it? Where is authentication? What should I read first?"
+                      rows={2}
                       minLength={2}
                     />
-                    <button type="submit" disabled={findState.status === 'loading' || findQuery.trim().length < 2}>
-                      {findState.status === 'loading' ? '...' : 'Find'}
+                    <button type="submit" disabled={agentQuery.trim().length < 2}>
+                      Dispatch <i aria-hidden="true">↗</i>
                     </button>
                   </div>
-                  {location.path && <small className="context-hint">Using current context: {location.path}</small>}
-                  <div className="finder-prompts" aria-label="Suggested file searches">
-                    {['main entry point', 'where are the tests?', 'configuration'].map((prompt) => (
-                      <button key={prompt} type="button" onClick={() => void findFiles(loadState.map, prompt)}>{prompt}</button>
+                  {location.path && <small className="context-hint">Current context: {location.path}</small>}
+                  <div className="agent-prompts" aria-label="Suggested repository questions">
+                    {['What does this project do?', 'How do I install and run it?', 'Where are the tests?'].map((prompt) => (
+                      <button key={prompt} type="button" onClick={() => void askAgent(loadState.map, prompt)}>{prompt}</button>
                     ))}
                   </div>
                 </form>
-
-                {findState.status === 'loading' && (
-                  <div className="finder-loading" aria-live="polite">
-                    <span className="locator-pulse" aria-hidden="true" />
-                    <div>
-                      <strong>Triangulating likely files</strong>
-                      <small>Comparing paths, language, context, and selected source content</small>
-                    </div>
-                  </div>
-                )}
-
-                {findState.status === 'error' && (
-                  <div className="install-error" role="alert">
-                    <p>{findState.message}</p>
-                    <button type="button" onClick={() => void findFiles(loadState.map, findQuery)}>Try again</button>
-                  </div>
-                )}
-
-                {findState.status === 'ready' && (
-                  <article className="finder-results" aria-live="polite">
-                    <header>
-                      <div>
-                        <p className="plate-number">Marked coordinates</p>
-                        <h3>{findState.response.results.length} likely locations</h3>
-                      </div>
-                      <span>{Math.round((findState.response.results[0]?.score ?? 0) * 100)}%</span>
-                    </header>
-
-                    <p className="finder-query">“{findState.response.query}”</p>
-
-                    <ol>
-                      {findState.response.results.map((result, index) => (
-                        <li key={result.path}>
-                          <div className="result-rank">{String(index + 1).padStart(2, '0')}</div>
-                          <div className="result-body">
-                            <div className="result-heading">
-                              <strong>{result.path}</strong>
-                              <span className={`match-confidence ${result.confidence}`}>{result.confidence}</span>
-                            </div>
-                            <p>{result.reason}</p>
-                            {result.snippet && <code>{result.snippet}</code>}
-                            <div className="result-signals">
-                              {result.signals.slice(0, 4).map((signal) => <span key={signal}>{signal}</span>)}
-                            </div>
-                            <button type="button" className="result-open" onClick={() => void openFile(loadState.map, result.path, result.lines)}>
-                              Open coordinate <i aria-hidden="true">↗</i>
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-
-                    {findState.response.warnings.length > 0 && (
-                      <div className="finder-warnings">
-                        {findState.response.warnings.map((warning) => <p key={warning}>{warning}</p>)}
-                      </div>
-                    )}
-                  </article>
-                )}
               </section>
 
               <section className="trail-section">

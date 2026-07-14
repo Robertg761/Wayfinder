@@ -118,6 +118,23 @@ export interface FileFindResponse {
   generatedAt: string;
 }
 
+export type AgentIntent = "orientation" | "installation" | "file-find";
+
+interface AgentAnswerBase {
+  repo: string;
+  sha: string;
+  query: string;
+  intent: AgentIntent;
+  summary: string;
+  suggestions: string[];
+  generatedAt: string;
+}
+
+export type AgentAnswer =
+  | (AgentAnswerBase & { intent: "orientation"; tour: RepoTour })
+  | (AgentAnswerBase & { intent: "installation"; guide: InstallGuide })
+  | (AgentAnswerBase & { intent: "file-find"; finder: FileFindResponse });
+
 export type WayfinderMessage =
   | { type: "wayfinder:context"; context: RepoLocation | null }
   | { type: "wayfinder:get-context" };
