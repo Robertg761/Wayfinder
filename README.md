@@ -10,6 +10,9 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - [Demo script](docs/DEMO_SCRIPT.md): timed primary demo and free-mode backup
 - [Devpost submission draft](docs/DEVPOST_SUBMISSION.md): paste-ready story, technology list, and truth checks
 - [Ship checklist](docs/SHIP_CHECKLIST.md): completed evidence and remaining submission gates
+- [Verification matrix](docs/VERIFICATION_MATRIX.md): live results across five repository shapes
+- [Privacy](PRIVACY.md): data flow, local caching, model processing, and retention boundaries
+- [Contributing](CONTRIBUTING.md): local development, checks, and public smoke testing
 
 ## Current slice
 

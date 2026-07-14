@@ -260,6 +260,8 @@ The model may not invent paths, commands, or line ranges. All concrete repositor
 
 ## 7. Verification Matrix
 
+**Status:** Complete against the deployed Worker. See [docs/VERIFICATION_MATRIX.md](docs/VERIFICATION_MATRIX.md).
+
 Use at least these repository shapes:
 
 | Shape | Example | What it proves |

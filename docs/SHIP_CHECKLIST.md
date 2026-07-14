@@ -17,10 +17,11 @@ Updated July 13, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 43 automated tests pass
+- [x] All 48 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] Public `openai/openai-node` orientation, installation, and file-find API dry run
+- [x] Public matrix across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
 - [x] Representative evidence URLs return HTTP 200
 - [x] Deprecated pagination wrapper regression fixed and tested
 - [x] Architecture document
@@ -77,7 +78,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-043248bb747f2afa02c070644655e0a7ca1e5d92c334eb3b05d6fa750f2f9e57
+30a4315e5a29f1147ecddfc8623c645e14a0f9fd5d9b625b2e0c959dec9a95ec
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

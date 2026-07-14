@@ -68,7 +68,8 @@ We also needed a useful path before model credits arrived. That constraint produ
 - GPT-5.6 output is constrained by a strict schema and an exact-path allow-list.
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 43 cases across URL context, caching, repository mapping, tours, installation extraction, intent routing, file ranking, and model fallback.
+- The test suite covers 48 cases across URL context, caching, repository mapping, tours, installation extraction, intent routing, file ranking, and model fallback.
+- A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
 ## What we learned
@@ -108,9 +109,9 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `fcda2c66-325b-46a9-a6a7-12902de86f71`
+- Current Worker version: `caa4fe63-2c93-46a0-85f7-f35c328d6613`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256 after production endpoint configuration: `043248bb747f2afa02c070644655e0a7ca1e5d92c334eb3b05d6fa750f2f9e57`
-- Automated checks: 43 tests, typecheck, extension production build, Worker dry run
-- Live public repository check: `openai/openai-node` at `1cdc0196b4341ee641ec6839e08744b2771250e4`
+- Archive SHA-256: `30a4315e5a29f1147ecddfc8623c645e14a0f9fd5d9b625b2e0c959dec9a95ec`
+- Automated checks: 48 tests, typecheck, extension production build, Worker dry run
+- Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: pending
