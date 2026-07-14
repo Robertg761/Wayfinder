@@ -5,5 +5,15 @@
   "compatibility_date": "2026-07-13",
   "observability": {
     "enabled": true
-  }
+  },
+  "ratelimits": [
+    {
+      "name": "MODEL_RATE_LIMITER",
+      "namespace_id": "3022301",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
+  ]
 }

@@ -498,6 +498,7 @@ The demo should prove that Wayfinder is an agent, not only a generated tour.
 | Installation documentation is incomplete | Show only sourced commands and clearly list missing information |
 | Large repositories bias the map toward early alphabetical paths | Preserve root files and architectural landmarks during compaction |
 | GitHub rate limits interrupt free mode | Support an optional GitHub token, cache by commit, and show a clear retry state |
+| Public model traffic spends credits unexpectedly | Require the Cloudflare model rate-limit binding and fall back to deterministic answers when denied or unavailable |
 | The chat interface implies more intelligence than free mode provides | Offer supported action prompts and label structural inference honestly |
 | Model responses later invent facts | Require tool use and repository evidence for concrete claims |
 

@@ -124,6 +124,7 @@ Shared rules:
 - Cache timestamps and per-answer refresh controls
 - Manual repository refresh and active-tab context sync
 - Typed messages for rate limits, private or missing repositories, invalid tokens, and upstream failures
+- Paid model attempts protected by a Cloudflare rate-limit binding with deterministic fallback
 - Live verification across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
 - Narrow-panel checks for private-repository messaging and repository refresh
 

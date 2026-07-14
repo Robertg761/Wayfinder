@@ -48,6 +48,12 @@ The Cloudflare Worker exposes six routes:
 
 This edge layer reduces repeated GitHub quota use without caching user questions, generated answers, or authenticated repository data.
 
+## Public request boundary
+
+Repository maps posted back by the extension are treated as untrusted input. The Worker revalidates repository identities, hexadecimal commit SHAs, timestamps, text sizes, tree counts, file sizes, and every repository path before running a tool. Paths must be normalized relative paths without empty, control, `.` or `..` segments. Malformed JSON and contract violations return a client error before any repository tool runs.
+
+A missing README is an allowed repository shape. GitHub rate limits, authentication failures, malformed upstream responses, and network failures are not converted into a missing README, so the extension can show the correct retry or fallback state.
+
 ## GPT-5.6 boundary
 
 The OpenAI key exists only in the Worker environment. The model request uses the Responses API with:
@@ -58,8 +64,11 @@ The OpenAI key exists only in the Worker environment. The model request uses the
 - `store: false`
 - the deterministic answer as the only repository evidence
 - a maximum of five evidence paths
+- a Cloudflare rate-limit allowance before any paid request
 
 The Worker parses the structured result and rejects the entire synthesis if any model path is absent from the tool output. It also falls back when the key is missing, the API is unavailable, the response is refused or malformed, or local validation fails.
+
+Paid synthesis is fail-closed behind `MODEL_RATE_LIMITER`. The binding permits 10 attempts per connecting-IP key per minute in each Cloudflare location. A denied or unavailable allowance skips the model and returns the completed deterministic answer. The health route reports secret configuration, protection availability, and effective model enablement separately.
 
 ## Deployment
 

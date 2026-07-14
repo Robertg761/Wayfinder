@@ -317,7 +317,10 @@ export async function createRepoMap(owner: string, repo: string, token?: string)
 
   const [tree, readme] = await Promise.all([
     githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(metadata.default_branch) + "?recursive=1", token),
-    githubFetch<GitHubReadmeResponse>(prefix + "/readme", token).catch(() => null),
+    githubFetch<GitHubReadmeResponse>(prefix + "/readme", token).catch((error) => {
+      if (error instanceof GitHubApiError && error.code === "repository-unavailable") return null;
+      throw error;
+    }),
   ]);
 
   const rootTree = tree.truncated || tree.tree.length > 4_000

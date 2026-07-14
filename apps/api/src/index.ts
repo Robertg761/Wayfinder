@@ -10,30 +10,40 @@ interface Env {
   GITHUB_TOKEN?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
+  MODEL_RATE_LIMITER?: RateLimit;
 }
 
 const mapRequestSchema = z.object({
-  owner: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_.-]+$/),
-  repo: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_.-]+$/),
+  owner: z.string().min(1).max(100).regex(/^(?!\.{1,2}$)[a-zA-Z0-9_.-]+$/),
+  repo: z.string().min(1).max(100).regex(/^(?!\.{1,2}$)[a-zA-Z0-9_.-]+$/),
 });
 
+const repositoryPathSchema = z.string()
+  .min(1)
+  .max(1_000)
+  .refine((path) =>
+    !path.startsWith("/") &&
+    !/[\u0000-\u001f\u007f]/.test(path) &&
+    path.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== ".."),
+  { message: "Repository paths must be normalized relative paths." });
+
 const repoMapSchema = z.object({
-  repo: z.string().min(3),
-  sha: z.string().min(7),
-  defaultBranch: z.string().min(1),
-  description: z.string().nullable(),
-  homepage: z.string().nullable(),
-  language: z.string().nullable(),
-  stars: z.number().nonnegative(),
-  readme: z.string().nullable(),
+  repo: z.string().min(3).max(201).regex(/^(?!\.{1,2}\/)(?!.*\/\.{1,2}$)[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/),
+  sha: z.string().regex(/^[a-f0-9]{7,64}$/i),
+  defaultBranch: z.string().min(1).max(255),
+  description: z.string().max(500).nullable(),
+  homepage: z.string().max(2_048).nullable(),
+  language: z.string().max(100).nullable(),
+  stars: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  readme: z.string().max(16_000).nullable(),
   tree: z.array(z.object({
-    path: z.string().min(1),
+    path: repositoryPathSchema,
     type: z.enum(["blob", "tree"]),
-    size: z.number().nonnegative().optional(),
+    size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   })).max(4_000),
-  setupFiles: z.array(z.string().min(1)).max(200),
+  setupFiles: z.array(repositoryPathSchema).max(200),
   truncated: z.boolean(),
-  generatedAt: z.string().min(1),
+  generatedAt: z.string().datetime(),
 });
 
 const tourRequestSchema = z.object({ map: repoMapSchema });
@@ -41,7 +51,7 @@ const installRequestSchema = z.object({ map: repoMapSchema });
 const findRequestSchema = z.object({
   map: repoMapSchema,
   query: z.string().trim().min(2).max(240),
-  currentPath: z.string().max(1_000).nullable().optional(),
+  currentPath: repositoryPathSchema.nullable().optional(),
 });
 const agentRequestSchema = findRequestSchema;
 
@@ -57,6 +67,13 @@ function json(body: unknown, status = 200): Response {
 
 function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 500): Response {
   if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
+  if (error instanceof SyntaxError) {
+    return json({
+      error: "invalid_json",
+      code: "request-failed",
+      message: "Request body must be valid JSON.",
+    }, 400);
+  }
   if (error instanceof GitHubApiError) {
     const status = error.code === "github-rate-limited" ? 429 : error.status;
     return json({
@@ -71,16 +88,36 @@ function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 
   return json({ error: fallbackError, code, message }, fallbackStatus);
 }
 
+async function modelOptions(request: Request, env: Env): Promise<{
+  apiKey: string;
+  model?: string;
+} | undefined> {
+  const apiKey = env.OPENAI_API_KEY?.trim();
+  if (!apiKey || !env.MODEL_RATE_LIMITER) return undefined;
+
+  const clientKey = request.headers.get("cf-connecting-ip")?.trim() || "unknown-client";
+  try {
+    const { success } = await env.MODEL_RATE_LIMITER.limit({ key: "agent:" + clientKey });
+    return success ? { apiKey, model: env.OPENAI_MODEL } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
+      const modelConfigured = Boolean(env.OPENAI_API_KEY?.trim());
+      const modelProtected = Boolean(env.MODEL_RATE_LIMITER);
       return json({
         ok: true,
         service: "wayfinder-api",
-        modelConfigured: Boolean(env.OPENAI_API_KEY),
+        modelConfigured,
+        modelProtected,
+        modelEnabled: modelConfigured && modelProtected,
         model: env.OPENAI_MODEL?.trim() || "gpt-5.6",
       });
     }
@@ -124,12 +161,13 @@ export default {
     if (request.method === "POST" && url.pathname === "/agent") {
       try {
         const input = agentRequestSchema.parse(await request.json());
+        const allowedModel = await modelOptions(request, env);
         return json(await createAgentAnswer(
           input.map as RepoMap,
           input.query,
           input.currentPath ?? null,
           env.GITHUB_TOKEN,
-          env.OPENAI_API_KEY ? { apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL } : undefined,
+          allowedModel,
         ));
       } catch (error) {
         return requestFailure(error, "agent_answer_failed");

@@ -37,6 +37,8 @@ When the Worker has an OpenAI API key configured, it sends the user question and
 - Every returned evidence path is validated against deterministic tool output.
 - A missing key, unavailable API, or invalid response falls back to the Worker's deterministic answer.
 
+Before a model request, the Worker uses Cloudflare's connecting-IP value as a short-lived rate-limit key. The key is not sent to OpenAI or written to Wayfinder storage. If the allowance is exhausted or the rate-limit binding is unavailable, the deterministic answer is returned.
+
 The current public Worker reports whether model processing is configured through `GET /health`.
 
 ## Third-party services

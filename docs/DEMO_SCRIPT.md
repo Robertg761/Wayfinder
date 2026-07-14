@@ -9,7 +9,7 @@ Demo repository: `openai/openai-node` at the current default-branch commit.
 1. Install `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip` in a clean Chrome profile.
 2. Open `https://github.com/openai/openai-node`.
 3. Confirm `https://wayfinder-api.hopit-robert.workers.dev/health` returns `ok: true`.
-4. If credits are available, confirm health reports `modelConfigured: true`.
+4. If credits are available, confirm health reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`.
 5. Keep the panel narrow enough to look like a normal GitHub side panel.
 6. Clear prior Wayfinder turns or reopen the repository before recording.
 

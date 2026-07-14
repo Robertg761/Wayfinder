@@ -8,17 +8,21 @@ Updated July 14, 2026.
 - [x] Current GitHub repository, directory, and file context
 - [x] Commit-aware repository and answer caching
 - [x] Unauthenticated GitHub edge caching with authenticated-request bypass
+- [x] Bounded repository-map validation and normalized path enforcement
+- [x] Malformed JSON returns a typed client error
+- [x] README rate limits and upstream failures propagate instead of degrading silently
 - [x] Typed rate-limit, private repository, authentication, offline, and retry states
 - [x] GPT-5.6 Responses API integration with strict structured output
 - [x] Exact model evidence-path validation
 - [x] Automatic deterministic fallback
 - [x] Server-side OpenAI credential boundary and `store: false`
+- [x] Paid synthesis protected by a Cloudflare rate-limit binding with deterministic fallback
 - [x] Public Worker deployment
 - [x] Production extension points to the public Worker
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 54 automated tests pass
+- [x] All 61 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification
@@ -36,7 +40,7 @@ Updated July 14, 2026.
 ## Needs credits
 
 - [ ] Add `OPENAI_API_KEY` as a Cloudflare Worker secret
-- [ ] Confirm `/health` reports `modelConfigured: true`
+- [ ] Confirm `/health` reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`
 - [ ] Run one live GPT-5.6 question through the deployed `/agent` endpoint
 - [ ] Confirm the response has `mode: gpt-5.6`, the expected model name, and only valid evidence paths
 - [ ] Capture the GPT-5.6 synthesis screenshot

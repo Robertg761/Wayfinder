@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   collectSetupFiles,
   compactTree,
+  createRepoMap,
   dedupeTree,
   describeGitHubFailure,
   filterTree,
@@ -10,6 +10,10 @@ import {
   githubFetch,
   shouldIncludePath,
 } from "../src/github";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("repository tree filtering", () => {
   it("keeps source files and useful project metadata", () => {
@@ -129,5 +133,33 @@ describe("GitHub response caching", () => {
       headers: { Authorization: "Bearer secret-token" },
     });
     expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty("cf");
+  });
+});
+
+describe("repository map partial failures", () => {
+  it("propagates a README rate limit instead of returning a degraded map", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/repos/openai/openai-node")) {
+        return Response.json({
+          default_branch: "main",
+          description: null,
+          homepage: null,
+          language: "TypeScript",
+          stargazers_count: 1,
+        });
+      }
+      if (url.includes("/git/trees/")) {
+        return Response.json({ sha: "a".repeat(40), truncated: false, tree: [] });
+      }
+      return Response.json({ message: "rate limited" }, {
+        status: 429,
+        headers: { "x-ratelimit-reset": "1784030400" },
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    await expect(createRepoMap("openai", "openai-node"))
+      .rejects.toMatchObject({ code: "github-rate-limited", status: 429 });
   });
 });

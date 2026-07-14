@@ -37,6 +37,8 @@ It can:
 
 The free deterministic route remains fully functional. If the OpenAI key is missing, the model API is unavailable, structured output is invalid, or GPT-5.6 names a path outside the evidence set, Wayfinder returns the deterministic answer automatically.
 
+Paid synthesis is protected by a Cloudflare rate-limit binding. A denied or unavailable model allowance also returns the deterministic answer, so cost protection does not turn into a user-facing outage.
+
 ## How we built it
 
 The Chrome extension uses WXT, React, TypeScript, and Manifest V3. A content script tracks GitHub single-page navigation and sends the active repository context to the side panel.
@@ -68,7 +70,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - GPT-5.6 output is constrained by a strict schema and an exact-path allow-list.
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 54 cases across URL context, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, intent routing, file ranking, and model fallback.
+- The test suite covers 61 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, intent routing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -112,6 +114,6 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 - Current Worker version: `e3a41878-3674-46de-8a5a-7191e7665fee`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `c5ed4be0b3151bc31f9d426111a7ff8ec86f09d53689865b16529a0fed61d779`
-- Automated checks: 54 tests, typecheck, extension production build, Worker dry run
+- Automated checks: 61 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: pending

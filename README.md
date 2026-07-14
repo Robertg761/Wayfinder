@@ -36,6 +36,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Commit-aware repository and answer caching in `chrome.storage.local`
 - Edge-cached public GitHub responses with longer retention for immutable commit evidence
 - Friendly rate-limit, private-repository, authentication, and offline states
+- Bounded public request validation with normalized repository paths
 - Manual repository refresh and active GitHub context sync controls
 - Shared TypeScript contracts across the extension and Worker
 - Editorial field-guide interface with loading, empty, ready, and error states
@@ -65,6 +66,8 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars
 Add a GitHub token to `apps/api/.dev.vars` for a higher API rate limit. Public repositories also work without one at GitHub's unauthenticated rate limit.
 
 Add an OpenAI API key to the same file to enable GPT-5.6 synthesis. The key stays in the Worker and is never exposed to the extension. Without it, the deterministic agent remains fully functional.
+
+The Worker also requires its Cloudflare model rate-limit binding before it enables paid synthesis. The binding allows 10 model attempts per client per minute in each Cloudflare location. Exhausted or unavailable allowances fall back to the deterministic answer instead of failing the request. Wrangler simulates the configured binding during local development.
 
 Start the Worker:
 
