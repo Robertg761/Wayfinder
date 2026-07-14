@@ -50,7 +50,7 @@ const stopWords = new Set([
 
 const aliasGroups = [
   ["auth", "authentication", "authorize", "authorization", "login", "oauth", "permission", "session", "token"],
-  ["route", "router", "routing", "navigation"],
+  ["route", "router", "routing", "navigation", "app", "application", "dispatch", "endpoint", "scaffold", "url", "view"],
   ["config", "configuration", "environment", "env", "settings"],
   ["test", "tests", "testing", "spec", "specs", "fixture", "fixtures"],
   ["entry", "entrypoint", "index", "main", "bootstrap", "startup"],
@@ -58,7 +58,7 @@ const aliasGroups = [
   ["api", "controller", "endpoint", "handler", "request", "response"],
   ["cache", "caching", "memo", "redis"],
   ["log", "logger", "logging", "telemetry"],
-  ["cli", "command", "commands", "terminal"],
+  ["cli", "command", "commands", "terminal", "executable", "binary", "bin", "main"],
   ["websocket", "websockets", "socket", "ws"],
   ["payment", "payments", "billing", "checkout", "stripe"],
   ["user", "users", "account", "accounts", "profile"],
@@ -83,6 +83,21 @@ const inspectableExtensions = new Set([
   "c", "cc", "cpp", "cs", "go", "h", "hpp", "html", "java", "js", "jsx", "json", "kt",
   "md", "mjs", "php", "py", "rb", "rs", "sh", "swift", "toml", "ts", "tsx", "vue", "yaml", "yml",
 ]);
+
+const sourceExtensions = new Set([
+  "c", "cc", "cpp", "cs", "go", "h", "hpp", "java", "js", "jsx", "kt", "mjs", "php", "py",
+  "rb", "rs", "sh", "swift", "ts", "tsx", "vue",
+]);
+
+const implementationQuestion = /\b(implementation|implemented|source|defined|definition|handled|handles)\b/i;
+
+function isTestPath(path: string): boolean {
+  return /(^|\/)(__tests__|test|tests|spec|specs|fixtures?)(\/|$)|\.(test|spec)\.|(^|\/)test_[^/]+\.[^.]+$|_test\.[^.]+$/i.test(path);
+}
+
+function isAuxiliaryPath(path: string): boolean {
+  return /(^|\/)(examples?|demos?|evals?|bench(?:es)?|benchmarks?|fixtures?|templates?|playgrounds?)(\/|$)/i.test(path);
+}
 
 function words(value: string): string[] {
   return value
@@ -129,6 +144,9 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
   const directSet = new Set(direct);
   const currentDir = currentDirectory(currentPath);
   const askingForTests = expanded.some((term) => ["test", "tests", "testing", "spec", "specs"].includes(term));
+  const askingForImplementation = implementationQuestion.test(query);
+  const askingForDocumentation = /\b(readme|documentation|docs?|guide|template|issue)\b/i.test(query);
+  const askingForExecutable = /\b(executable|binary|command line|cli)\b/i.test(query);
   const preferredExtensions = new Set(languageExtensions[map.language ?? ""] ?? []);
 
   return map.tree
@@ -168,12 +186,12 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
         }
       }
 
-      const isTest = /(^|\/)(__tests__|test|tests|spec|specs|fixtures?)(\/|$)|\.(test|spec)\./i.test(path);
+      const isTest = isTestPath(path);
       if (askingForTests && isTest) {
         score += 34;
         addSignal(signals, "test-pair");
       } else if (!askingForTests && isTest) {
-        score -= 10;
+        score -= askingForImplementation ? 52 : 18;
       }
 
       if (currentDir && (path.startsWith(currentDir.toLowerCase() + "/") || currentDir.toLowerCase().startsWith(path.split("/").slice(0, -1).join("/")))) {
@@ -186,8 +204,24 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
         addSignal(signals, "primary-language");
       }
 
+      if (!askingForDocumentation && (extension(path) === "md" || path.startsWith(".github/"))) {
+        score -= 45;
+      }
+
+      if (askingForImplementation && isAuxiliaryPath(path)) {
+        score -= 55;
+      }
+
       if (/^(index|main|app|server|client|router|routes|config|cli)$/.test(baseName)) {
         score += 6;
+        addSignal(signals, "architecture");
+      }
+
+      if (askingForExecutable && baseName === "main") {
+        score += 55;
+        addSignal(signals, "architecture");
+      } else if (askingForExecutable && /(^|\/)bin(\/|$)/.test(path)) {
+        score += 35;
         addSignal(signals, "architecture");
       }
 
@@ -315,7 +349,15 @@ export function findFiles(
   });
 
   results.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
-  const usefulResults = results.filter((result, index) => result.confidence !== "possible" || index < 3).slice(0, 5);
+  const productionResults = implementationQuestion.test(query) && !/\b(tests?|specs?|fixtures?)\b/i.test(query)
+    ? results.filter((result) =>
+      !isTestPath(result.path) &&
+      !isAuxiliaryPath(result.path) &&
+      sourceExtensions.has(extension(result.path)),
+    )
+    : results;
+  const eligibleResults = productionResults.length > 0 ? productionResults : results;
+  const usefulResults = eligibleResults.filter((result, index) => result.confidence !== "possible" || index < 3).slice(0, 5);
   const warnings: string[] = [];
   if (direct.length === 0) warnings.push("The query did not contain a specific repository concept, so results rely on architectural landmarks.");
   if (usefulResults.every((result) => result.confidence === "possible")) {
