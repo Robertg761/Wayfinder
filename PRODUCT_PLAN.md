@@ -266,14 +266,14 @@ Rules:
 
 ### 8.4 `find_file`
 
-**Status:** Planned after `guide_install`.
+**Status:** Complete in free mode.
 
 Inputs:
 
 - Natural-language query
 - Repository map
 - Current GitHub path
-- Optional candidate-file snippets
+- Candidate-file snippets fetched by the Worker
 
 Free-mode ranking signals:
 
@@ -286,7 +286,7 @@ Free-mode ranking signals:
 - Import, export, class, and function names from fetched candidate snippets
 - Proximity to the current directory when relevant
 
-Proposed output:
+Output:
 
 ```json
 {
@@ -303,7 +303,9 @@ Proposed output:
 }
 ```
 
-The first version should return ranked evidence, not claim deep semantic understanding.
+The implementation first scores the complete filtered tree, then fetches only the five strongest inspectable files. Files larger than 200 KB are not fetched for content inspection. Exact symbol matches, source snippets, and nearby line ranges can strengthen the result, while current-directory context breaks ties toward the part of the repository the user is already exploring.
+
+The response returns ranked evidence and does not claim deep semantic understanding. A weak query or an all-possible result set includes an explicit warning instead of presenting structural guesses as confirmed implementations.
 
 ### 8.5 `get_current_context`
 
@@ -397,7 +399,7 @@ Cache behavior:
 
 ### Phase 3: File finder
 
-**Status:** Next.
+**Status:** Complete.
 
 - Add query normalization and alias mapping
 - Rank paths using structural signals
@@ -406,6 +408,8 @@ Cache behavior:
 - Navigate directly to selected results
 
 ### Phase 4: Agent conversation shell
+
+**Status:** Next.
 
 - Add a compact question composer
 - Route install, find, and orientation intents

@@ -1,6 +1,6 @@
 # Wayfinder
 
-Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and move through the repository with confidence. The current build provides free repository mapping and a clickable reading route without requiring model credits.
+Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and move through the repository with confidence. The current build provides free repository mapping, a clickable reading route, sourced installation guidance, and natural-language file discovery without requiring model credits.
 
 ## Product documentation
 
@@ -15,15 +15,17 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Cloudflare Worker with `GET /health` and `POST /map`
 - Free deterministic tour engine exposed through `POST /tour`
 - Evidence-backed installation guide exposed through `POST /guide/install`
+- Context-aware natural-language file finder exposed through `POST /find`
 - Filtered GitHub tree, README, metadata, language, and star count
 - Package-manager, runtime, setup-command, and environment evidence detection
 - Clickable tour stops that open real files and line ranges on GitHub
 - Installation checklist with documented and inferred confidence labels
+- Ranked file matches with reasons, confidence, content evidence, and direct navigation
 - Shared TypeScript contracts across the extension and Worker
 - Editorial field-guide interface with loading, empty, ready, and error states
-- Unit tests for URL parsing and repository filtering
+- Unit tests for URL parsing, repository filtering, installation guidance, and file finding
 
-The deterministic engine uses repository conventions, file roles, depth, and language signals. The tour and installation guide are tools in the broader repository agent. File discovery and the conversational agent shell are the next implementation phases.
+The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The tour, installation guide, and file finder are tools in the broader repository agent. A unified conversational shell is the next implementation phase.
 
 ## Workspace
 
@@ -69,6 +71,8 @@ curl -X POST http://localhost:8787/map \
   -H 'Content-Type: application/json' \
   -d '{"owner":"openai","repo":"openai-node"}'
 ```
+
+`POST /find` accepts a repository map, a natural-language query, and an optional current path. The side panel builds the map automatically and opens each result at its evidence lines on GitHub.
 
 ## Checks
 

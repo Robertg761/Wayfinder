@@ -1,6 +1,7 @@
 import type { RepoMap } from "@wayfinder/contracts";
 import { z } from "zod";
 import { createRepoMap } from "./github";
+import { createFileFind } from "./find";
 import { createInstallGuide } from "./install";
 import { generateTour } from "./tour";
 
@@ -34,6 +35,11 @@ const repoMapSchema = z.object({
 
 const tourRequestSchema = z.object({ map: repoMapSchema });
 const installRequestSchema = z.object({ map: repoMapSchema });
+const findRequestSchema = z.object({
+  map: repoMapSchema,
+  query: z.string().trim().min(2).max(240),
+  currentPath: z.string().max(1_000).nullable().optional(),
+});
 
 const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
@@ -84,6 +90,17 @@ export default {
         if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
         const message = error instanceof Error ? error.message : "Unknown error";
         return json({ error: "install_guide_failed", message }, 500);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/find") {
+      try {
+        const input = findRequestSchema.parse(await request.json());
+        return json(await createFileFind(input.map as RepoMap, input.query, input.currentPath ?? null, env.GITHUB_TOKEN));
+      } catch (error) {
+        if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
+        const message = error instanceof Error ? error.message : "Unknown error";
+        return json({ error: "file_find_failed", message }, 500);
       }
     }
 

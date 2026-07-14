@@ -24,8 +24,8 @@ Private repositories, code editing, pull requests, teams, a VS Code port, and gu
 | `map_repository` | Read metadata, README, language, commit, and filtered tree | Complete |
 | `build_tour` | Produce a structured reading route | Complete in free mode |
 | `guide_install` | Extract sourced setup and run instructions | Complete in free mode |
-| `find_file` | Rank likely files for a concept or feature | Planned |
-| `get_current_context` | Follow the repository, directory, and file open in GitHub | Detection complete, agent integration planned |
+| `find_file` | Rank likely files for a concept or feature | Complete in free mode |
+| `get_current_context` | Follow the repository, directory, and file open in GitHub | Integrated into file ranking |
 
 The free toolchain is the required baseline. A model can later improve routing and explanation quality without replacing these tools.
 
@@ -91,7 +91,19 @@ Shared rules:
 - Side-panel prerequisites, commands, confidence labels, and evidence links
 - Live checks on TypeScript, Python, and Rust repositories
 
-## 4. Remaining Build Schedule
+### Free file finder complete
+
+- `POST /find`
+- Natural-language tokenization and common code aliases
+- Structural ranking across names, paths, tests, entry points, configuration, and language
+- Current-directory proximity from the active GitHub view
+- Targeted content and symbol inspection for the five strongest candidates
+- Ranked reasons, confidence labels, evidence snippets, and line-aware navigation
+- Suggested prompts and a compact finder in the side panel
+- Unit coverage for aliases, tests, context, symbols, and vague queries
+- Live verification on `openai/openai-node`
+
+## 4. Build Schedule
 
 ### Day 2: Installation guide (complete)
 
@@ -118,23 +130,23 @@ Shared rules:
 
 **Ship gate:** asking "How do I install and run this?" returns a trustworthy, sourced guide on four test repositories without model access.
 
-### Day 3: File finder and agent shell
+### Day 3: File finder complete, agent shell next
 
-#### Morning: structural search
+#### Morning: structural search (complete)
 
 - Add query tokenization, singularization, and common code aliases.
 - Rank filename, path, directory, extension, test relationship, and current-directory proximity.
 - Prefer the repository's primary language when several candidates are otherwise equal.
 - Return the top five candidates with reasons, signals, and confidence.
 
-#### Afternoon: targeted content search
+#### Afternoon: targeted content search (complete)
 
 - Fetch snippets only for the strongest candidates.
 - Index import, export, class, function, and command names.
 - Re-rank candidates using exact symbol and content matches.
 - Add `POST /find` with a typed response.
 
-#### Evening: conversational shell
+#### Evening: conversational shell (next)
 
 - Add a compact question composer.
 - Route orientation, installation, and file-finding questions deterministically.

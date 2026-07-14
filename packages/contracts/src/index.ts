@@ -85,6 +85,39 @@ export interface InstallGuide {
   generatedAt: string;
 }
 
+export type FileMatchSignal =
+  | "filename"
+  | "path"
+  | "alias"
+  | "content"
+  | "symbol"
+  | "primary-language"
+  | "current-directory"
+  | "test-pair"
+  | "architecture";
+
+export type FileMatchConfidence = "strong" | "likely" | "possible";
+
+export interface FileMatch {
+  path: string;
+  score: number;
+  confidence: FileMatchConfidence;
+  reason: string;
+  signals: FileMatchSignal[];
+  lines?: [number, number];
+  snippet?: string;
+}
+
+export interface FileFindResponse {
+  repo: string;
+  sha: string;
+  query: string;
+  currentPath: string | null;
+  results: FileMatch[];
+  warnings: string[];
+  generatedAt: string;
+}
+
 export type WayfinderMessage =
   | { type: "wayfinder:context"; context: RepoLocation | null }
   | { type: "wayfinder:get-context" };

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
+  FileFindResponse,
   InstallEvidence,
   InstallGuide,
   RepoLocation,
@@ -20,6 +21,12 @@ type InstallState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; guide: InstallGuide }
+  | { status: 'error'; message: string };
+
+type FindState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; response: FileFindResponse }
   | { status: 'error'; message: string };
 
 const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL ?? 'http://localhost:8787';
@@ -73,6 +80,8 @@ function App() {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'idle' });
   const [selectedStop, setSelectedStop] = useState(0);
   const [installState, setInstallState] = useState<InstallState>({ status: 'idle' });
+  const [findQuery, setFindQuery] = useState('');
+  const [findState, setFindState] = useState<FindState>({ status: 'idle' });
 
   useEffect(() => {
     if (!extensionBrowser) {
@@ -134,6 +143,8 @@ function App() {
       .then(({ map, tour }) => {
         setSelectedStop(0);
         setInstallState({ status: 'idle' });
+        setFindQuery('');
+        setFindState({ status: 'idle' });
         setLoadState({ status: 'ready', map, tour });
       })
       .catch((error: unknown) => {
@@ -166,6 +177,27 @@ function App() {
       setInstallState({
         status: 'error',
         message: error instanceof Error ? error.message : 'Installation evidence could not be assembled.',
+      });
+    }
+  };
+
+  const findFiles = async (map: RepoMap, query: string) => {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) return;
+    setFindQuery(trimmedQuery);
+    setFindState({ status: 'loading' });
+    try {
+      const response = await fetch(apiUrl + '/find', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ map, query: trimmedQuery, currentPath: location?.path ?? null }),
+      });
+      if (!response.ok) throw new Error('The repository coordinates could not be searched.');
+      setFindState({ status: 'ready', response: (await response.json()) as FileFindResponse });
+    } catch (error) {
+      setFindState({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'The repository coordinates could not be searched.',
       });
     }
   };
@@ -342,6 +374,95 @@ function App() {
                       <div className="guide-warnings">
                         <p className="eyebrow">Field notes</p>
                         {installState.guide.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+                      </div>
+                    )}
+                  </article>
+                )}
+
+                <div className="finder-divider"><span>or mark a coordinate</span></div>
+
+                <form
+                  className="file-finder"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void findFiles(loadState.map, findQuery);
+                  }}
+                >
+                  <label htmlFor="wayfinder-query">Where does something live?</label>
+                  <div className="finder-input">
+                    <input
+                      id="wayfinder-query"
+                      value={findQuery}
+                      onChange={(event) => setFindQuery(event.target.value)}
+                      placeholder="authentication, routing, tests..."
+                      minLength={2}
+                    />
+                    <button type="submit" disabled={findState.status === 'loading' || findQuery.trim().length < 2}>
+                      {findState.status === 'loading' ? '...' : 'Find'}
+                    </button>
+                  </div>
+                  {location.path && <small className="context-hint">Using current context: {location.path}</small>}
+                  <div className="finder-prompts" aria-label="Suggested file searches">
+                    {['main entry point', 'where are the tests?', 'configuration'].map((prompt) => (
+                      <button key={prompt} type="button" onClick={() => void findFiles(loadState.map, prompt)}>{prompt}</button>
+                    ))}
+                  </div>
+                </form>
+
+                {findState.status === 'loading' && (
+                  <div className="finder-loading" aria-live="polite">
+                    <span className="locator-pulse" aria-hidden="true" />
+                    <div>
+                      <strong>Triangulating likely files</strong>
+                      <small>Comparing paths, language, context, and selected source content</small>
+                    </div>
+                  </div>
+                )}
+
+                {findState.status === 'error' && (
+                  <div className="install-error" role="alert">
+                    <p>{findState.message}</p>
+                    <button type="button" onClick={() => void findFiles(loadState.map, findQuery)}>Try again</button>
+                  </div>
+                )}
+
+                {findState.status === 'ready' && (
+                  <article className="finder-results" aria-live="polite">
+                    <header>
+                      <div>
+                        <p className="plate-number">Marked coordinates</p>
+                        <h3>{findState.response.results.length} likely locations</h3>
+                      </div>
+                      <span>{Math.round((findState.response.results[0]?.score ?? 0) * 100)}%</span>
+                    </header>
+
+                    <p className="finder-query">“{findState.response.query}”</p>
+
+                    <ol>
+                      {findState.response.results.map((result, index) => (
+                        <li key={result.path}>
+                          <div className="result-rank">{String(index + 1).padStart(2, '0')}</div>
+                          <div className="result-body">
+                            <div className="result-heading">
+                              <strong>{result.path}</strong>
+                              <span className={`match-confidence ${result.confidence}`}>{result.confidence}</span>
+                            </div>
+                            <p>{result.reason}</p>
+                            {result.snippet && <code>{result.snippet}</code>}
+                            <div className="result-signals">
+                              {result.signals.slice(0, 4).map((signal) => <span key={signal}>{signal}</span>)}
+                            </div>
+                            <button type="button" className="result-open" onClick={() => void openFile(loadState.map, result.path, result.lines)}>
+                              Open coordinate <i aria-hidden="true">↗</i>
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+
+                    {findState.response.warnings.length > 0 && (
+                      <div className="finder-warnings">
+                        {findState.response.warnings.map((warning) => <p key={warning}>{warning}</p>)}
                       </div>
                     )}
                   </article>
