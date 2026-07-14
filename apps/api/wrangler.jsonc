@@ -6,6 +6,23 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "MODEL_BUDGET_USD": "5"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MODEL_BUDGET",
+        "class_name": "ModelBudget"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ModelBudget"]
+    }
+  ],
   "ratelimits": [
     {
       "name": "MODEL_RATE_LIMITER",

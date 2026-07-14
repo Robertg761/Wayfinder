@@ -38,7 +38,7 @@ It can:
 
 The free deterministic route remains fully functional. If the OpenAI key is missing, the model API is unavailable, structured output is invalid, or GPT-5.6 names a path outside the evidence set, Wayfinder returns the deterministic answer automatically.
 
-Paid synthesis is protected by a Cloudflare rate-limit binding. A denied or unavailable model allowance also returns the deterministic answer, so cost protection does not turn into a user-facing outage.
+Paid synthesis is protected by a Cloudflare rate-limit binding and a persistent global `$5` budget. A SQLite-backed Durable Object serializes spend reservations across all users, reconciles successful calls to actual Luna token usage, and fails closed to the deterministic answer. Cost protection therefore does not turn into a user-facing outage.
 
 ## How we built it
 
@@ -70,10 +70,11 @@ We also needed a useful path before model credits arrived. That constraint produ
 - Every concrete command and file recommendation carries repository evidence.
 - The extension works on public repositories without OpenAI credits.
 - GPT-5.6 output is constrained by a strict schema and an exact-path allow-list.
+- Paid model traffic has both per-client rate limiting and a persistent global budget cap.
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 71 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, feature-aware test pairing, file ranking, and model fallback.
+- The test suite covers 76 cases across URL context, public request validation, model allowance fallback, global budget accounting, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, feature-aware test pairing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -117,6 +118,6 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 - Current Worker version: `a42744b3-3db3-419f-8e77-654a4495441c`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `bd0811b3cb73ca4fef9e1461f3259b268620acbe5dae7c080e2c30e733856b13`
-- Automated checks: 71 tests, typecheck, extension production build, Worker dry run
+- Automated checks: 76 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

@@ -33,6 +33,21 @@ function rateLimiter(success: boolean): RateLimit {
   } as unknown as RateLimit;
 }
 
+function budgetNamespace(): DurableObjectNamespace {
+  const stub = {
+    fetch: vi.fn(async () => Response.json({
+      spentMicroUsd: 17_336,
+      reservedMicroUsd: 0,
+      limitMicroUsd: 5_000_000,
+      remainingMicroUsd: 4_982_664,
+    })),
+  };
+  return {
+    idFromName: vi.fn(() => ({ toString: () => "budget-id" })),
+    get: vi.fn(() => stub),
+  } as unknown as DurableObjectNamespace;
+}
+
 describe("public API request boundaries", () => {
   it("accepts a normalized repository map", async () => {
     const response = await post("/tour", { map: validMap() });
@@ -81,6 +96,12 @@ describe("public API request boundaries", () => {
       OPENAI_API_KEY: "secret",
       MODEL_RATE_LIMITER: rateLimiter(true),
     });
+    const fullyProtected = await worker.fetch(new Request("https://wayfinder.test/health"), {
+      OPENAI_API_KEY: "secret",
+      MODEL_RATE_LIMITER: rateLimiter(true),
+      MODEL_BUDGET: budgetNamespace(),
+      MODEL_BUDGET_USD: "5",
+    });
 
     await expect(configuredOnly.json()).resolves.toMatchObject({
       modelConfigured: true,
@@ -92,9 +113,21 @@ describe("public API request boundaries", () => {
     await expect(protectedModel.json()).resolves.toMatchObject({
       modelConfigured: true,
       modelProtected: true,
-      modelEnabled: true,
+      modelBudgetProtected: false,
+      modelEnabled: false,
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
+    });
+    await expect(fullyProtected.json()).resolves.toMatchObject({
+      modelConfigured: true,
+      modelProtected: true,
+      modelBudgetProtected: true,
+      modelEnabled: true,
+      modelBudget: {
+        spentUsd: 0.017336,
+        limitUsd: 5,
+        remainingUsd: 4.982664,
+      },
     });
   });
 
@@ -110,6 +143,7 @@ describe("public API request boundaries", () => {
     }), {
       OPENAI_API_KEY: "secret",
       MODEL_RATE_LIMITER: limiter,
+      MODEL_BUDGET: budgetNamespace(),
     });
 
     expect(response.status).toBe(200);
@@ -129,6 +163,7 @@ describe("public API request boundaries", () => {
     }), {
       OPENAI_API_KEY: "secret",
       MODEL_RATE_LIMITER: limiter,
+      MODEL_BUDGET: budgetNamespace(),
     });
 
     expect(response.status).toBe(200);

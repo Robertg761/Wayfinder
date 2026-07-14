@@ -6,6 +6,8 @@ Wayfinder uses only `gpt-5.6-luna`. The production default is low reasoning. Med
 
 Paid synthesis runs only for contribution Trail Plans. Orientation, installation, and file-location questions remain deterministic. The existing Cloudflare binding permits 10 model attempts per connecting IP per minute in each Cloudflare location, and a denied or unavailable allowance returns the free answer.
 
+A SQLite-backed Durable Object adds a global lifetime cap of `$5`. It reserves a conservative maximum before each call and reconciles successful calls to actual token cost. The ledger includes the `$0.017336` spent during the initial evaluation and public verification. If the global budget service is missing, unavailable, or exhausted, model mode fails closed to the deterministic answer.
+
 Each successful response records:
 
 - input, cached input, output, reasoning, and total tokens

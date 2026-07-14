@@ -18,12 +18,13 @@ Updated July 14, 2026.
 - [x] Automatic deterministic fallback
 - [x] Server-side OpenAI credential boundary and `store: false`
 - [x] Paid synthesis protected by a Cloudflare rate-limit binding with deterministic fallback
+- [x] Persistent global `$5` model budget with conservative reservation and actual-cost reconciliation
 - [x] Public Worker deployment
 - [x] Production extension points to the public Worker
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 71 automated tests pass
+- [x] All 76 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification

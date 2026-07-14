@@ -71,12 +71,15 @@ The OpenAI key exists only in the Worker environment. The model request uses the
 - a maximum of five evidence paths
 - a maximum of four ordered field-brief actions
 - a Cloudflare rate-limit allowance before any paid request
+- a serialized global budget reservation before any paid request
 
 The Worker parses the structured result and rejects the entire synthesis if any model citation or field-brief path is absent from the tool output. It also falls back when the key is missing, the API is unavailable, the response is refused or malformed, or local validation fails.
 
 Successful model answers include token counts, latency, reasoning tokens, and an estimated Luna API cost. Focused orientation, installation, and file-location questions never request a model allowance. Their deterministic tools already answer the job directly.
 
-Paid synthesis is fail-closed behind `MODEL_RATE_LIMITER`. The binding permits 10 attempts per connecting-IP key per minute in each Cloudflare location. A denied or unavailable allowance skips the model and returns the completed deterministic answer. The health route reports secret configuration, protection availability, and effective model enablement separately.
+Paid synthesis is fail-closed behind `MODEL_RATE_LIMITER` and `MODEL_BUDGET`. The rate-limit binding permits 10 attempts per connecting-IP key per minute in each Cloudflare location. The SQLite-backed Durable Object serializes all paid requests globally and persists its ledger across Worker deployments. Before a request leaves the Worker, it reserves a conservative cost based on request bytes, output limits, protocol overhead, and a safety multiplier. A successful response reconciles that reservation to reported Luna token usage. Missing usage or failed reconciliation keeps the larger reservation.
+
+The lifetime budget is `$5`, including the verified pre-guard evaluation spend. When the budget is exhausted or either protection is unavailable, Wayfinder returns the completed deterministic answer. `GET /health` reports rate-limit protection, budget protection, effective model enablement, spent budget, reserved budget, and remaining budget.
 
 ## Deployment
 
