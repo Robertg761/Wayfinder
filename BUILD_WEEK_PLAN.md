@@ -115,6 +115,17 @@ Shared rules:
 - Unit coverage for nine representative routing questions
 - Live narrow-panel verification on `openai/openai-node`
 
+### Context and resilience complete for public free mode
+
+- Repository maps and tours cached for 15 minutes
+- Agent answers cached for 30 minutes by commit, query, and current path
+- Stale evidence fallback when a refresh cannot reach GitHub
+- Cache timestamps and per-answer refresh controls
+- Manual repository refresh and active-tab context sync
+- Typed messages for rate limits, private or missing repositories, invalid tokens, and upstream failures
+- Live verification across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
+- Narrow-panel checks for private-repository messaging and repository refresh
+
 ## 4. Build Schedule
 
 ### Day 2: Installation guide (complete)
@@ -169,14 +180,14 @@ Shared rules:
 
 ### Day 4: Context, resilience, and dry run
 
-#### Morning: contextual behavior
+#### Morning: contextual behavior (complete)
 
 - Feed the currently open directory and file into the intent router and file finder.
 - Update answers as GitHub changes routes without reloading the page.
 - Add a manual context refresh control.
 - Keep the selected answer visible while navigating to its evidence.
 
-#### Afternoon: resilience
+#### Afternoon: resilience (complete for public free mode)
 
 - Add friendly GitHub rate-limit handling.
 - Add a clear private-repository message.
@@ -185,7 +196,7 @@ Shared rules:
 - Ensure truncated repositories retain root landmarks.
 - Verify all actions with no GitHub token and with an optional token.
 
-#### Evening: full demo dry run
+#### Evening: full demo dry run (next)
 
 - Run the complete three-minute story on a clean browser profile.
 - Ask a second person to choose a public repository.

@@ -23,11 +23,14 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Installation checklist with documented and inferred confidence labels
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
 - Unified question composer with a persistent evidence timeline and suggested follow-ups
+- Commit-aware repository and answer caching in `chrome.storage.local`
+- Friendly rate-limit, private-repository, authentication, and offline states
+- Manual repository refresh and active GitHub context sync controls
 - Shared TypeScript contracts across the extension and Worker
 - Editorial field-guide interface with loading, empty, ready, and error states
 - Unit tests for URL parsing, repository filtering, installation guidance, and file finding
 
-The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, or file discovery, then renders the appropriate typed tool result in one timeline. Context resilience and caching are the next implementation phase.
+The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, or file discovery, then renders the appropriate typed tool result in one timeline. Recent maps and answers remain available during temporary GitHub or network failures, with visible cache timestamps and manual refresh controls.
 
 ## Workspace
 
@@ -75,6 +78,8 @@ curl -X POST http://localhost:8787/map \
 ```
 
 `POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes the question through the tour, installation guide, or file finder without model credits. The side panel builds the map automatically and opens each evidence result on GitHub.
+
+GitHub access errors use typed response codes so the extension can distinguish a public API rate limit from a private or missing repository. A GitHub token remains optional for public repositories and can be added to `apps/api/.dev.vars` for a higher rate limit.
 
 ## Checks
 

@@ -6,7 +6,7 @@ import type {
   InstallStep,
   RepoMap,
 } from "@wayfinder/contracts";
-import { fetchRepoFile } from "./github";
+import { fetchRepoFile, isBlockingGitHubError } from "./github";
 
 interface PackageJson {
   packageManager?: string;
@@ -368,7 +368,10 @@ export async function createInstallGuide(map: RepoMap, token?: string): Promise<
     .slice(0, 16);
 
   const loaded = await Promise.all(setupPaths.map(async (path) => {
-    const content = await fetchRepoFile(map.repo, path, map.sha, token).catch(() => null);
+    const content = await fetchRepoFile(map.repo, path, map.sha, token).catch((error) => {
+      if (isBlockingGitHubError(error)) throw error;
+      return null;
+    });
     return content === null ? null : [path, content] as const;
   }));
 

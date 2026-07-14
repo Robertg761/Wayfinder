@@ -6,7 +6,7 @@ import type {
   RepoMap,
   RepoTreeEntry,
 } from "@wayfinder/contracts";
-import { fetchRepoFile } from "./github";
+import { fetchRepoFile, isBlockingGitHubError } from "./github";
 
 interface RankedCandidate {
   entry: RepoTreeEntry;
@@ -333,7 +333,10 @@ export async function createFileFind(
     .slice(0, 5);
 
   const loaded = await Promise.all(candidates.map(async ({ entry }) => {
-    const content = await fetchRepoFile(map.repo, entry.path, map.sha, token).catch(() => null);
+    const content = await fetchRepoFile(map.repo, entry.path, map.sha, token).catch((error) => {
+      if (isBlockingGitHubError(error)) throw error;
+      return null;
+    });
     return content === null ? null : [entry.path, content] as const;
   }));
   const files = Object.fromEntries(loaded.filter((item): item is readonly [string, string] => item !== null));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectSetupFiles, compactTree, dedupeTree, filterTree, shouldIncludePath } from "../src/github";
+import { collectSetupFiles, compactTree, dedupeTree, describeGitHubFailure, filterTree, shouldIncludePath } from "../src/github";
 
 describe("repository tree filtering", () => {
   it("keeps source files and useful project metadata", () => {
@@ -66,5 +66,18 @@ describe("repository tree filtering", () => {
       { path: "docs/setup.md", type: "blob" },
       { path: "src/index.ts", type: "blob" },
     ])).toEqual([".node-version", "pnpm-lock.yaml", "docs/setup.md"]);
+  });
+
+  it("distinguishes rate limits from private or missing repositories", () => {
+    expect(describeGitHubFailure(403, "0", "1783987200")).toMatchObject({
+      code: "github-rate-limited",
+      resetAt: "2026-07-14T00:00:00.000Z",
+    });
+    expect(describeGitHubFailure(404, null, null)).toMatchObject({
+      code: "repository-unavailable",
+    });
+    expect(describeGitHubFailure(403, "45", null)).toMatchObject({
+      code: "github-rate-limited",
+    });
   });
 });

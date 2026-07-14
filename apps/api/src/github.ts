@@ -1,4 +1,53 @@
-import type { RepoMap, RepoTreeEntry } from "@wayfinder/contracts";
+import type { RepoMap, RepoTreeEntry, WayfinderErrorCode } from "@wayfinder/contracts";
+
+export class GitHubApiError extends Error {
+  constructor(
+    public readonly code: WayfinderErrorCode,
+    message: string,
+    public readonly status: number,
+    public readonly resetAt?: string,
+  ) {
+    super(message);
+    this.name = "GitHubApiError";
+  }
+}
+
+export function describeGitHubFailure(status: number, remaining: string | null, reset: string | null): {
+  code: WayfinderErrorCode;
+  message: string;
+  resetAt?: string;
+} {
+  const resetSeconds = reset ? Number(reset) : Number.NaN;
+  const resetAt = Number.isFinite(resetSeconds) ? new Date(resetSeconds * 1_000).toISOString() : undefined;
+
+  if (status === 429 || status === 403) {
+    return {
+      code: "github-rate-limited",
+      message: "GitHub's public API limit has been reached. Cached guides still work while the limit resets.",
+      ...(resetAt ? { resetAt } : {}),
+    };
+  }
+  if (status === 404) {
+    return {
+      code: "repository-unavailable",
+      message: "This repository was not found or is private. Free mode currently reads public repositories only.",
+    };
+  }
+  if (status === 401) {
+    return {
+      code: "github-auth-failed",
+      message: "GitHub declined the configured token. Remove it or replace it with a valid token.",
+    };
+  }
+  return {
+    code: "upstream-unavailable",
+    message: "GitHub could not complete the repository request. Try the survey again shortly.",
+  };
+}
+
+export function isBlockingGitHubError(error: unknown): boolean {
+  return error instanceof GitHubApiError && error.code !== "repository-unavailable";
+}
 
 interface GitHubRepoResponse {
   default_branch: string;
@@ -198,8 +247,12 @@ async function githubFetch<T>(path: string, token?: string): Promise<T> {
   });
 
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error("GitHub request failed (" + response.status + "): " + detail.slice(0, 240));
+    const failure = describeGitHubFailure(
+      response.status,
+      response.headers.get("x-ratelimit-remaining"),
+      response.headers.get("x-ratelimit-reset"),
+    );
+    throw new GitHubApiError(failure.code, failure.message, response.status, failure.resetAt);
   }
 
   return (await response.json()) as T;

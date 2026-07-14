@@ -135,6 +135,20 @@ export type AgentAnswer =
   | (AgentAnswerBase & { intent: "installation"; guide: InstallGuide })
   | (AgentAnswerBase & { intent: "file-find"; finder: FileFindResponse });
 
+export type WayfinderErrorCode =
+  | "github-rate-limited"
+  | "repository-unavailable"
+  | "github-auth-failed"
+  | "upstream-unavailable"
+  | "request-failed";
+
+export interface WayfinderErrorResponse {
+  error: string;
+  code: WayfinderErrorCode;
+  message: string;
+  resetAt?: string;
+}
+
 export type WayfinderMessage =
   | { type: "wayfinder:context"; context: RepoLocation | null }
   | { type: "wayfinder:get-context" };

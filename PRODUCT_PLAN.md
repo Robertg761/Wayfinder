@@ -421,13 +421,17 @@ The free router recognizes orientation, installation, command, architecture, and
 
 ### Phase 5: Context and resilience
 
-**Status:** Next.
+**Status:** Complete for public free mode.
 
 - Use the current directory and file as ranking context
 - Add rate-limit and private-repository messages
 - Cache recent results locally
 - Add manual refresh and retry controls
 - Verify behavior across at least five repository shapes
+
+Repository maps and tours are cached for 15 minutes. Agent answers are cached for 30 minutes using the repository commit, normalized question, and current GitHub path. The extension keeps the last usable evidence as a fallback when a refresh fails, labels cached results with their time, and lets the user refresh either the map or a specific answer.
+
+The Worker returns typed GitHub failure codes for public API limits, private or missing repositories, invalid tokens, and upstream failures. The no-token path was verified across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo. The optional-token path still needs a smoke test with a real token before submission.
 
 ### Phase 6: Optional model enhancement
 

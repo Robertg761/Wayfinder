@@ -1,7 +1,7 @@
-import type { RepoMap } from "@wayfinder/contracts";
+import type { RepoMap, WayfinderErrorCode } from "@wayfinder/contracts";
 import { z } from "zod";
 import { createAgentAnswer } from "./agent";
-import { createRepoMap } from "./github";
+import { createRepoMap, GitHubApiError } from "./github";
 import { createFileFind } from "./find";
 import { createInstallGuide } from "./install";
 import { generateTour } from "./tour";
@@ -53,6 +53,22 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: corsHeaders });
 }
 
+function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 500): Response {
+  if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
+  if (error instanceof GitHubApiError) {
+    const status = error.code === "github-rate-limited" ? 429 : error.status;
+    return json({
+      error: "github_request_failed",
+      code: error.code,
+      message: error.message,
+      ...(error.resetAt ? { resetAt: error.resetAt } : {}),
+    }, status);
+  }
+  const message = error instanceof Error ? error.message : "Unknown error";
+  const code: WayfinderErrorCode = "request-failed";
+  return json({ error: fallbackError, code, message }, fallbackStatus);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
@@ -67,9 +83,7 @@ export default {
         const input = mapRequestSchema.parse(await request.json());
         return json(await createRepoMap(input.owner, input.repo, env.GITHUB_TOKEN));
       } catch (error) {
-        if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
-        const message = error instanceof Error ? error.message : "Unknown error";
-        return json({ error: "map_failed", message }, 502);
+        return requestFailure(error, "map_failed", 502);
       }
     }
 
@@ -78,9 +92,7 @@ export default {
         const input = tourRequestSchema.parse(await request.json());
         return json(generateTour(input.map as RepoMap));
       } catch (error) {
-        if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
-        const message = error instanceof Error ? error.message : "Unknown error";
-        return json({ error: "tour_failed", message }, 500);
+        return requestFailure(error, "tour_failed");
       }
     }
 
@@ -89,9 +101,7 @@ export default {
         const input = installRequestSchema.parse(await request.json());
         return json(await createInstallGuide(input.map as RepoMap, env.GITHUB_TOKEN));
       } catch (error) {
-        if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
-        const message = error instanceof Error ? error.message : "Unknown error";
-        return json({ error: "install_guide_failed", message }, 500);
+        return requestFailure(error, "install_guide_failed");
       }
     }
 
@@ -100,9 +110,7 @@ export default {
         const input = findRequestSchema.parse(await request.json());
         return json(await createFileFind(input.map as RepoMap, input.query, input.currentPath ?? null, env.GITHUB_TOKEN));
       } catch (error) {
-        if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
-        const message = error instanceof Error ? error.message : "Unknown error";
-        return json({ error: "file_find_failed", message }, 500);
+        return requestFailure(error, "file_find_failed");
       }
     }
 
@@ -111,9 +119,7 @@ export default {
         const input = agentRequestSchema.parse(await request.json());
         return json(await createAgentAnswer(input.map as RepoMap, input.query, input.currentPath ?? null, env.GITHUB_TOKEN));
       } catch (error) {
-        if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
-        const message = error instanceof Error ? error.message : "Unknown error";
-        return json({ error: "agent_answer_failed", message }, 500);
+        return requestFailure(error, "agent_answer_failed");
       }
     }
 

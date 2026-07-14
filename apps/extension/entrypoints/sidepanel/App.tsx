@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentAnswer,
   InstallEvidence,
@@ -6,23 +6,86 @@ import type {
   RepoMap,
   RepoTour,
   TourStop,
+  WayfinderErrorCode,
+  WayfinderErrorResponse,
   WayfinderMessage,
 } from '@wayfinder/contracts';
+import {
+  agentCacheTtl,
+  agentResponseCacheKey,
+  getCached,
+  repositoryCacheKey,
+  repositoryCacheTtl,
+  setCached,
+  type CacheStorage,
+} from '@/lib/cache';
 import { parseGitHubUrl } from '@/lib/github-url';
 
 type LoadState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'ready'; map: RepoMap; tour: RepoTour }
-  | { status: 'error'; message: string };
+  | { status: 'ready'; map: RepoMap; tour: RepoTour; source: 'live' | 'cache'; cachedAt: string; notice?: string }
+  | { status: 'error'; message: string; code: WayfinderErrorCode; resetAt?: string };
 
 type AgentTurn =
   | { id: string; question: string; status: 'loading' }
-  | { id: string; question: string; status: 'ready'; answer: AgentAnswer }
+  | { id: string; question: string; status: 'ready'; answer: AgentAnswer; source: 'live' | 'cache'; cachedAt: string; notice?: string }
   | { id: string; question: string; status: 'error'; message: string };
+
+interface RepositoryBundle {
+  map: RepoMap;
+  tour: RepoTour;
+}
 
 const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL ?? 'http://localhost:8787';
 const extensionBrowser = typeof browser !== 'undefined' && browser.runtime?.id ? browser : null;
+const extensionCache = extensionBrowser
+  ? extensionBrowser.storage.local as unknown as CacheStorage
+  : null;
+
+class WayfinderRequestError extends Error {
+  constructor(
+    public readonly code: WayfinderErrorCode,
+    message: string,
+    public readonly resetAt?: string,
+  ) {
+    super(message);
+    this.name = 'WayfinderRequestError';
+  }
+}
+
+async function responseError(response: Response, fallback: string): Promise<WayfinderRequestError> {
+  const body = await response.json().catch(() => null) as Partial<WayfinderErrorResponse> | null;
+  return new WayfinderRequestError(
+    body?.code ?? 'request-failed',
+    body?.message ?? fallback,
+    body?.resetAt,
+  );
+}
+
+function requestError(error: unknown, fallback: string): WayfinderRequestError {
+  if (error instanceof WayfinderRequestError) return error;
+  if (error instanceof TypeError) {
+    return new WayfinderRequestError(
+      'upstream-unavailable',
+      'Wayfinder could not reach the guide service. Check the connection and try again.',
+    );
+  }
+  return new WayfinderRequestError('request-failed', error instanceof Error ? error.message : fallback);
+}
+
+function errorHeading(code: WayfinderErrorCode): string {
+  if (code === 'github-rate-limited') return 'GitHub asked us to pause.';
+  if (code === 'repository-unavailable') return 'This trail is not public.';
+  if (code === 'github-auth-failed') return 'The GitHub token was declined.';
+  if (code === 'upstream-unavailable') return 'The map desk cannot be reached.';
+  return 'The survey was interrupted.';
+}
+
+function cacheLabel(cachedAt: string): string {
+  const time = new Date(cachedAt);
+  return Number.isNaN(time.getTime()) ? 'recently' : time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
 
 function formatCount(value: number): string {
   return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
@@ -70,18 +133,30 @@ function EvidenceLink({ map, evidence }: { map: RepoMap; evidence: InstallEviden
 function AgentAnswerView({
   map,
   answer,
+  source,
+  cachedAt,
+  notice,
   onAsk,
+  onRefresh,
 }: {
   map: RepoMap;
   answer: AgentAnswer;
+  source: 'live' | 'cache';
+  cachedAt: string;
+  notice?: string;
   onAsk: (question: string) => void;
+  onRefresh: () => void;
 }) {
   return (
     <div className={`agent-answer ${answer.intent}`}>
       <header className="answer-heading">
         <span>{answer.intent === 'file-find' ? 'coordinates' : answer.intent}</span>
-        <small>Free evidence route</small>
+        <div>
+          <small>{source === 'cache' ? `Cached ${cacheLabel(cachedAt)}` : 'Fresh evidence'}</small>
+          <button type="button" onClick={onRefresh} aria-label="Refresh this answer">↻</button>
+        </div>
       </header>
+      {notice && <p className="cache-notice">{notice}</p>}
       <p className="answer-summary">{answer.summary}</p>
 
       {answer.intent === 'orientation' && (
@@ -200,6 +275,20 @@ function App() {
   const [selectedStop, setSelectedStop] = useState(0);
   const [agentQuery, setAgentQuery] = useState('');
   const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([]);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const [contextSyncing, setContextSyncing] = useState(false);
+  const forceRefresh = useRef(false);
+
+  const syncActiveContext = async () => {
+    if (!extensionBrowser) return;
+    setContextSyncing(true);
+    try {
+      const tabs = await extensionBrowser.tabs.query({ active: true, currentWindow: true });
+      setLocation(parseGitHubUrl(tabs[0]?.url ?? ''));
+    } finally {
+      setContextSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (!extensionBrowser) {
@@ -230,82 +319,155 @@ function App() {
   }, []);
 
   useEffect(() => {
+    setSelectedStop(0);
+    setAgentQuery('');
+    setAgentTurns([]);
+  }, [location?.owner, location?.repo]);
+
+  useEffect(() => {
     if (!location) {
       setLoadState({ status: 'idle' });
       return;
     }
 
     const controller = new AbortController();
+    const cacheKey = repositoryCacheKey(location.owner, location.repo);
+    const repoName = `${location.owner}/${location.repo}`;
+    const bypassCache = forceRefresh.current;
+    forceRefresh.current = false;
     setLoadState({ status: 'loading' });
 
-    void fetch(apiUrl + '/map', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ owner: location.owner, repo: location.repo }),
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Repository map could not be loaded.');
-        return (await response.json()) as RepoMap;
-      })
-      .then(async (map) => {
-        const response = await fetch(apiUrl + '/tour', {
+    void (async () => {
+      const cached = await getCached<RepositoryBundle>(extensionCache, cacheKey).catch(() => null);
+      if (cached && !bypassCache) {
+        setLoadState({
+          status: 'ready',
+          map: cached.value.map,
+          tour: cached.value.tour,
+          source: 'cache',
+          cachedAt: cached.cachedAt,
+        });
+        return;
+      }
+
+      try {
+        const mapResponse = await fetch(apiUrl + '/map', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ owner: location.owner, repo: location.repo }),
+          signal: controller.signal,
+        });
+        if (!mapResponse.ok) throw await responseError(mapResponse, 'Repository map could not be loaded.');
+        const map = (await mapResponse.json()) as RepoMap;
+
+        const tourResponse = await fetch(apiUrl + '/tour', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ map }),
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error('Repository tour could not be assembled.');
-        return { map, tour: (await response.json()) as RepoTour };
-      })
-      .then(({ map, tour }) => {
-        setSelectedStop(0);
-        setAgentQuery('');
-        setAgentTurns([]);
-        setLoadState({ status: 'ready', map, tour });
-      })
-      .catch((error: unknown) => {
+        if (!tourResponse.ok) throw await responseError(tourResponse, 'Repository tour could not be assembled.');
+        const tour = (await tourResponse.json()) as RepoTour;
+        const cachedAt = new Date().toISOString();
+        await setCached(extensionCache, cacheKey, repoName, 'repository', { map, tour }, repositoryCacheTtl).catch(() => undefined);
+        setLoadState({ status: 'ready', map, tour, source: 'live', cachedAt });
+      } catch (error) {
         if (controller.signal.aborted) return;
+        const failure = requestError(error, 'Repository map could not be loaded.');
+        const stale = cached ?? await getCached<RepositoryBundle>(extensionCache, cacheKey, Date.now(), true).catch(() => null);
+        if (stale) {
+          setLoadState({
+            status: 'ready',
+            map: stale.value.map,
+            tour: stale.value.tour,
+            source: 'cache',
+            cachedAt: stale.cachedAt,
+            notice: failure.message,
+          });
+          return;
+        }
         setLoadState({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Repository map could not be loaded.',
+          message: failure.message,
+          code: failure.code,
+          ...(failure.resetAt ? { resetAt: failure.resetAt } : {}),
         });
-      });
+      }
+    })();
 
     return () => controller.abort();
-  }, [location?.owner, location?.repo]);
+  }, [location?.owner, location?.repo, reloadNonce]);
 
   const activeStop = useMemo(
     () => (loadState.status === 'ready' ? loadState.tour.stops[selectedStop] ?? null : null),
     [loadState, selectedStop],
   );
 
-  const askAgent = async (map: RepoMap, question: string, retryId?: string) => {
+  const askAgent = async (map: RepoMap, question: string, retryId?: string, bypassCache = false) => {
     const trimmedQuestion = question.trim();
     if (trimmedQuestion.length < 2) return;
     const id = retryId ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const currentPath = location?.path ?? null;
+    const cacheKey = agentResponseCacheKey(map.repo, map.sha, trimmedQuestion, currentPath);
     setAgentQuery('');
     setAgentTurns((turns) => retryId
       ? turns.map((turn) => turn.id === retryId ? { id, question: trimmedQuestion, status: 'loading' } : turn)
       : [...turns.slice(-5), { id, question: trimmedQuestion, status: 'loading' }]);
 
     try {
+      const cached = await getCached<AgentAnswer>(extensionCache, cacheKey).catch(() => null);
+      if (cached && !bypassCache) {
+        setAgentTurns((turns) => turns.map((turn) => turn.id === id
+          ? {
+            id,
+            question: trimmedQuestion,
+            status: 'ready',
+            answer: cached.value,
+            source: 'cache',
+            cachedAt: cached.cachedAt,
+          }
+          : turn));
+        return;
+      }
+
       const response = await fetch(apiUrl + '/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map, query: trimmedQuestion, currentPath: location?.path ?? null }),
+        body: JSON.stringify({ map, query: trimmedQuestion, currentPath }),
       });
-      if (!response.ok) throw new Error('The guide could not complete that dispatch.');
+      if (!response.ok) throw await responseError(response, 'The guide could not complete that dispatch.');
       const answer = (await response.json()) as AgentAnswer;
+      const cachedAt = new Date().toISOString();
+      await setCached(extensionCache, cacheKey, map.repo, 'agent', answer, agentCacheTtl).catch(() => undefined);
       setAgentTurns((turns) => turns.map((turn) => turn.id === id
-        ? { id, question: trimmedQuestion, status: 'ready', answer }
+        ? { id, question: trimmedQuestion, status: 'ready', answer, source: 'live', cachedAt }
         : turn));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'The guide could not complete that dispatch.';
+      const failure = requestError(error, 'The guide could not complete that dispatch.');
+      const stale = await getCached<AgentAnswer>(extensionCache, cacheKey, Date.now(), true).catch(() => null);
+      if (stale) {
+        setAgentTurns((turns) => turns.map((turn) => turn.id === id
+          ? {
+            id,
+            question: trimmedQuestion,
+            status: 'ready',
+            answer: stale.value,
+            source: 'cache',
+            cachedAt: stale.cachedAt,
+            notice: failure.message,
+          }
+          : turn));
+        return;
+      }
       setAgentTurns((turns) => turns.map((turn) => turn.id === id
-        ? { id, question: trimmedQuestion, status: 'error', message }
+        ? { id, question: trimmedQuestion, status: 'error', message: failure.message }
         : turn));
     }
+  };
+
+  const refreshRepository = () => {
+    forceRefresh.current = true;
+    setReloadNonce((value) => value + 1);
   };
 
   return (
@@ -342,7 +504,14 @@ function App() {
               <p className="eyebrow">Current coordinates</p>
               <strong>{location.owner} / {location.repo}</strong>
             </div>
-            <span>{locationLabel(location)}</span>
+            <div className="coordinate-tools">
+              <span>{locationLabel(location)}</span>
+              {extensionBrowser && (
+                <button type="button" onClick={() => void syncActiveContext()} disabled={contextSyncing} aria-label="Refresh GitHub context">
+                  {contextSyncing ? '...' : '↻'}
+                </button>
+              )}
+            </div>
           </section>
 
           {loadState.status === 'loading' && (
@@ -361,9 +530,10 @@ function App() {
           {loadState.status === 'error' && (
             <section className="error-card" role="alert">
               <p className="plate-number">Survey interrupted</p>
-              <h2>The map desk is offline.</h2>
+              <h2>{errorHeading(loadState.code)}</h2>
               <p>{loadState.message}</p>
-              <small>Start the Wayfinder Worker locally, then reload this panel.</small>
+              {loadState.resetAt && <small>GitHub expects to reopen the trail around {cacheLabel(loadState.resetAt)}.</small>}
+              <button type="button" className="retry-survey" onClick={refreshRepository}>Retry survey</button>
             </section>
           )}
 
@@ -375,8 +545,14 @@ function App() {
                     <p className="plate-number">Orientation 01</p>
                     <h2>{loadState.map.repo}</h2>
                   </div>
-                  <span className="sha">{loadState.map.sha.slice(0, 7)}</span>
+                  <div className="orientation-tools">
+                    <span className="sha">{loadState.map.sha.slice(0, 7)}</span>
+                    <span className={`cache-source ${loadState.source}`}>{loadState.source === 'cache' ? `Cached ${cacheLabel(loadState.cachedAt)}` : 'Fresh map'}</span>
+                    <button type="button" onClick={refreshRepository} aria-label="Refresh repository map">↻</button>
+                  </div>
                 </div>
+
+                {loadState.notice && <p className="cache-notice map-notice">{loadState.notice}</p>}
 
                 <p className="summary">{loadState.tour.summary}</p>
 
@@ -426,7 +602,15 @@ function App() {
                         )}
 
                         {turn.status === 'ready' && (
-                          <AgentAnswerView map={loadState.map} answer={turn.answer} onAsk={(question) => void askAgent(loadState.map, question)} />
+                          <AgentAnswerView
+                            map={loadState.map}
+                            answer={turn.answer}
+                            source={turn.source}
+                            cachedAt={turn.cachedAt}
+                            notice={turn.notice}
+                            onAsk={(question) => void askAgent(loadState.map, question)}
+                            onRefresh={() => void askAgent(loadState.map, turn.question, turn.id, true)}
+                          />
                         )}
                       </li>
                     ))}
