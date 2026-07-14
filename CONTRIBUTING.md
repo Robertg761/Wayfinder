@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 20 or newer
+- Node.js 22 or newer
 - pnpm 10
 - Chrome or another Chromium browser for extension testing
 

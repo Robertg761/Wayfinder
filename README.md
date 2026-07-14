@@ -53,7 +53,7 @@ BUILD_WEEK_PLAN.md Build-week execution plan
 
 ## Local setup
 
-Prerequisites: Node.js 20 or newer and pnpm 10.
+Prerequisites: Node.js 22 or newer and pnpm 10.
 
 ```bash
 pnpm install
