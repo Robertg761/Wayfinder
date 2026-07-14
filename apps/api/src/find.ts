@@ -216,6 +216,16 @@ function contentEvidence(content: string, direct: string[], expanded: string[]):
   let snippet: string | undefined;
   const lines = content.split(/\r?\n/);
 
+  if (/\bdeprecated\b/i.test(content)) {
+    score -= 50;
+    addSignal(signals, "deprecated");
+  }
+
+  if (content.length < 1_000 && /^\s*export\s+(\*|\{[\s\S]*?\})\s+from\s+['"]/m.test(content)) {
+    score -= 25;
+    addSignal(signals, "re-export");
+  }
+
   for (const term of expanded) {
     const index = lower.indexOf(term.toLowerCase());
     if (index === -1) continue;
@@ -260,6 +270,9 @@ function confidence(score: number): FileMatchConfidence {
 
 function reasonFor(signals: FileMatchSignal[], terms: string[]): string {
   const topic = terms.slice(0, 3).join(", ") || "the query";
+  if (signals.includes("deprecated") && signals.includes("re-export")) return "This path matches, but it is a deprecated forwarding file rather than the primary implementation.";
+  if (signals.includes("deprecated")) return "This path matches, but its source marks it as deprecated.";
+  if (signals.includes("re-export")) return "This path matches, but it mainly forwards exports from another module.";
   if (signals.includes("filename") && signals.includes("content")) return "The filename and source content both match " + topic + ".";
   if (signals.includes("symbol")) return "A named symbol in this file matches " + topic + ".";
   if (signals.includes("filename")) return "The filename directly matches " + topic + ".";
@@ -301,6 +314,7 @@ export function findFiles(
     };
   });
 
+  results.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
   const usefulResults = results.filter((result, index) => result.confidence !== "possible" || index < 3).slice(0, 5);
   const warnings: string[] = [];
   if (direct.length === 0) warnings.push("The query did not contain a specific repository concept, so results rely on architectural landmarks.");

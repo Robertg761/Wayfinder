@@ -37,7 +37,8 @@ interface RepositoryBundle {
   tour: RepoTour;
 }
 
-const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL ?? 'http://localhost:8787';
+const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL
+  ?? (import.meta.env.PROD ? 'https://wayfinder-api.hopit-robert.workers.dev' : 'http://localhost:8787');
 const extensionBrowser = typeof browser !== 'undefined' && browser.runtime?.id ? browser : null;
 const extensionCache = extensionBrowser
   ? extensionBrowser.storage.local as unknown as CacheStorage

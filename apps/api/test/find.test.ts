@@ -21,6 +21,8 @@ const map: RepoMap = {
     { path: "src/auth/session.ts", type: "blob", size: 2_000 },
     { path: "src/router.ts", type: "blob", size: 3_000 },
     { path: "src/config.ts", type: "blob", size: 1_000 },
+    { path: "src/pagination.ts", type: "blob", size: 100 },
+    { path: "src/core/pagination.ts", type: "blob", size: 8_000 },
     { path: "src/features/payments/handler.ts", type: "blob", size: 2_000 },
     { path: "tests", type: "tree" },
     { path: "tests/auth.test.ts", type: "blob", size: 2_000 },
@@ -64,5 +66,15 @@ describe("findFiles", () => {
   it("warns when a vague query has only structural suggestions", () => {
     const response = findFiles(map, "where is this handled");
     expect(response.warnings).toContain("The query did not contain a specific repository concept, so results rely on architectural landmarks.");
+  });
+
+  it("ranks the implementation above a deprecated re-export wrapper", () => {
+    const response = findFiles(map, "where is pagination implemented", {
+      "src/pagination.ts": "/** @deprecated Import from ./core/pagination instead */\nexport * from './core/pagination';",
+      "src/core/pagination.ts": "export abstract class AbstractPage<Item> {\n  abstract getPaginatedItems(): Item[];\n}",
+    });
+
+    expect(response.results[0].path).toBe("src/core/pagination.ts");
+    expect(response.results.find((result) => result.path === "src/pagination.ts")).toBeUndefined();
   });
 });

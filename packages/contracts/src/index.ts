@@ -94,7 +94,9 @@ export type FileMatchSignal =
   | "primary-language"
   | "current-directory"
   | "test-pair"
-  | "architecture";
+  | "architecture"
+  | "deprecated"
+  | "re-export";
 
 export type FileMatchConfidence = "strong" | "likely" | "possible";
 
