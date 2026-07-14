@@ -24,6 +24,8 @@ The full matrix passed again after deploying unauthenticated GitHub subrequest c
 
 Trail Plan was also exercised through the public Worker on `openai/openai-node`. The goal `I want to change speech generation. Plan my first contribution.` returned `src/resources/audio/speech.ts` for implementation and `tests/api-resources/audio/speech.test.ts` for verification. The post-propagation check used Worker version `ace31ff6-e34a-4469-98f9-d6f80fc358e0` and returned HTTP 200 in deterministic mode.
 
+After enabling the model, the same public Trail Plan returned `mode: gpt-5.6`, model `gpt-5.6-luna`, and low reasoning from Worker version `a42744b3-3db3-419f-8e77-654a4495441c`. It preserved the expected speech implementation and test coordinates, used 2,483 tokens, took 2,739 ms, and cost an estimated $0.004188.
+
 The public boundary also rejects malformed JSON and normalized-path violations with HTTP 400. Health reports model configuration, protection, and effective enablement separately.
 
 ## Defects found and fixed

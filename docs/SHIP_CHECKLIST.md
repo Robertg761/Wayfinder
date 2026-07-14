@@ -38,14 +38,14 @@ Updated July 14, 2026.
 - [x] Devpost story draft
 - [x] Public privacy statement and contributor guide
 
-## Needs live model verification
+## Live model verification
 
-- [ ] Add `OPENAI_API_KEY` as a Cloudflare Worker secret
-- [ ] Run the three-case low-reasoning Luna evaluation and record usage, latency, and quality
-- [ ] Try medium reasoning only for any case that fails the low-reasoning quality gate
-- [ ] Confirm `/health` reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`
-- [ ] Run one live GPT-5.6 question through the deployed `/agent` endpoint
-- [ ] Confirm the response has `mode: gpt-5.6`, the expected model name, and only valid evidence paths
+- [x] Add `OPENAI_API_KEY` as a Cloudflare Worker secret
+- [x] Run the three-case low-reasoning Luna evaluation and record usage, latency, and quality
+- [x] Keep low reasoning after identifying the Flask weakness as deterministic retrieval rather than synthesis quality
+- [x] Confirm `/health` reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`
+- [x] Run one live GPT-5.6 question through the deployed `/agent` endpoint
+- [x] Confirm the response has `mode: gpt-5.6`, model `gpt-5.6-luna`, low reasoning, and only valid evidence paths
 - [ ] Capture the GPT-5.6 synthesis screenshot
 
 Add the secret with:
@@ -54,7 +54,7 @@ Add the secret with:
 pnpm --filter @wayfinder/api exec wrangler secret put OPENAI_API_KEY
 ```
 
-No source change or redeploy should be required after the secret is added. Luna is fixed in source. See `docs/LUNA_EVALUATION.md` for the budget gate and commands.
+Luna is fixed in source. The verified production Worker version is `a42744b3-3db3-419f-8e77-654a4495441c`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
 
 ## Needs manual Chrome verification
 
