@@ -27,7 +27,7 @@ Private repositories, code editing, pull requests, teams, a VS Code port, and gu
 | `find_file` | Rank likely files for a concept or feature | Complete in free mode |
 | `get_current_context` | Follow the repository, directory, and file open in GitHub | Integrated into file ranking |
 
-The free toolchain is the required baseline. A model can later improve routing and explanation quality without replacing these tools.
+The free toolchain is the required baseline. GPT-5.6 now improves explanation quality without replacing these tools or becoming the source of repository facts.
 
 ## 2. Architecture
 
@@ -196,9 +196,10 @@ Shared rules:
 - Ensure truncated repositories retain root landmarks.
 - Verify all actions with no GitHub token and with an optional token.
 
-#### Evening: full demo dry run (next)
+#### Evening: full demo dry run (in progress)
 
-- Run the complete three-minute story on a clean browser profile.
+- Run the complete API story against the deployed Worker. Complete on `openai/openai-node`.
+- Run the complete three-minute story on a clean browser profile. Manual gate remains.
 - Ask a second person to choose a public repository.
 - Fix only failures that block orientation, installation, search, or navigation.
 
@@ -208,11 +209,11 @@ Shared rules:
 
 #### Morning
 
-- Run final checks and build the extension package.
+- Run final checks and build the extension package. Complete.
 - Prepare a short backup recording.
 - Capture screenshots and a concise architecture diagram.
-- Finish the Devpost project story using real implementation details.
-- Document free mode and the optional future model enhancement honestly.
+- Finish the Devpost project story using real implementation details. Draft complete.
+- Document free mode and the optional GPT-5.6 enhancement honestly. Complete.
 
 #### Demo script
 
@@ -221,7 +222,7 @@ Shared rules:
 3. Ask, "How do I install and run this?" and show sourced commands. (45 seconds)
 4. Ask, "Where is routing handled?" and show ranked file evidence. (45 seconds)
 5. Open the best match and show that Wayfinder follows the current file. (25 seconds)
-6. Explain that the workflow runs in free mode and can later gain deeper reasoning through the same tools. (20 seconds)
+6. Show the evidence badge and explain that GPT-5.6 can synthesize only verified tool output, while free mode remains the automatic fallback. (20 seconds)
 
 **Ship gate:** the live demo proves orientation, installation guidance, file discovery, and contextual navigation.
 
@@ -243,15 +244,17 @@ Free mode must not pretend to deeply understand arbitrary implementation logic. 
 
 ## 6. Optional Model Upgrade
 
-When credits arrive, add the model as an orchestration and synthesis layer.
+**Implementation status:** Complete. Live credit-backed smoke test pending.
 
-The model may:
+GPT-5.6 is integrated as a synthesis layer through the Responses API. The Worker uses strict structured output, disables response storage, validates every returned path against the deterministic tool result, and falls back without interrupting the user.
 
-- Interpret ambiguous questions
-- Select agent tools
-- Explain relationships across several evidence files
-- Answer questions about the currently open file
+The current model path can:
+
 - Produce more natural summaries
+- Explain what the selected evidence means
+- Reference the currently open repository question
+
+Future expansion may let GPT-5.6 interpret ambiguous questions, select more than one agent tool, and explain relationships across several evidence files.
 
 The model may not invent paths, commands, or line ranges. All concrete repository claims must come from tool output.
 

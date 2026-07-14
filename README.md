@@ -1,11 +1,15 @@
 # Wayfinder
 
-Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and move through the repository with confidence. The current build provides free repository mapping, a clickable reading route, sourced installation guidance, and natural-language file discovery without requiring model credits.
+Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and move through the repository with confidence. Deterministic repository tools provide a useful free baseline, while an optional GPT-5.6 synthesis layer turns verified evidence into a more natural explanation.
 
 ## Product documentation
 
 - [Product plan](PRODUCT_PLAN.md): product vision, user journeys, agent tools, free mode, model mode, acceptance criteria, and roadmap
 - [Build week plan](BUILD_WEEK_PLAN.md): implementation order, ship gates, demo story, verification matrix, and cut lines
+- [Architecture](docs/ARCHITECTURE.md): runtime flow, trust boundary, model path, and fallback behavior
+- [Demo script](docs/DEMO_SCRIPT.md): timed primary demo and free-mode backup
+- [Devpost submission draft](docs/DEVPOST_SUBMISSION.md): paste-ready story, technology list, and truth checks
+- [Ship checklist](docs/SHIP_CHECKLIST.md): completed evidence and remaining submission gates
 
 ## Current slice
 
@@ -17,6 +21,8 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Evidence-backed installation guide exposed through `POST /guide/install`
 - Context-aware natural-language file finder exposed through `POST /find`
 - Deterministic agent router exposed through `POST /agent`
+- Optional GPT-5.6 synthesis through the OpenAI Responses API
+- Strict structured model output with exact-path validation and automatic free-mode fallback
 - Filtered GitHub tree, README, metadata, language, and star count
 - Package-manager, runtime, setup-command, and environment evidence detection
 - Clickable tour stops that open real files and line ranges on GitHub
@@ -53,6 +59,8 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars
 
 Add a GitHub token to `apps/api/.dev.vars` for a higher API rate limit. Public repositories also work without one at GitHub's unauthenticated rate limit.
 
+Add an OpenAI API key to the same file to enable GPT-5.6 synthesis. The key stays in the Worker and is never exposed to the extension. Without it, the deterministic agent remains fully functional.
+
 Start the Worker:
 
 ```bash
@@ -77,9 +85,11 @@ curl -X POST http://localhost:8787/map \
   -d '{"owner":"openai","repo":"openai-node"}'
 ```
 
-`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes the question through the tour, installation guide, or file finder without model credits. The side panel builds the map automatically and opens each evidence result on GitHub.
+`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes the question through the tour, installation guide, or file finder. When an OpenAI key is configured, GPT-5.6 receives the typed tool result and produces a structured synthesis. Any unverified path, invalid response, API failure, or missing key returns the deterministic answer instead.
 
 GitHub access errors use typed response codes so the extension can distinguish a public API rate limit from a private or missing repository. A GitHub token remains optional for public repositories and can be added to `apps/api/.dev.vars` for a higher rate limit.
+
+The public Worker is deployed at [wayfinder-api.hopit-robert.workers.dev](https://wayfinder-api.hopit-robert.workers.dev/health). Production extension builds use this origin automatically, while development builds use `http://localhost:8787` unless `WXT_WAYFINDER_API_URL` is set.
 
 ## Checks
 
@@ -90,3 +100,9 @@ pnpm build
 ```
 
 The extension build is written to `apps/extension/.output/chrome-mv3`. The Worker dry-run bundle is written to `apps/api/dist`.
+
+Create the Chrome submission archive with:
+
+```bash
+pnpm --filter @wayfinder/extension zip
+```

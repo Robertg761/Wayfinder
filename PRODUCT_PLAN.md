@@ -137,7 +137,7 @@ Wayfinder should sound like an experienced contributor helping someone on their 
 
 ## 7. Tool-First Agent Architecture
 
-The agent should be built from explicit repository tools. The user interface and future model layer both consume the same typed outputs.
+The agent is built from explicit repository tools. The user interface and optional model layer both consume the same typed outputs.
 
 ```text
 GitHub page context
@@ -161,7 +161,7 @@ Evidence-backed response
 Open exact file in GitHub
 ```
 
-An optional model can later choose tools and improve explanations. It should not replace the tools or become the source of repository facts.
+An optional GPT-5.6 layer improves explanations after the deterministic tool has run. It does not replace the tools or become the source of repository facts.
 
 ## 8. Core Tools
 
@@ -207,7 +207,7 @@ Outputs:
 
 Current free implementation scores documentation, manifests, entry points, runtime modules, tests, and configuration. It prefers shallow files, the repository's primary language, and paths related to the repository name when working with a compacted monorepo.
 
-Future model mode may improve explanations and line ranges, but it must preserve the same `RepoTour` contract.
+Model mode improves the explanation while preserving the same `RepoTour` contract.
 
 ### 8.3 `guide_install`
 
@@ -309,7 +309,7 @@ The response returns ranked evidence and does not claim deep semantic understand
 
 ### 8.5 `get_current_context`
 
-**Status:** Repository and path detection implemented. Agent integration remains.
+**Status:** Complete.
 
 This tool exposes the GitHub view already detected by the content script. It lets answers prefer the current directory or explain how the open file relates to the repository route.
 
@@ -333,17 +333,17 @@ Free mode should handle orientation, installation, and file discovery. It will n
 
 ### 9.2 Model mode
 
-Model mode is an enhancement when credits become available.
+Model mode is implemented and activates when credits and an API key are available.
 
-It can:
+The current implementation can:
 
-- Interpret ambiguous questions
-- Choose between repository tools
 - Synthesize evidence into more natural answers
-- Explain how several files work together
-- Answer questions about the currently open file
+- Explain what the selected tool evidence means
+- Preserve the user's repository question in the synthesis
 
-The model must receive tool outputs and cite repository evidence. It should not invent paths, commands, or line ranges.
+Future model orchestration may interpret ambiguous questions, choose more than one repository tool, explain how several files work together, and answer deeper questions about the currently open file.
+
+The model receives the complete typed tool output through the Responses API with strict structured output. Returned paths are checked against an allow-list built from that evidence. Invalid output, an unavailable API, or a missing key returns the free answer unchanged.
 
 ## 10. Data and Caching
 
@@ -435,10 +435,13 @@ The Worker returns typed GitHub failure codes for public API limits, private or 
 
 ### Phase 6: Optional model enhancement
 
-- Connect the model only after credits arrive
-- Give the model access to the explicit tools
-- Require structured, evidence-backed responses
-- Keep free mode available as fallback
+**Status:** Implementation and mocked API verification complete. Live credit-backed smoke test pending.
+
+- Connect GPT-5.6 through the Responses API
+- Supply the explicit tool result as the only repository evidence
+- Require strict structured, evidence-backed responses
+- Reject paths that do not occur in tool output
+- Keep free mode available as automatic fallback
 
 ## 12. Acceptance Criteria
 
@@ -483,7 +486,7 @@ The demo should prove that Wayfinder is an agent, not only a generated tour.
 5. Ask, "Where is routing handled?"
 6. Open one of the ranked files directly in GitHub.
 7. Navigate to another file and show that Wayfinder follows the context.
-8. Explain that the entire flow works in free mode, while a model can later add deeper reasoning through the same tools.
+8. Explain that the entire flow works in free mode, while GPT-5.6 adds grounded synthesis through the same evidence.
 
 ## 14. Risks and Guardrails
 
