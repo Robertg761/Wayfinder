@@ -4,7 +4,7 @@ Updated July 14, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Worker version: `e3a41878-3674-46de-8a5a-7191e7665fee`
+Worker version: `b413ee5b-e983-43e1-af42-e00d56604f49`
 
 The matrix runs through the public Worker without an OpenAI key or GitHub token. Each case maps the current default-branch commit, requests orientation, requests installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
 
@@ -21,6 +21,8 @@ The matrix runs through the public Worker without an OpenAI key or GitHub token.
 Flask and GitHub CLI correctly warn that their inspected setup instructions are structural inferences rather than explicit contributor commands. The warning is part of the expected result.
 
 The full matrix passed again after deploying unauthenticated GitHub subrequest caching.
+
+The public boundary also rejects malformed JSON and normalized-path violations with HTTP 400. Health reports model configuration, protection, and effective enablement separately.
 
 ## Defects found and fixed
 

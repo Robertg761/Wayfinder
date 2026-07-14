@@ -10,6 +10,7 @@ Updated July 14, 2026.
 - [x] Unauthenticated GitHub edge caching with authenticated-request bypass
 - [x] Bounded repository-map validation and normalized path enforcement
 - [x] Malformed JSON returns a typed client error
+- [x] Public Worker rejects traversal paths and malformed JSON with HTTP 400
 - [x] README rate limits and upstream failures propagate instead of degrading silently
 - [x] Typed rate-limit, private repository, authentication, offline, and retry states
 - [x] GPT-5.6 Responses API integration with strict structured output
