@@ -20,6 +20,7 @@ Updated July 13, 2026.
 - [x] All 48 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
+- [x] GitHub Actions CI runs typecheck, tests, builds, packaging, and artifact upload
 - [x] Public `openai/openai-node` orientation, installation, and file-find API dry run
 - [x] Public matrix across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
 - [x] Representative evidence URLs return HTTP 200
@@ -27,6 +28,7 @@ Updated July 13, 2026.
 - [x] Architecture document
 - [x] Timed demo script
 - [x] Devpost story draft
+- [x] Public privacy statement and contributor guide
 
 ## Needs credits
 
