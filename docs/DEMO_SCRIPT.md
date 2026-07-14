@@ -1,6 +1,6 @@
 # Wayfinder Demo Script
 
-Target length: 2 minutes 50 seconds.
+Target length: 2 minutes 55 seconds.
 
 Demo repository: `openai/openai-node` at the current default-branch commit.
 
@@ -27,39 +27,37 @@ Open `README.md`, then open `src/index.ts` from the reading route.
 
 Say: "These are not generated file names. Each landmark is mapped from the current commit and opens directly in GitHub. Wayfinder keeps following the repository as I navigate."
 
-### 0:45 to 1:25, trustworthy installation help
+### 0:45 to 1:55, the Trail Plan moment
 
-Ask: `How do I install and run this?`
+Ask: `I want to add pagination support. Plan my first contribution.`
 
 Show:
 
-- `npm install openai` from `README.md` line 14
-- `pnpm test` from `CONTRIBUTING.md` line 77
-- documented and inferred confidence labels
+- the repository landmark in Survey
+- sourced setup commands in Prepare
+- `src/core/pagination.ts` in Trace
+- the strongest related test coordinate in Prove
+- the ordered GPT-5.6 field brief when model mode is available
 
-Say: "Setup advice is where a confident guess can waste the most time. Wayfinder only shows a command when it can name the source, line, and confidence."
+Say: "A new contributor does not need another repository summary. They need a route from intention to a safe first edit. Wayfinder orchestrates its repository tools, then GPT-5.6 turns the evidence into an ordered field brief: establish a baseline, open the real implementation, and follow the verification path."
 
-### 1:25 to 2:05, find the implementation
+Open the implementation coordinate.
 
-Ask: `Where is pagination implemented?`
+Say: "Every command and coordinate remains inspectable. In this repository, Wayfinder detects that the obvious pagination file is a deprecated forwarding wrapper and leads me to the core implementation instead."
 
-Open the strongest result, `src/core/pagination.ts`.
+### 1:55 to 2:35, trust boundary
 
-Say: "Wayfinder first ranks the repository structure, then inspects only the strongest candidates for content and symbols. It detects that `src/pagination.ts` is a deprecated forwarding file and takes me to the core implementation instead."
+If model mode is configured, point out the `GPT-5.6 synthesis` badge, field brief, and verified evidence links.
 
-### 2:05 to 2:35, GPT-5.6 with a guardrail
-
-If model mode is configured, point out the `GPT-5.6 synthesis` badge, natural explanation, and verified evidence links.
-
-Say: "GPT-5.6 does the part language models are good at: understanding the question and explaining the result. It cannot invent a path. The Worker checks every model citation against deterministic tool output, and any failure falls back automatically."
+Say: "GPT-5.6 is doing the planning, but it does not get to invent the map. The Worker checks every model citation and action coordinate against deterministic tool output. Any invalid path or model failure falls back automatically."
 
 If credits are not available, show the `Deterministic route` badge instead.
 
 Say: "The same workflow remains useful without model credits. The GPT-5.6 path is implemented and tested, and activates by adding the Worker secret."
 
-### 2:35 to 2:50, close
+### 2:35 to 2:55, close
 
-Say: "Wayfinder turns repository onboarding from wandering through files into an evidence-backed route: what this is, how to run it, where the code lives, and one click to get there."
+Say: "Wayfinder turns 'I want to contribute' into an evidence-backed route through a repository, right where the work happens. It is not another chat window. It is the missing trail between intention and a confident first pull request."
 
 ## Backup path
 
@@ -77,6 +75,6 @@ If the model API is unavailable, continue in deterministic mode. That fallback i
 Capture at least these four frames at a consistent panel width:
 
 1. Repository orientation and reading route
-2. Sourced installation commands with confidence labels
-3. Pagination results with `src/core/pagination.ts` first
-4. GPT-5.6 synthesis badge and verified evidence, only after the live model check passes
+2. Trail Plan showing Survey, Prepare, Trace, and Prove
+3. `src/core/pagination.ts` as the implementation coordinate
+4. GPT-5.6 field brief and verified evidence, only after the live model check passes

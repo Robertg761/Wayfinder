@@ -23,7 +23,7 @@ Updated July 14, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 61 automated tests pass
+- [x] All 64 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification

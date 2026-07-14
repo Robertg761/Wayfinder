@@ -12,7 +12,7 @@ An evidence-first agent that guides you through any unfamiliar GitHub repository
 
 ## Short description
 
-Wayfinder is a Chrome side-panel agent for GitHub. It shows developers where to start, extracts sourced installation steps, finds where a feature is implemented, and opens every answer at the exact repository evidence. GPT-5.6 turns deterministic tool results into natural guidance, while strict path validation prevents it from inventing repository coordinates.
+Wayfinder is a Chrome side-panel agent for GitHub. It shows developers where to start, extracts sourced installation steps, finds where a feature is implemented, and turns a contribution goal into an evidence-backed Trail Plan. GPT-5.6 reasons across the typed tool results to produce an ordered field brief, while strict path validation prevents it from inventing repository coordinates.
 
 ## Inspiration
 
@@ -30,10 +30,11 @@ It can:
 - extract installation, development, test, and build commands from repository evidence
 - label commands as documented, inferred, or conflicting
 - find likely source files from a natural-language question
+- turn a goal such as "I want to add pagination support" into a setup, implementation, and verification route
 - use the active GitHub directory as ranking context
 - open every recommended file at the mapped commit and known line range
 - keep recent evidence available through temporary network or GitHub failures
-- use GPT-5.6 to synthesize a clearer answer from the typed tool result
+- use GPT-5.6 to synthesize an ordered field brief from several typed tool results
 
 The free deterministic route remains fully functional. If the OpenAI key is missing, the model API is unavailable, structured output is invalid, or GPT-5.6 names a path outside the evidence set, Wayfinder returns the deterministic answer automatically.
 
@@ -50,10 +51,11 @@ A TypeScript Cloudflare Worker provides explicit repository tools:
 - installation evidence extractor
 - contextual file finder
 - deterministic intent router
+- multi-tool contribution orchestrator
 
 The mapper reads GitHub metadata, the current commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. The install tool extracts documented commands with line references and uses manifests only for clearly labeled inference.
 
-GPT-5.6 is connected through the OpenAI Responses API. The model receives the user's question and the completed typed tool result, uses medium reasoning, and must return strict structured output. Responses are not stored. Before the answer reaches the extension, the Worker verifies that every model evidence path occurs in the deterministic result.
+GPT-5.6 is connected through the OpenAI Responses API. The model receives the user's question and the completed typed evidence, uses medium reasoning, and must return strict structured output containing a direct answer, explanation, citations, and up to four ordered actions. Responses are not stored. Before the answer reaches the extension, the Worker verifies that every model evidence path and action coordinate occurs in the deterministic result.
 
 ## Challenges we ran into
 
@@ -69,8 +71,9 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The extension works on public repositories without OpenAI credits.
 - GPT-5.6 output is constrained by a strict schema and an exact-path allow-list.
 - The same typed contracts drive free mode, model mode, caching, and the interface.
+- Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 61 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, intent routing, file ranking, and model fallback.
+- The test suite covers 64 cases across URL context, public request validation, model allowance fallback, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -82,7 +85,7 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 
 ## What's next
 
-- expand model orchestration for questions that need more than one repository tool
+- expand Trail Plan with caller and dependency relationships
 - add private-repository authentication with an explicit consent flow
 - explain relationships between the active file and nearby callers or tests
 - support saved onboarding routes for teams and contributors
@@ -114,6 +117,6 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 - Current Worker version: `b413ee5b-e983-43e1-af42-e00d56604f49`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `c5ed4be0b3151bc31f9d426111a7ff8ec86f09d53689865b16529a0fed61d779`
-- Automated checks: 61 tests, typecheck, extension production build, Worker dry run
+- Automated checks: 64 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: pending

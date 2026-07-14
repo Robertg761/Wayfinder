@@ -13,6 +13,10 @@ flowchart LR
   R --> T["Tour tool"]
   R --> I["Install tool"]
   R --> F["File finder"]
+  R --> C["Contribution orchestrator"]
+  C --> T
+  C --> I
+  C --> F
   T --> E["Typed evidence"]
   I --> E
   F --> E
@@ -44,7 +48,7 @@ The Cloudflare Worker exposes six routes:
 - `POST /tour` builds a deterministic reading route.
 - `POST /guide/install` extracts documented or manifest-backed setup commands with confidence labels.
 - `POST /find` ranks paths, then inspects only the strongest small text candidates for content and symbols.
-- `POST /agent` classifies the question, runs one typed tool, and optionally requests GPT-5.6 synthesis.
+- `POST /agent` classifies the question, runs one typed tool for focused questions, or orchestrates tour, install, implementation, and verification evidence for a contribution goal. It then optionally requests GPT-5.6 synthesis.
 
 This edge layer reduces repeated GitHub quota use without caching user questions, generated answers, or authenticated repository data.
 
@@ -64,9 +68,10 @@ The OpenAI key exists only in the Worker environment. The model request uses the
 - `store: false`
 - the deterministic answer as the only repository evidence
 - a maximum of five evidence paths
+- a maximum of four ordered field-brief actions
 - a Cloudflare rate-limit allowance before any paid request
 
-The Worker parses the structured result and rejects the entire synthesis if any model path is absent from the tool output. It also falls back when the key is missing, the API is unavailable, the response is refused or malformed, or local validation fails.
+The Worker parses the structured result and rejects the entire synthesis if any model citation or field-brief path is absent from the tool output. It also falls back when the key is missing, the API is unavailable, the response is refused or malformed, or local validation fails.
 
 Paid synthesis is fail-closed behind `MODEL_RATE_LIMITER`. The binding permits 10 attempts per connecting-IP key per minute in each Cloudflare location. A denied or unavailable allowance skips the model and returns the completed deterministic answer. The health route reports secret configuration, protection availability, and effective model enablement separately.
 

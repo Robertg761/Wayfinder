@@ -120,7 +120,24 @@ export interface FileFindResponse {
   generatedAt: string;
 }
 
-export type AgentIntent = "orientation" | "installation" | "file-find";
+export interface ContributionTrail {
+  repo: string;
+  sha: string;
+  goal: string;
+  tour: RepoTour;
+  guide: InstallGuide;
+  implementation: FileFindResponse;
+  verification: FileFindResponse;
+  generatedAt: string;
+}
+
+export interface AgentBriefStep {
+  title: string;
+  action: string;
+  evidencePath: string | null;
+}
+
+export type AgentIntent = "orientation" | "installation" | "file-find" | "contribution";
 export type AgentMode = "free" | "gpt-5.6";
 
 interface AgentAnswerBase {
@@ -133,6 +150,7 @@ interface AgentAnswerBase {
   summary: string;
   explanation?: string;
   evidencePaths?: string[];
+  brief?: AgentBriefStep[];
   suggestions: string[];
   generatedAt: string;
 }
@@ -140,7 +158,8 @@ interface AgentAnswerBase {
 export type AgentAnswer =
   | (AgentAnswerBase & { intent: "orientation"; tour: RepoTour })
   | (AgentAnswerBase & { intent: "installation"; guide: InstallGuide })
-  | (AgentAnswerBase & { intent: "file-find"; finder: FileFindResponse });
+  | (AgentAnswerBase & { intent: "file-find"; finder: FileFindResponse })
+  | (AgentAnswerBase & { intent: "contribution"; trail: ContributionTrail });
 
 export type WayfinderErrorCode =
   | "github-rate-limited"

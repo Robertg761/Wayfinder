@@ -179,7 +179,7 @@ function AgentAnswerView({
   return (
     <div className={`agent-answer ${answer.intent}`}>
       <header className="answer-heading">
-        <span>{answer.intent === 'file-find' ? 'coordinates' : answer.intent}</span>
+        <span>{answer.intent === 'file-find' ? 'coordinates' : answer.intent === 'contribution' ? 'trail plan' : answer.intent}</span>
         <div>
           <small>{source === 'cache' ? `Cached ${cacheLabel(cachedAt)}` : 'Fresh evidence'}</small>
           <button type="button" onClick={onRefresh} aria-label="Refresh this answer">↻</button>
@@ -199,6 +199,69 @@ function AgentAnswerView({
           {answer.evidencePaths.map((path) => (
             <button key={path} type="button" onClick={() => void openFile(map, path)}>{path}<i aria-hidden="true">↗</i></button>
           ))}
+        </div>
+      )}
+
+      {answer.brief && answer.brief.length > 0 && (
+        <ol className="model-brief" aria-label="GPT-5.6 field brief">
+          {answer.brief.map((step, index) => (
+            <li key={`${step.title}-${index}`}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <div><strong>{step.title}</strong><p>{step.action}</p></div>
+              {step.evidencePath && (
+                <button type="button" onClick={() => void openFile(map, step.evidencePath!)} aria-label={`Open evidence: ${step.evidencePath}`}>↗</button>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {answer.intent === 'contribution' && (
+        <div className="contribution-answer">
+          <div className="trail-goal"><small>Contribution goal</small><p>{answer.trail.goal}</p></div>
+          <ol className="contribution-route">
+            {answer.trail.tour.stops[0] && (
+              <li>
+                <span className="trail-marker">01</span>
+                <div className="trail-stage">
+                  <small>Survey</small>
+                  <strong>Read the repository landmark</strong>
+                  <p>{answer.trail.tour.stops[0].explanation}</p>
+                  <button type="button" onClick={() => void openStop(map, answer.trail.tour.stops[0])}>{answer.trail.tour.stops[0].path}<i aria-hidden="true">↗</i></button>
+                </div>
+              </li>
+            )}
+            <li>
+              <span className="trail-marker">02</span>
+              <div className="trail-stage">
+                <small>Prepare</small>
+                <strong>Establish a working baseline</strong>
+                {answer.trail.guide.steps.length > 0 ? answer.trail.guide.steps.slice(0, 2).map((step) => (
+                  <CopyableCommand key={`${step.order}-${step.command}`} command={step.command} />
+                )) : <p>No sourced setup command was found. Review the field notes before changing the repository.</p>}
+              </div>
+            </li>
+            <li>
+              <span className="trail-marker">03</span>
+              <div className="trail-stage">
+                <small>Trace</small>
+                <strong>Open the likely implementation</strong>
+                {answer.trail.implementation.results[0] ? (
+                  <><p>{answer.trail.implementation.results[0].reason}</p><button type="button" onClick={() => void openFile(map, answer.trail.implementation.results[0].path, answer.trail.implementation.results[0].lines)}>{answer.trail.implementation.results[0].path}<i aria-hidden="true">↗</i></button></>
+                ) : <p>No credible implementation coordinate was found for this goal.</p>}
+              </div>
+            </li>
+            <li>
+              <span className="trail-marker">04</span>
+              <div className="trail-stage">
+                <small>Prove</small>
+                <strong>Follow the verification path</strong>
+                {answer.trail.verification.results[0] ? (
+                  <><p>{answer.trail.verification.results[0].reason}</p><button type="button" onClick={() => void openFile(map, answer.trail.verification.results[0].path, answer.trail.verification.results[0].lines)}>{answer.trail.verification.results[0].path}<i aria-hidden="true">↗</i></button></>
+                ) : <p>No related test coordinate was verified. Add that uncertainty to the contribution plan.</p>}
+              </div>
+            </li>
+          </ol>
         </div>
       )}
 
@@ -692,7 +755,7 @@ function App() {
                           void askAgent(loadState.map, agentQuery);
                         }
                       }}
-                      placeholder="How do I run it? Where is authentication? What should I read first?"
+                      placeholder="What do you want to understand, run, find, or contribute?"
                       rows={2}
                       minLength={2}
                       maxLength={240}
@@ -709,7 +772,7 @@ function App() {
                     <small>{agentQuery.length}/240</small>
                   </div>
                   <div className="agent-prompts" aria-label="Suggested repository questions">
-                    {['What does this project do?', 'How do I install and run it?', 'Where are the tests?'].map((prompt) => (
+                    {['What does this project do?', 'How do I install and run it?', 'Help me plan my first contribution'].map((prompt) => (
                       <button key={prompt} type="button" onClick={() => void askAgent(loadState.map, prompt)}>{prompt}</button>
                     ))}
                   </div>

@@ -341,7 +341,7 @@ The current implementation can:
 - Explain what the selected tool evidence means
 - Preserve the user's repository question in the synthesis
 
-Future model orchestration may interpret ambiguous questions, choose more than one repository tool, explain how several files work together, and answer deeper questions about the currently open file.
+Contribution requests now orchestrate more than one repository tool and let GPT-5.6 turn their combined evidence into an ordered field brief. Future model work may interpret more ambiguous goals, explain how several files work together, and answer deeper questions about the currently open file.
 
 The model receives the complete typed tool output through the Responses API with strict structured output. Returned paths are checked against an allow-list built from that evidence. Invalid output, an unavailable API, or a missing key returns the free answer unchanged.
 

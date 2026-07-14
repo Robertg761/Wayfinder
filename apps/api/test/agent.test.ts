@@ -14,6 +14,9 @@ describe("classifyAgentIntent", () => {
     ["Find the authentication implementation", "file-find"],
     ["What does pagination do?", "file-find"],
     ["configuration", "file-find"],
+    ["Help me make my first contribution", "contribution"],
+    ["I want to add pagination support", "contribution"],
+    ["Help me fix the authentication bug", "contribution"],
   ] as const)("routes %s to %s", (query, intent) => {
     expect(classifyAgentIntent(query)).toBe(intent);
   });

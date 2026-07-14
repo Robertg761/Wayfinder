@@ -11,6 +11,11 @@ const synthesisSchema = z.object({
   summary: z.string().trim().min(1).max(420),
   explanation: z.string().trim().min(1).max(1_200),
   evidencePaths: z.array(z.string().min(1)).max(5),
+  brief: z.array(z.object({
+    title: z.string().trim().min(1).max(80),
+    action: z.string().trim().min(1).max(280),
+    evidencePath: z.string().min(1).nullable(),
+  })).max(4),
 });
 
 const responseSchema = z.object({
@@ -41,8 +46,26 @@ const outputJsonSchema = {
       description: "Zero to five exact repository paths copied from the supplied evidence.",
       items: { type: "string" },
     },
+    brief: {
+      type: "array",
+      description: "Zero to four ordered, evidence-grounded actions. Use this to create a practical contribution plan when requested.",
+      maxItems: 4,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: { type: "string" },
+          action: { type: "string" },
+          evidencePath: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description: "An exact supplied evidence path, or null when the action has no file coordinate.",
+          },
+        },
+        required: ["title", "action", "evidencePath"],
+      },
+    },
   },
-  required: ["summary", "explanation", "evidencePaths"],
+  required: ["summary", "explanation", "evidencePaths", "brief"],
 } as const;
 
 function answerEvidencePaths(answer: AgentAnswer): Set<string> {
@@ -57,6 +80,17 @@ function answerEvidencePaths(answer: AgentAnswer): Set<string> {
     return new Set([
       ...answer.guide.prerequisites.map((item) => item.evidence.path),
       ...answer.guide.steps.map((step) => step.evidence.path),
+    ]);
+  }
+
+  if (answer.intent === "contribution") {
+    return new Set([
+      ...answer.trail.tour.entryPoints.map((entry) => entry.path),
+      ...answer.trail.tour.stops.map((stop) => stop.path),
+      ...answer.trail.guide.prerequisites.map((item) => item.evidence.path),
+      ...answer.trail.guide.steps.map((step) => step.evidence.path),
+      ...answer.trail.implementation.results.map((result) => result.path),
+      ...answer.trail.verification.results.map((result) => result.path),
     ]);
   }
 
@@ -109,6 +143,7 @@ export async function synthesizeAgentAnswer(
           "Never invent a path, command, dependency, symbol, capability, or fact.",
           "Use only exact paths present in the evidence when filling evidencePaths.",
           "If the evidence is incomplete, say what is missing and suggest a supported next question.",
+          "For a contribution request, use brief to turn the evidence into an ordered first-contribution plan that separates setup, implementation, and verification.",
           "Be concise, practical, and welcoming to a developer who is new to the repository.",
         ].join(" "),
         input: JSON.stringify({
@@ -137,6 +172,7 @@ export async function synthesizeAgentAnswer(
 
     const allowedPaths = answerEvidencePaths(answer);
     if (synthesis.data.evidencePaths.some((path) => !allowedPaths.has(path))) return answer;
+    if (synthesis.data.brief.some((step) => step.evidencePath !== null && !allowedPaths.has(step.evidencePath))) return answer;
 
     return {
       ...answer,
@@ -145,6 +181,11 @@ export async function synthesizeAgentAnswer(
       summary: cleanModelText(synthesis.data.summary),
       explanation: cleanModelText(synthesis.data.explanation),
       evidencePaths: synthesis.data.evidencePaths,
+      brief: synthesis.data.brief.map((step) => ({
+        title: cleanModelText(step.title),
+        action: cleanModelText(step.action),
+        evidencePath: step.evidencePath,
+      })),
     };
   } catch {
     return answer;

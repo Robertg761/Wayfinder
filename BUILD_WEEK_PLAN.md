@@ -248,7 +248,7 @@ Free mode must not pretend to deeply understand arbitrary implementation logic. 
 
 **Implementation status:** Complete. Live credit-backed smoke test pending.
 
-GPT-5.6 is integrated as a synthesis layer through the Responses API. The Worker uses strict structured output, disables response storage, validates every returned path against the deterministic tool result, and falls back without interrupting the user.
+GPT-5.6 is integrated as a planning and synthesis layer through the Responses API. For contribution goals, the Worker combines tour, install, implementation, and verification evidence before requesting an ordered field brief. It uses strict structured output, disables response storage, validates every returned path against the deterministic tool results, and falls back without interrupting the user.
 
 The current model path can:
 
@@ -256,7 +256,7 @@ The current model path can:
 - Explain what the selected evidence means
 - Reference the currently open repository question
 
-Future expansion may let GPT-5.6 interpret ambiguous questions, select more than one agent tool, and explain relationships across several evidence files.
+Future expansion may let GPT-5.6 interpret more ambiguous goals and explain caller, dependency, and test relationships across several evidence files.
 
 The model may not invent paths, commands, or line ranges. All concrete repository claims must come from tool output.
 

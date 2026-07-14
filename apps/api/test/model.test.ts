@@ -44,6 +44,7 @@ describe("synthesizeAgentAnswer", () => {
       summary: "Authentication is handled in src/auth/session.ts.",
       explanation: "Start with the exported session logic, then follow its callers.",
       evidencePaths: ["src/auth/session.ts"],
+      brief: [{ title: "Read the session", action: "Start with the exported session logic.", evidencePath: "src/auth/session.ts" }],
     })) as unknown as typeof fetch;
 
     const answer = await synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher });
@@ -72,6 +73,7 @@ describe("synthesizeAgentAnswer", () => {
       summary: "Use a path that does not exist.",
       explanation: "This answer should be discarded.",
       evidencePaths: ["src/invented.ts"],
+      brief: [],
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
@@ -93,6 +95,7 @@ describe("synthesizeAgentAnswer", () => {
       summary: "Authentication\u2014start with the session file.",
       explanation: "Open it\u2014then follow its callers.",
       evidencePaths: ["src/auth/session.ts"],
+      brief: [],
     })) as unknown as typeof fetch;
 
     const answer = await synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher });

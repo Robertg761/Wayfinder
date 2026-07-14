@@ -1,6 +1,6 @@
 # Wayfinder
 
-Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and move through the repository with confidence. Deterministic repository tools provide a useful free baseline, while an optional GPT-5.6 synthesis layer turns verified evidence into a more natural explanation.
+Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and plan a first contribution with confidence. Deterministic repository tools provide a useful free baseline, while an optional GPT-5.6 synthesis layer turns verified evidence into a practical field brief.
 
 ## Product documentation
 
@@ -24,8 +24,9 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Evidence-backed installation guide exposed through `POST /guide/install`
 - Context-aware natural-language file finder exposed through `POST /find`
 - Deterministic agent router exposed through `POST /agent`
+- Multi-tool Trail Plan for contribution goals, setup, implementation, and verification
 - Optional GPT-5.6 synthesis through the OpenAI Responses API
-- Strict structured model output with exact-path validation and automatic free-mode fallback
+- Strict structured model output with evidence-grounded action plans, exact-path validation, and automatic free-mode fallback
 - Filtered GitHub tree, README, metadata, language, and star count
 - Package-manager, runtime, setup-command, and environment evidence detection
 - Clickable tour stops that open real files and line ranges on GitHub
@@ -42,7 +43,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Editorial field-guide interface with loading, empty, ready, and error states
 - Unit tests for URL parsing, caching, clipboard behavior, repository filtering, installation guidance, and file finding
 
-The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, or file discovery, then renders the appropriate typed tool result in one timeline. Recent maps and answers remain available during temporary GitHub or network failures, with visible cache timestamps and manual refresh controls.
+The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, file discovery, or contribution planning. A contribution request runs several tools and combines the repository route, sourced setup commands, likely implementation, and related verification path. Recent maps and answers remain available during temporary GitHub or network failures, with visible cache timestamps and manual refresh controls.
 
 ## Workspace
 
@@ -93,7 +94,7 @@ curl -X POST http://localhost:8787/map \
   -d '{"owner":"openai","repo":"openai-node"}'
 ```
 
-`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes the question through the tour, installation guide, or file finder. When an OpenAI key is configured, GPT-5.6 receives the typed tool result and produces a structured synthesis. Any unverified path, invalid response, API failure, or missing key returns the deterministic answer instead.
+`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes a focused question through the tour, installation guide, or file finder. Contribution goals invoke all three capabilities to build a Trail Plan. When an OpenAI key is configured, GPT-5.6 receives the typed evidence and produces a structured synthesis plus an ordered field brief. Any unverified path, invalid response, API failure, or missing key returns the deterministic answer instead.
 
 GitHub access errors use typed response codes so the extension can distinguish a public API rate limit from a private or missing repository. A GitHub token remains optional for public repositories and can be added to `apps/api/.dev.vars` for a higher rate limit.
 
