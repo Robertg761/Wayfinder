@@ -19,6 +19,7 @@ Updated July 14, 2026.
 - [x] Server-side OpenAI credential boundary and `store: false`
 - [x] Paid synthesis protected by a Cloudflare rate-limit binding with deterministic fallback
 - [x] Persistent global `$5` model budget with conservative reservation and actual-cost reconciliation
+- [x] Production budget ledger reconciles a live call exactly and releases its reservation
 - [x] Public Worker deployment
 - [x] Production extension points to the public Worker
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
@@ -55,7 +56,7 @@ Add the secret with:
 pnpm --filter @wayfinder/api exec wrangler secret put OPENAI_API_KEY
 ```
 
-Luna is fixed in source. The verified production Worker version is `a42744b3-3db3-419f-8e77-654a4495441c`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
+Luna is fixed in source. The verified production Worker version is `ea9f71ea-ff43-4a7e-890f-cd3340403b28`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
 
 ## Needs manual Chrome verification
 

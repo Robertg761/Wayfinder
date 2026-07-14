@@ -26,6 +26,8 @@ Trail Plan was also exercised through the public Worker on `openai/openai-node`.
 
 After enabling the model, the same public Trail Plan returned `mode: gpt-5.6`, model `gpt-5.6-luna`, and low reasoning from Worker version `a42744b3-3db3-419f-8e77-654a4495441c`. It preserved the expected speech implementation and test coordinates, used 2,483 tokens, took 2,739 ms, and cost an estimated $0.004188.
 
+Worker version `ea9f71ea-ff43-4a7e-890f-cd3340403b28` added the persistent global budget. A live speech Trail Plan reported `$0.004206`, and the Durable Object ledger increased by exactly `$0.004206` to `$0.021542`. The outstanding reservation returned to zero and the Worker reported `$4.978458` remaining under its `$5` lifetime cap.
+
 The public boundary also rejects malformed JSON and normalized-path violations with HTTP 400. Health reports model configuration, protection, and effective enablement separately.
 
 ## Defects found and fixed

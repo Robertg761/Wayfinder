@@ -115,7 +115,7 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `a42744b3-3db3-419f-8e77-654a4495441c`
+- Current Worker version: `ea9f71ea-ff43-4a7e-890f-cd3340403b28`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `bd0811b3cb73ca4fef9e1461f3259b268620acbe5dae7c080e2c30e733856b13`
 - Automated checks: 76 tests, typecheck, extension production build, Worker dry run
