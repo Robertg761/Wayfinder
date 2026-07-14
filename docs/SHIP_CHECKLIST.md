@@ -1,12 +1,13 @@
 # Wayfinder Ship Checklist
 
-Updated July 13, 2026.
+Updated July 14, 2026.
 
 ## Complete
 
 - [x] Repository map, tour, installation guide, file finder, and unified agent endpoint
 - [x] Current GitHub repository, directory, and file context
 - [x] Commit-aware repository and answer caching
+- [x] Unauthenticated GitHub edge caching with authenticated-request bypass
 - [x] Typed rate-limit, private repository, authentication, offline, and retry states
 - [x] GPT-5.6 Responses API integration with strict structured output
 - [x] Exact model evidence-path validation
@@ -17,7 +18,7 @@ Updated July 13, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 51 automated tests pass
+- [x] All 54 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification

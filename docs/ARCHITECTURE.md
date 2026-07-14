@@ -33,6 +33,8 @@ The WXT Manifest V3 extension reads the active GitHub repository, branch or comm
 
 Recent repository maps and answers are cached in `chrome.storage.local`. Cache keys include the commit SHA, so evidence from one revision is not silently reused for another.
 
+The Worker also asks Cloudflare to edge-cache unauthenticated GitHub subrequests. Mutable metadata, README, and branch tree responses use a five-minute TTL. File responses addressed by a full commit SHA use a 24-hour TTL. Error responses are excluded, and any request carrying a GitHub token explicitly bypasses shared caching.
+
 ## Worker tools
 
 The Cloudflare Worker exposes six routes:
@@ -43,6 +45,8 @@ The Cloudflare Worker exposes six routes:
 - `POST /guide/install` extracts documented or manifest-backed setup commands with confidence labels.
 - `POST /find` ranks paths, then inspects only the strongest small text candidates for content and symbols.
 - `POST /agent` classifies the question, runs one typed tool, and optionally requests GPT-5.6 synthesis.
+
+This edge layer reduces repeated GitHub quota use without caching user questions, generated answers, or authenticated repository data.
 
 ## GPT-5.6 boundary
 

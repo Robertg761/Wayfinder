@@ -236,14 +236,46 @@ function decodeBase64(value: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-async function githubFetch<T>(path: string, token?: string): Promise<T> {
-  const response = await fetch("https://api.github.com" + path, {
+interface GitHubRequestRuntime {
+  fetcher?: typeof fetch;
+}
+
+const mutableGitHubCacheSeconds = 5 * 60;
+const immutableGitHubCacheSeconds = 24 * 60 * 60;
+
+export function githubCacheTtl(path: string): number {
+  const ref = new URL("https://api.github.com" + path).searchParams.get("ref");
+  return ref && /^[a-f0-9]{40}$/i.test(ref)
+    ? immutableGitHubCacheSeconds
+    : mutableGitHubCacheSeconds;
+}
+
+export async function githubFetch<T>(
+  path: string,
+  token?: string,
+  runtime: GitHubRequestRuntime = {},
+): Promise<T> {
+  const url = "https://api.github.com" + path;
+  const response = await (runtime.fetcher ?? fetch)(url, {
     headers: {
       Accept: "application/vnd.github+json",
       "User-Agent": "wayfinder-build-week",
       "X-GitHub-Api-Version": "2022-11-28",
       ...(token ? { Authorization: "Bearer " + token } : {}),
     },
+    ...(token
+      ? { cache: "no-store" as const }
+      : {
+          cf: {
+            cacheEverything: true,
+            cacheTtlByStatus: {
+              "200-299": githubCacheTtl(path),
+              "300-399": 0,
+              "400-499": 0,
+              "500-599": 0,
+            },
+          },
+        }),
   });
 
   if (!response.ok) {

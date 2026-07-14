@@ -119,6 +119,7 @@ Shared rules:
 
 - Repository maps and tours cached for 15 minutes
 - Agent answers cached for 30 minutes by commit, query, and current path
+- Public GitHub subrequests edge-cached for five minutes, or 24 hours for commit-addressed files
 - Stale evidence fallback when a refresh cannot reach GitHub
 - Cache timestamps and per-answer refresh controls
 - Manual repository refresh and active-tab context sync

@@ -34,6 +34,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
 - Unified question composer with a persistent evidence timeline and suggested follow-ups
 - Commit-aware repository and answer caching in `chrome.storage.local`
+- Edge-cached public GitHub responses with longer retention for immutable commit evidence
 - Friendly rate-limit, private-repository, authentication, and offline states
 - Manual repository refresh and active GitHub context sync controls
 - Shared TypeScript contracts across the extension and Worker

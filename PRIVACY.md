@@ -17,7 +17,9 @@ The extension does not read unrelated tabs. The `tabs` permission is used to fol
 
 The extension sends the public repository identity, current GitHub path, and user question to the Wayfinder Cloudflare Worker. The Worker requests public metadata and selected public file contents from the GitHub REST API.
 
-The Worker does not use a database or Cloudflare KV. It does not intentionally persist repository contents, questions, or answers. Cloudflare may retain operational request metadata according to the account and platform logging configuration.
+The Worker does not use a database or Cloudflare KV. To reduce GitHub API usage, unauthenticated public GitHub responses use Cloudflare's edge cache. Mutable repository responses are eligible for five minutes of edge caching. File responses addressed by a full commit SHA are eligible for 24 hours because that evidence is immutable. Authenticated GitHub requests always bypass the shared cache.
+
+Questions, generated answers, and model responses are not cached by the Worker. Cloudflare may retain operational request metadata according to the account and platform logging configuration.
 
 ## Local cache
 

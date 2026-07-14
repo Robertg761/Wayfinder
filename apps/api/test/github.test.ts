@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { collectSetupFiles, compactTree, dedupeTree, describeGitHubFailure, filterTree, shouldIncludePath } from "../src/github";
+import { vi } from "vitest";
+import {
+  collectSetupFiles,
+  compactTree,
+  dedupeTree,
+  describeGitHubFailure,
+  filterTree,
+  githubCacheTtl,
+  githubFetch,
+  shouldIncludePath,
+} from "../src/github";
 
 describe("repository tree filtering", () => {
   it("keeps source files and useful project metadata", () => {
@@ -79,5 +89,45 @@ describe("repository tree filtering", () => {
     expect(describeGitHubFailure(403, "45", null)).toMatchObject({
       code: "github-rate-limited",
     });
+  });
+});
+
+describe("GitHub response caching", () => {
+  it("uses a short TTL for mutable routes and a long TTL for commit-addressed files", () => {
+    expect(githubCacheTtl("/repos/openai/openai-node")).toBe(300);
+    expect(githubCacheTtl("/repos/openai/openai-node/contents/src/index.ts?ref=main")).toBe(300);
+    expect(githubCacheTtl("/repos/openai/openai-node/contents/src/index.ts?ref=" + "a".repeat(40))).toBe(86_400);
+  });
+
+  it("configures unauthenticated GitHub requests for edge caching", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ default_branch: "main" }));
+
+    await expect(githubFetch("/repos/openai/openai-node", undefined, { fetcher }))
+      .resolves.toEqual({ default_branch: "main" });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+      cf: {
+        cacheEverything: true,
+        cacheTtlByStatus: {
+          "200-299": 300,
+          "400-499": 0,
+          "500-599": 0,
+        },
+      },
+    });
+  });
+
+  it("bypasses shared caching whenever a GitHub token is configured", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ ok: true }));
+
+    await githubFetch("/repos/openai/openai-node", "secret-token", { fetcher });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+      cache: "no-store",
+      headers: { Authorization: "Bearer secret-token" },
+    });
+    expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty("cf");
   });
 });
