@@ -116,7 +116,7 @@ async function modelOptions(request: Request, env: Env): Promise<{
       : "low";
     if (!success) return undefined;
 
-    const budgetId = env.MODEL_BUDGET.idFromName("luna-lifetime-v1");
+    const budgetId = env.MODEL_BUDGET.idFromName("luna-lifetime-v2");
     const budget = env.MODEL_BUDGET.get(budgetId);
     const fetcher: typeof fetch = async (input, init) => {
       const requestBody = typeof init?.body === "string" ? init.body : "";
@@ -170,7 +170,7 @@ export default {
       let modelBudget: Record<string, number> | undefined;
       if (env.MODEL_BUDGET) {
         try {
-          const budget = env.MODEL_BUDGET.get(env.MODEL_BUDGET.idFromName("luna-lifetime-v1"));
+          const budget = env.MODEL_BUDGET.get(env.MODEL_BUDGET.idFromName("luna-lifetime-v2"));
           const limitUsd = budgetLimitMicroUsd(env.MODEL_BUDGET_USD) / 1_000_000;
           const status = await budget.fetch("https://budget.internal/status?limitUsd=" + limitUsd);
           const body = await status.json() as {
