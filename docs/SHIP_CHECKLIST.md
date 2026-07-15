@@ -56,7 +56,7 @@ Add the secret with:
 pnpm --filter @wayfinder/api exec wrangler secret put OPENAI_API_KEY
 ```
 
-Luna is fixed in source. The verified production Worker version is `ea9f71ea-ff43-4a7e-890f-cd3340403b28`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
+Luna is fixed in source. The verified production Worker version is `6e0084fa-937d-47fa-902b-73c614c06147`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
 
 ## Needs manual Chrome verification
 
