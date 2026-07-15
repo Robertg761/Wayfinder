@@ -174,7 +174,7 @@ export type AgentAnswer =
   | (AgentAnswerBase & { intent: "orientation"; tour: RepoTour; guide: InstallGuide })
   | (AgentAnswerBase & { intent: "installation"; guide: InstallGuide })
   | (AgentAnswerBase & { intent: "file-find"; finder: FileFindResponse })
-  | (AgentAnswerBase & { intent: "file-context"; currentPath: string; imports: string[]; relatedPaths: string[]; tests: FileFindResponse })
+  | (AgentAnswerBase & { intent: "file-context"; currentPath: string; imports: string[]; relatedPaths: string[]; callers: FileFindResponse; tests: FileFindResponse })
   | (AgentAnswerBase & { intent: "contribution"; trail: ContributionTrail });
 
 export type WayfinderErrorCode =

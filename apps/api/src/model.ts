@@ -112,6 +112,7 @@ function answerEvidencePaths(answer: AgentAnswer): Set<string> {
     return new Set([
       answer.currentPath,
       ...answer.relatedPaths,
+      ...answer.callers.results.map((result) => result.path),
       ...answer.tests.results.map((result) => result.path),
     ]);
   }

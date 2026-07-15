@@ -52,7 +52,7 @@ The Cloudflare Worker exposes six routes:
 - `POST /tour` builds a deterministic reading route.
 - `POST /guide/install` extracts either consumer or contributor setup commands with confidence labels.
 - `POST /find` ranks paths, then inspects only the strongest small text candidates for content and symbols.
-- `POST /agent` classifies the question, runs one typed tool for focused questions, resolves current-file imports and paired tests when appropriate, or orchestrates tour, install, implementation, and verification evidence for a contribution goal. It then optionally requests GPT-5.6 synthesis.
+- `POST /agent` classifies the question, runs one typed tool for focused questions, resolves current-file imports, likely callers, and paired tests when appropriate, or orchestrates tour, install, implementation, and verification evidence for a contribution goal. It then optionally requests GPT-5.6 synthesis.
 
 This edge layer reduces repeated GitHub quota use without caching user questions, generated answers, or authenticated repository data.
 

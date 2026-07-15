@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FileFindResponse } from "@wayfinder/contracts";
-import { classifyAgentIntent, importedSpecifiers, keepGoalLinkedVerification } from "../src/agent";
+import { classifyAgentIntent, importedSpecifiers, keepGoalLinkedVerification, keepLikelyCallers } from "../src/agent";
 
 describe("classifyAgentIntent", () => {
   it.each([
@@ -39,6 +39,27 @@ describe("importedSpecifiers", () => {
     ].join("\n");
 
     expect(importedSpecifiers(content)).toEqual(['./client', './register', '../lazy', './config']);
+  });
+});
+
+describe("keepLikelyCallers", () => {
+  it("keeps production candidates and drops the current file and non-production surfaces", () => {
+    const finder: FileFindResponse = {
+      repo: "example/trail",
+      sha: "abc1234",
+      query: "pagination import usage caller",
+      currentPath: "src/pagination.ts",
+      results: [
+        { path: "src/pagination.ts", score: 1, confidence: "strong", reason: "Current file.", signals: ["filename"] },
+        { path: "src/client.ts", score: 0.9, confidence: "strong", reason: "Production import.", signals: ["content"] },
+        { path: "tests/pagination.test.ts", score: 0.8, confidence: "strong", reason: "Test.", signals: ["content"] },
+        { path: "ecosystem-tests/example/index.ts", score: 0.7, confidence: "likely", reason: "Fixture.", signals: ["content"] },
+      ],
+      warnings: [],
+      generatedAt: "2026-07-15T00:00:00.000Z",
+    };
+
+    expect(keepLikelyCallers(finder, "src/pagination.ts").results.map((result) => result.path)).toEqual(["src/client.ts"]);
   });
 });
 

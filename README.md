@@ -38,7 +38,7 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 - Installation checklist with documented and inferred confidence labels
 - One-click copying for sourced installation commands
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
-- Current-file import extraction, local dependency resolution, and paired-test ranking
+- Current-file import extraction, local dependency resolution, likely-caller search, and paired-test ranking
 - Compact repository snapshot with purpose, stack, package manager, ref, key directories, entry point, and local commands
 - Unified question composer with saved per-repository trails and suggested follow-ups
 - Saved answer continuity across evidence navigation with a Back to saved trail action

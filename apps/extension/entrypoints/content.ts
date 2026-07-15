@@ -619,6 +619,7 @@ export default defineContentScript({
       if (currentPath) {
         return [
           ['Summarize this file', `Summarize the role of ${currentPath} and its important public surface`],
+          ['Find likely callers', `Which files likely import or call ${currentPath}?`],
           ['Find its tests', `Find the tests paired with ${currentPath}`],
           ['Trace dependencies', `What does ${currentPath} depend on and where should I read next?`],
           ['Map change impact', `If I change ${currentPath}, what implementation and verification files should I inspect?`],
@@ -868,7 +869,8 @@ export default defineContentScript({
           ? `<ol class="wf-route-list">${answer.relatedPaths.map((path) => `<li><strong>${escapeHtml(path)}</strong>${pathButton(path, 'Open dependency')}</li>`).join('')}</ol>`
           : '<div class="wf-boundary">No local dependency path could be resolved from this file. Package imports may point outside the repository.</div>';
         const tests = answer.tests.results.slice(0, 4).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><span class="wf-confidence">${escapeHtml(result.confidence)} match</span><p>${escapeHtml(result.reason)}</p>${pathButton(result.path, 'Open test', result.lines)}</article>`).join('');
-        sections.push(`<div class="wf-snapshot"><div class="wf-fact wide"><span>Current file</span><strong>${escapeHtml(answer.currentPath)}</strong></div>${imports}</div><div class="wf-detail"><div class="wf-kicker"><span>Local dependencies</span></div>${related}</div><div><div class="wf-kicker"><span>Likely paired tests</span></div><div class="wf-result-list">${tests || '<div class="wf-boundary">No credible paired test was found.</div>'}</div></div>`);
+        const callers = answer.callers.results.slice(0, 4).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><span class="wf-confidence">${escapeHtml(result.confidence)} match</span><p>${escapeHtml(result.reason)}</p>${pathButton(result.path, 'Open likely caller', result.lines)}</article>`).join('');
+        sections.push(`<div class="wf-snapshot"><div class="wf-fact wide"><span>Current file</span><strong>${escapeHtml(answer.currentPath)}</strong></div>${imports}</div><div class="wf-detail"><div class="wf-kicker"><span>Local dependencies</span></div>${related}</div><div><div class="wf-kicker"><span>Likely callers</span></div><div class="wf-result-list">${callers || '<div class="wf-boundary">No credible caller was found in the bounded evidence search.</div>'}</div></div><div><div class="wf-kicker"><span>Likely paired tests</span></div><div class="wf-result-list">${tests || '<div class="wf-boundary">No credible paired test was found.</div>'}</div></div>`);
       }
 
       if (answer.intent === 'contribution' && !answer.brief?.length) {

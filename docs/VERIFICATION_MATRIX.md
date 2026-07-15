@@ -4,7 +4,7 @@ Updated July 15, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Worker version: `f6e7df36-f2ef-431e-ac40-503a100fffbb`
+Worker version: `fe43d4c2-c27c-476e-a982-dcb2a7ddb041`
 
 The matrix runs through the public Worker without an OpenAI key or GitHub token. Each case maps the current default-branch commit, requests orientation, requests installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
 
@@ -22,7 +22,7 @@ Flask and GitHub CLI correctly warn that their inspected setup instructions are 
 
 The full matrix passed again after deploying unauthenticated GitHub subrequest caching.
 
-Worker version `f6e7df36-f2ef-431e-ac40-503a100fffbb` passed the full matrix after adding requested-ref mapping, consumer and contributor setup separation, orientation setup evidence, and current-file dependency context. A targeted production check remapped `openai/openai-node` from its exact commit SHA and returned the same requested ref, resolved ref, and commit SHA. Consumer setup returned the documented `npm install openai`, `deno add jsr:@openai/openai`, and `npx jsr add @openai/openai` commands. Current-file context for `src/index.ts` extracted local imports, resolved them to files including `src/client.ts` and `src/core/pagination.ts`, and ranked likely paired tests.
+Worker version `fe43d4c2-c27c-476e-a982-dcb2a7ddb041` passed the full matrix after adding requested-ref mapping, consumer and contributor setup separation, orientation setup evidence, and current-file dependency context. A targeted production check remapped `openai/openai-node` from its exact commit SHA and returned the same requested ref, resolved ref, and commit SHA. Consumer setup returned the documented `npm install openai`, `deno add jsr:@openai/openai`, and `npx jsr add @openai/openai` commands. Current-file context for `src/index.ts` extracted local imports, resolved them to files including `src/client.ts` and `src/core/pagination.ts`, and ranked likely paired tests. A caller check for `src/core/pagination.ts` returned `src/resources/admin/organization/usage.ts` as a strong production candidate while excluding test, fixture, example, evaluation, benchmark, and ecosystem-test surfaces.
 
 Trail Plan was also exercised through the public Worker on `openai/openai-node`. The goal `I want to change speech generation. Plan my first contribution.` returned `src/resources/audio/speech.ts` for implementation and `tests/api-resources/audio/speech.test.ts` for verification. The post-propagation check used Worker version `ace31ff6-e34a-4469-98f9-d6f80fc358e0` and returned HTTP 200 in deterministic mode.
 

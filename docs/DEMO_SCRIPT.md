@@ -23,7 +23,7 @@ Open `openai/openai-node` and let the floating helper appear. Choose "Guide me,"
 
 ### 0:20 to 0:45, orientation becomes navigation
 
-Switch the helper header to Quick mode and open the repository snapshot. Point out the purpose, TypeScript stack, package manager, viewed ref, pinned commit, key directories, entry point, and local commands. Open `src/index.ts`, then use the file actions to show its direct imports, resolved local dependencies, and likely paired tests.
+Switch the helper header to Quick mode and open the repository snapshot. Point out the purpose, TypeScript stack, package manager, viewed ref, pinned commit, key directories, entry point, and local commands. Open `src/index.ts`, then use the file actions to show its direct imports, resolved local dependencies, likely callers, and paired tests.
 
 Say: "Guided mode helps someone learn the terrain. Quick mode gives an experienced developer the important facts immediately. These are not generated file names. Every answer is mapped from the exact branch and pinned commit, and my trail stays available as I inspect the evidence."
 

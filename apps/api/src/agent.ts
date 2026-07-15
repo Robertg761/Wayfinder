@@ -59,6 +59,15 @@ function resolveLocalImports(map: RepoMap, currentPath: string, imports: string[
   return resolved.slice(0, 10);
 }
 
+export function keepLikelyCallers(finder: FileFindResponse, currentPath: string): FileFindResponse {
+  return {
+    ...finder,
+    results: finder.results.filter((result) =>
+      result.path !== currentPath && !/(^|\/)(test|tests|__tests__|fixtures?|examples?|evals?|bench|benchmarks?|ecosystem-tests?)(\/|$)|\.(test|spec)\./i.test(result.path),
+    ),
+  };
+}
+
 function contributionConcepts(goal: string): string[] {
   return [...new Set(goal.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 2 && !contributionNoise.has(term)))];
 }
@@ -194,15 +203,22 @@ export async function createAgentAnswer(
     });
     const imports = importedSpecifiers(content);
     const relatedPaths = resolveLocalImports(map, currentPath, imports);
-    const tests = await createFileFind(map, currentPath.split("/").at(-1)! + " paired tests specs", currentPath, token);
+    const fileName = currentPath.split("/").at(-1)!;
+    const stem = fileName.replace(/\.[^.]+$/, "");
+    const [tests, callerCandidates] = await Promise.all([
+      createFileFind(map, fileName + " paired tests specs", currentPath, token),
+      createFileFind(map, stem + " import usage caller", currentPath, token),
+    ]);
+    const callers = keepLikelyCallers(callerCandidates, currentPath);
     const testPaths = tests.results.slice(0, 3).map((result) => result.path);
+    const callerPath = callers.results[0]?.path;
     return {
       repo: map.repo,
       sha: map.sha,
       query,
       intent,
       mode: "free",
-      summary: `${currentPath} directly references ${imports.length} import${imports.length === 1 ? "" : "s"}${testPaths.length ? ` and has likely verification in ${testPaths[0]}.` : "."}`,
+      summary: `${currentPath} directly references ${imports.length} import${imports.length === 1 ? "" : "s"}${callerPath ? `, is likely used by ${callerPath}` : ""}${testPaths.length ? `, and has likely verification in ${testPaths[0]}.` : "."}`,
       explanation: relatedPaths.length
         ? "The local dependency paths below were resolved from imports in the current file. Test matches are ranked separately."
         : "No local imports were resolved from the current file. Test matches are still ranked from repository evidence.",
@@ -211,6 +227,7 @@ export async function createAgentAnswer(
       currentPath,
       imports,
       relatedPaths,
+      callers,
       tests,
     };
   }
