@@ -192,11 +192,16 @@ export function generateInstallGuide(map: RepoMap, files: Record<string, string>
     .flatMap((path) => extractMarkdownCommands(files[path] ?? (path === readmePath ? readme ?? "" : ""), path))
     .filter((step, index, all) => all.findIndex((candidate) => candidate.command === step.command) === index)
     .map((step, index) => ({ ...step, order: index + 1 }));
-  const steps = [...documentedSteps];
+  const omittedConsumerSteps = documentedSteps.filter((step) =>
+    step.title === "Install the published package" || /<[^>]+>/.test(step.command));
+  const steps = documentedSteps.filter((step) => !omittedConsumerSteps.includes(step));
   const seenCommands = new Set(steps.map((step) => step.command.toLowerCase().replace(/\s+/g, " ").trim()));
   const prerequisites: InstallPrerequisite[] = [];
   const runtimes = new Set<string>();
   const warnings: string[] = [];
+  if (omittedConsumerSteps.length > 0) {
+    warnings.push("Published-package and placeholder commands were omitted because this guide prepares the repository for local contribution.");
+  }
 
   const packagePath = shallowestPath(paths, "package.json");
   let packageJson: PackageJson | null = null;

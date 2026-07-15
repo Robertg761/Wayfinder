@@ -9,6 +9,7 @@ const testLocationQuestion = /\bwhere\b.*\b(tests?|specs?|fixtures?)\b|\b(tests?
 const installationQuestion = /\b(install|installation|setup|set up|prerequisite|dependencies|dependency|package manager|environment|env file|build|compile|start|serve|run locally|develop locally)\b/i;
 const commandQuestion = /\bhow\b.*\b(run|start|build|compile|test|develop|install)\b/i;
 const orientationQuestion = /\b(overview|orientation|tour|architecture|stack|purpose|explore|entry point|entrypoint)\b|\b(what does|what is|tell me about)\s+(this|the)?\s*(repo|repository|project)\b/i;
+const entryFileQuestion = /\b(which|where|find|locate)\b.*\b(entry|entrypoint|entry point)\b.*\b(file|implementation|source)\b|\bmain\s+(implementation\s+)?entry\s+(file|point)\b/i;
 const startingQuestion = /\b(where|how)\b.*\b(start|begin)\b/i;
 const contributionQuestion = /\b(first contribution|contribution plan|contribute|pull request|work on|make a change)\b|\b(i want to|help me|plan to|trying to)\b.*\b(add|change|fix|implement|refactor|improve)\b/i;
 const contributionNoise = new Set([
@@ -21,6 +22,7 @@ export function classifyAgentIntent(query: string): AgentIntent {
   const normalized = query.trim();
   if (contributionQuestion.test(normalized)) return "contribution";
   if (testLocationQuestion.test(normalized)) return "file-find";
+  if (entryFileQuestion.test(normalized)) return "file-find";
   if (startingQuestion.test(normalized)) return "orientation";
   if (commandQuestion.test(normalized) || installationQuestion.test(normalized)) return "installation";
   if (orientationQuestion.test(normalized)) return "orientation";

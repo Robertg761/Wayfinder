@@ -9,18 +9,20 @@ export interface BubblePlacement {
   left: number;
   top: number;
   side: "above" | "below";
+  maxHeight: number;
 }
 
 export interface AgentStarter {
   label: string;
   question: string;
+  requiresInput?: boolean;
 }
 
 export const agentStarters: AgentStarter[] = [
   { label: "Map it in 60 seconds", question: "Give me a 60-second overview of this repository" },
-  { label: "Trace the entry path", question: "Where is the main entry point and execution path?" },
+  { label: "Find the entry file", question: "Which file is the main implementation entry point?" },
   { label: "Choose my first read", question: "Where should I start reading this repository?" },
-  { label: "Plan a small contribution", question: "Help me plan one small, safe first contribution" },
+  { label: "Plan a contribution", question: "I want to change [feature]. Plan my first contribution.", requiresInput: true },
 ];
 
 const landmarkDetails: Record<string, string> = {
@@ -42,15 +44,19 @@ export function placeBubble(
   bubbleWidth: number,
   bubbleHeight: number,
   viewportWidth: number,
+  viewportHeight: number,
   margin = 14,
 ): BubblePlacement {
   const screenLeft = Math.max(margin, Math.min(viewportWidth - bubbleWidth - margin, dock.right - bubbleWidth));
-  const aboveTop = -bubbleHeight - margin;
-  const canFitAbove = dock.top + aboveTop >= margin;
+  const roomAbove = Math.max(0, dock.top - margin * 2);
+  const roomBelow = Math.max(0, viewportHeight - dock.top - dock.height - margin * 2);
+  const side = bubbleHeight <= roomAbove || roomAbove >= roomBelow ? "above" : "below";
+  const maxHeight = Math.max(120, Math.min(bubbleHeight, side === "above" ? roomAbove : roomBelow));
   return {
     left: screenLeft - dock.left,
-    top: canFitAbove ? aboveTop : dock.height + margin,
-    side: canFitAbove ? "above" : "below",
+    top: side === "above" ? -maxHeight - margin : dock.height + margin,
+    side,
+    maxHeight,
   };
 }
 

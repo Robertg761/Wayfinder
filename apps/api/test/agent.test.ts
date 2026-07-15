@@ -11,6 +11,7 @@ describe("classifyAgentIntent", () => {
     ["Tell me about this project", "orientation"],
     ["Where should I start?", "orientation"],
     ["Give me an architecture tour", "orientation"],
+    ["Which file is the main implementation entry point?", "file-find"],
     ["Where are the tests?", "file-find"],
     ["Find the authentication implementation", "file-find"],
     ["What does pagination do?", "file-find"],

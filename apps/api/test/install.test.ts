@@ -104,4 +104,23 @@ describe("generateInstallGuide", () => {
     expect(guide.packageManager).toBe("yarn");
     expect(guide.warnings[0]).toContain("Multiple root package-manager signals");
   });
+
+  it("omits published-package and placeholder commands from contributor setup", () => {
+    const readme = [
+      "# Trail",
+      "## Installation",
+      "```bash",
+      "npm install trail-sdk",
+      "npm run example -- examples/<your-example>.ts",
+      "```",
+    ].join("\n");
+    const map = makeMap({ readme, setupFiles: ["README.md", "package.json", "pnpm-lock.yaml"] });
+    const guide = generateInstallGuide(map, {
+      "README.md": readme,
+      "package.json": JSON.stringify({ packageManager: "pnpm@10.0.0", scripts: { test: "vitest", build: "vite build" } }),
+    });
+
+    expect(guide.steps.map((step) => step.command)).toEqual(["pnpm install", "pnpm test", "pnpm build"]);
+    expect(guide.warnings[0]).toContain("omitted");
+  });
 });
