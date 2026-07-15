@@ -809,7 +809,13 @@ export default defineContentScript({
         })
         .slice(0, 6);
       const entryPoint = tour.entryPoints[0]?.path ?? 'Not confidently detected';
-      const commands = guide?.steps.slice(0, 4).map((step) => step.command) ?? [];
+      const commands = guide ? [...guide.steps]
+        .sort((left, right) => {
+          const priority = (title: string) => /install dependencies/i.test(title) ? 0 : /start/i.test(title) ? 1 : /test/i.test(title) ? 2 : /build/i.test(title) ? 3 : 4;
+          return priority(left.title) - priority(right.title) || left.order - right.order;
+        })
+        .slice(0, 4)
+        .map((step) => step.command) : [];
       return `
         <div class="wf-snapshot">
           <div class="wf-fact wide"><span>Purpose</span><strong>${escapeHtml(tour.summary)}</strong></div>

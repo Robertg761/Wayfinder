@@ -14,6 +14,51 @@ const fixtureHtml = `<!doctype html>
       <article id="readme" class="markdown-body"><h2>Fixture README</h2></article>
     </main>
   </body></html>`;
+const fixtureMap = {
+  repo: 'example/wayfinder-fixture',
+  sha: 'a'.repeat(40),
+  requestedRef: null,
+  resolvedRef: 'main',
+  defaultBranch: 'main',
+  description: 'A fixture repository for Wayfinder.',
+  homepage: null,
+  language: 'TypeScript',
+  stars: 1,
+  readme: '# Fixture',
+  tree: [
+    { path: 'src', type: 'tree' },
+    { path: 'tests', type: 'tree' },
+    { path: 'README.md', type: 'blob' },
+    { path: 'package.json', type: 'blob' },
+    { path: 'src/index.ts', type: 'blob' },
+    { path: 'tests/index.test.ts', type: 'blob' },
+  ],
+  setupFiles: ['package.json', 'pnpm-lock.yaml'],
+  truncated: false,
+  generatedAt: '2026-07-15T12:00:00.000Z',
+};
+const fixtureTour = {
+  repo: fixtureMap.repo,
+  sha: fixtureMap.sha,
+  summary: fixtureMap.description,
+  stack: ['TypeScript', 'Node.js'],
+  entryPoints: [{ path: 'src/index.ts', why: 'Primary entry point.' }],
+  stops: [{ order: 1, title: 'Start here', path: 'src/index.ts', lines: [1, 40], explanation: 'Primary entry point.', lookFor: 'Exports.' }],
+};
+const developGuide = {
+  repo: fixtureMap.repo,
+  sha: fixtureMap.sha,
+  audience: 'develop',
+  packageManager: 'pnpm',
+  runtimes: ['Node.js >=22'],
+  prerequisites: [],
+  steps: [
+    { order: 1, title: 'Run the tests', command: 'pnpm test', evidence: { path: 'package.json' }, confidence: 'documented' },
+    { order: 2, title: 'Install dependencies', command: 'pnpm install', evidence: { path: 'package.json' }, confidence: 'documented' },
+  ],
+  warnings: [],
+  generatedAt: '2026-07-15T12:00:00.000Z',
+};
 
 let context: BrowserContext;
 let page: Page;
@@ -50,6 +95,26 @@ test.beforeAll(async () => {
   page = context.pages()[0] ?? await context.newPage();
   await page.route('https://github.com/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html', body: fixtureHtml });
+  });
+  await page.route(/^(?:http:\/\/localhost:8787|https:\/\/wayfinder-api\.hopit-robert\.workers\.dev)\//, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/map') return route.fulfill({ json: fixtureMap });
+    if (url.pathname === '/tour') return route.fulfill({ json: fixtureTour });
+    if (url.pathname === '/agent') {
+      const request = route.request().postDataJSON() as { query: string };
+      if (/use this project/i.test(request.query)) {
+        return route.fulfill({ json: {
+          repo: fixtureMap.repo, sha: fixtureMap.sha, query: request.query, intent: 'installation', mode: 'free',
+          summary: 'I found one consumer installation command.', suggestions: [], generatedAt: '2026-07-15T12:00:00.000Z',
+          guide: { ...developGuide, audience: 'use', steps: [{ ...developGuide.steps[1], title: 'Install the published package', command: 'pnpm add wayfinder-fixture' }] },
+        } });
+      }
+      return route.fulfill({ json: {
+        repo: fixtureMap.repo, sha: fixtureMap.sha, query: request.query, intent: 'orientation', mode: 'free',
+        summary: fixtureTour.summary, suggestions: [], generatedAt: '2026-07-15T12:00:00.000Z', tour: fixtureTour, guide: developGuide,
+      } });
+    }
+    return route.fulfill({ status: 404, json: { error: 'not_found' } });
   });
 });
 
@@ -145,4 +210,23 @@ test('opens and closes with the keyboard shortcut', async () => {
   await expect(page.getByRole('button', { name: 'Close helper' })).toBeVisible();
   await page.keyboard.press('Alt+Shift+W');
   await expect(page.getByRole('button', { name: 'Close helper' })).toBeHidden();
+});
+
+test('renders a compact quick snapshot with setup commands in workflow order', async () => {
+  await page.goto(fixtureUrl);
+  await selectMode('Quick');
+  await page.getByRole('button', { name: 'Repository snapshot' }).click();
+  await expect(page.getByText('A fixture repository for Wayfinder.').first()).toBeVisible();
+  await expect(page.getByText('TypeScript, Node.js')).toBeVisible();
+  await expect(page.getByText('main at aaaaaaaaaaaa')).toBeVisible();
+  await expect(page.getByText('pnpm install · pnpm test')).toBeVisible();
+});
+
+test('asks whether setup means using or developing the project', async () => {
+  await page.goto(fixtureUrl);
+  await selectMode('Quick');
+  await page.getByRole('button', { name: 'Use or develop this project' }).click();
+  await expect(page.getByRole('heading', { name: 'What are you setting up?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Use this project' }).click();
+  await expect(page.getByRole('button', { name: 'pnpm add wayfinder-fixture' })).toBeVisible();
 });

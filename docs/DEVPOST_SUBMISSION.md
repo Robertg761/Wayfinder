@@ -22,17 +22,21 @@ General chat tools can help, but they make users move context out of GitHub and 
 
 ## What it does
 
-Wayfinder appears as a small helper directly on GitHub. It can lead a visual tour of the repository name, branch, file tree, README, breadcrumbs, code, and line coordinates. When a user asks a deeper question, the same helper expands to show repository answers, commands, Trail Plans, and clickable evidence.
+Wayfinder appears as a small helper directly on GitHub. The user chooses Guided mode for a patient, project-specific tour or Quick mode for a quiet, compact developer map. It can lead a visual tour of the repository name, branch, file tree, README, breadcrumbs, code, and line coordinates. When a user asks a deeper question, the same helper expands to show repository answers, commands, Trail Plans, current-file relationships, and clickable evidence.
 
 It can:
 
 - summarize a repository and build a clickable reading route
+- show a compact snapshot with stack, package manager, ref, commit, key directories, entry point, and local commands
+- separate published-project installation from local repository development
 - extract installation, development, test, and build commands from repository evidence
 - label commands as documented, inferred, or conflicting
 - find likely source files from a natural-language question
 - turn a goal such as "I want to change speech generation" into a setup, implementation, and verification route
 - use the active GitHub directory as ranking context
+- extract imports from the active file, resolve local dependencies, and rank paired tests
 - open every recommended file at the mapped commit and known line range
+- preserve the current trail while the user follows evidence through GitHub
 - keep recent evidence available through temporary network or GitHub failures
 - use GPT-5.6 to synthesize an ordered field brief from several typed tool results
 
@@ -53,7 +57,7 @@ A TypeScript Cloudflare Worker provides explicit repository tools:
 - deterministic intent router
 - multi-tool contribution orchestrator
 
-The mapper reads GitHub metadata, the current commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. The install tool extracts documented commands with line references and uses manifests only for clearly labeled inference.
+The mapper reads GitHub metadata, the exact viewed branch, tag, or commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. Current-file questions inspect direct imports, resolve local repository paths, and rank likely paired tests. The install tool extracts documented commands with line references and uses manifests only for clearly labeled inference.
 
 GPT-5.6 Luna is connected through the OpenAI Responses API for contribution Trail Plans. The model receives the user's question and the completed typed evidence, uses the lowest reasoning level that passes our evaluation, and must return strict structured output containing a direct answer, explanation, citations, and up to four ordered actions. Responses are not stored. Before the answer reaches the extension, the Worker verifies that every model evidence path and action coordinate occurs in the deterministic result. Focused questions stay on the deterministic route, and successful model calls report token usage, latency, and estimated cost.
 
@@ -74,7 +78,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 78 cases across URL context, public request validation, model allowance fallback, global budget accounting, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, goal-linked test pairing, file ranking, and model fallback.
+- The automated suite covers 94 unit and integration cases plus 10 complete browser workflows across URL context, mode persistence, public request validation, ref correctness, setup intent, current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -86,9 +90,9 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 
 ## What's next
 
-- expand Trail Plan with caller and dependency relationships
+- expand Trail Plan with repository-wide caller relationships
 - add private-repository authentication with an explicit consent flow
-- explain relationships between the active file and nearby callers or tests
+- add symbol-aware impact analysis beyond direct imports and paired tests
 - support saved onboarding routes for teams and contributors
 - add a VS Code surface that consumes the same Worker contracts
 
@@ -120,9 +124,9 @@ Verified screenshot candidates:
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `5e1c4017-5fb7-4da2-abec-0031d605b163`
+- Current Worker version: `f6e7df36-f2ef-431e-ac40-503a100fffbb`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `fd100fd8a9b8f0f6958cdfc7a2a64684ec98a11a8a93b7f089f48ed0bdf94464`
-- Automated checks: 85 tests, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `ddd039b7ac1af1bb9c53d1ad0bc49fb49d9dd3a9610c19dcb1305bf97986dbad`
+- Automated checks: 94 unit and integration tests, 10 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

@@ -19,13 +19,13 @@ Demo repository: `openai/openai-node` at the current default-branch commit.
 
 Say: "An unfamiliar repository gives you thousands of files, but not a path through them. Wayfinder is a guide that lives right on GitHub and takes you from a question to verified code evidence."
 
-Open `openai/openai-node` and let the floating helper appear. Select "Show me around." Let the attached character and bubble travel to the repository name and one more GitHub landmark while they highlight and explain each target. Then select "Explain this" and show that Wayfinder answers about that exact landmark without moving or opening generic starters. Open the general question surface, ask for a 60-second repository overview, and point out the repository summary, TypeScript stack, commit identity, and ordered reading route.
+Open `openai/openai-node` and let the floating helper appear. Choose "Guide me," then select "Show me around." Let the attached character and bubble travel to the repository name and one more GitHub landmark while they highlight and explain each target. Point out that each stop teaches the real GitHub term and adds a fact about this project. Then select "Explain this" and show that Wayfinder answers about that exact landmark without moving or opening generic starters.
 
 ### 0:20 to 0:45, orientation becomes navigation
 
-Open `README.md`, then open `src/index.ts` from the reading route.
+Switch the helper header to Quick mode and open the repository snapshot. Point out the purpose, TypeScript stack, package manager, viewed ref, pinned commit, key directories, entry point, and local commands. Open `src/index.ts`, then use the file actions to show its direct imports, resolved local dependencies, and likely paired tests.
 
-Say: "These are not generated file names. Each landmark is mapped from the current commit and opens directly in GitHub. Wayfinder keeps following the repository as I navigate."
+Say: "Guided mode helps someone learn the terrain. Quick mode gives an experienced developer the important facts immediately. These are not generated file names. Every answer is mapped from the exact branch and pinned commit, and my trail stays available as I inspect the evidence."
 
 ### 0:45 to 1:55, the Trail Plan moment
 
