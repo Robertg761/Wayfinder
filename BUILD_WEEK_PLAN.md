@@ -36,8 +36,8 @@ GitHub content script
   detects owner, repo, ref, path, and view
                  |
                  v
-React side panel
-  orientation, questions, evidence, navigation
+Floating on-page helper
+  tour, questions, evidence, navigation
                  |
                  v
 Cloudflare Worker
@@ -61,7 +61,7 @@ Shared rules:
 ### Foundation complete
 
 - pnpm workspace
-- WXT and React MV3 extension
+- Lightweight WXT MV3 extension
 - Cloudflare Worker
 - Shared TypeScript contracts
 - GitHub single-page navigation detection
@@ -88,7 +88,7 @@ Shared rules:
 - Manifest-backed inferred commands
 - Conflict and missing-documentation warnings
 - `POST /guide/install`
-- Side-panel prerequisites, commands, confidence labels, and evidence links
+- On-page prerequisites, commands, confidence labels, and evidence links
 - Live checks on TypeScript, Python, and Rust repositories
 
 ### Free file finder complete
@@ -99,7 +99,7 @@ Shared rules:
 - Current-directory proximity from the active GitHub view
 - Targeted content and symbol inspection for the five strongest candidates
 - Ranked reasons, confidence labels, evidence snippets, and line-aware navigation
-- Suggested prompts and a compact finder in the side panel
+- Suggested prompts and a compact finder inside the floating helper
 - Unit coverage for aliases, tests, context, symbols, and vague queries
 - Live verification on `openai/openai-node`
 
@@ -108,12 +108,12 @@ Shared rules:
 - `POST /agent`
 - Deterministic routing across orientation, installation, and file-discovery intents
 - One contextual question composer instead of separate tool controls
-- Persistent dispatch timeline with typed evidence cards
+- One focused answer surface with typed evidence cards
 - Tool-specific loading, error, warning, and retry states
 - Suggested starting prompts and answer-specific follow-ups
 - Current GitHub file or directory passed into every dispatch
 - Unit coverage for nine representative routing questions
-- Live narrow-panel verification on `openai/openai-node`
+- Live floating-helper verification on `openai/openai-node`
 
 ### Context and resilience complete for public free mode
 
@@ -126,7 +126,7 @@ Shared rules:
 - Typed messages for rate limits, private or missing repositories, invalid tokens, and upstream failures
 - Paid model attempts protected by a Cloudflare rate-limit binding with deterministic fallback
 - Live verification across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
-- Narrow-panel checks for private-repository messaging and repository refresh
+- Floating-helper checks for private-repository messaging and repository refresh
 
 ## 4. Build Schedule
 
@@ -147,9 +147,9 @@ Shared rules:
 - Label every result as `documented`, `inferred`, or `conflicting`.
 - Add tests for Node.js, Python, Rust, and a repository with incomplete instructions.
 
-#### Evening: panel experience
+#### Evening: on-page experience
 
-- Add an installation action to the side panel.
+- Add an installation action to the floating helper.
 - Render prerequisites, copyable commands, evidence links, and warnings.
 - Make every source path open in GitHub.
 

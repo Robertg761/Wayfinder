@@ -102,9 +102,9 @@ These can be revisited only after the four MVP user journeys are reliable.
 
 ## 6. Product Experience
 
-### 6.1 Default side panel
+### 6.1 Default floating helper
 
-The panel opens with an orientation card and a small question composer. It should suggest concrete actions instead of showing an empty chat box:
+The helper opens with an orientation card and expands in place into the full agent. It should suggest concrete actions instead of showing an empty chat box:
 
 - Show me where to start
 - How do I install this?
@@ -143,7 +143,7 @@ The agent is built from explicit repository tools. The user interface and option
 GitHub page context
         |
         v
-Wayfinder side panel
+Wayfinder on-page helper
         |
         v
 Intent router
@@ -370,7 +370,7 @@ Cache behavior:
 **Status:** Complete.
 
 - WXT Chrome extension
-- React side panel
+- Lightweight floating on-page helper
 - Cloudflare Worker
 - Shared TypeScript contracts
 - GitHub URL context detection
@@ -395,7 +395,7 @@ Cache behavior:
 - Extract documented commands and prerequisites
 - Detect package manager and environment files
 - Return typed evidence and confidence labels
-- Add installation answer cards to the side panel
+- Add installation answer cards to the floating helper
 
 ### Phase 3: File finder
 
@@ -417,7 +417,7 @@ Cache behavior:
 - Preserve repository context while navigating
 - Add suggested follow-up actions
 
-The free router recognizes orientation, installation, command, architecture, and file-location language. It keeps the last six dispatches visible, carries the active GitHub path into each tool request, and exposes answer-specific follow-up prompts. The timeline is session-local and resets when the user changes repositories.
+The free router recognizes orientation, installation, command, architecture, and file-location language. It carries the active GitHub path into each tool request, renders one focused answer inside the helper, and exposes answer-specific follow-up prompts. Cached answers are scoped to the repository commit, question, and current path.
 
 ### Phase 5: Context and resilience
 

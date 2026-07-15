@@ -1,6 +1,6 @@
 # Wayfinder
 
-Wayfinder is a context-aware repository guide that lives directly on GitHub. A small animated compass helper travels to important landmarks on the page, highlights them, and explains what they reveal about the repository. Its full side-panel agent helps someone understand an unfamiliar codebase, install and run it, locate important files, and plan a first contribution with confidence. Deterministic repository tools provide a useful free baseline, while GPT-5.6 Luna can turn a verified contribution trail into a practical field brief.
+Wayfinder is a context-aware repository guide that lives directly on GitHub. A small animated compass helper travels to important landmarks on the page, highlights them, explains what they reveal, and expands into a complete repository agent. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and plan a first contribution with confidence. Deterministic repository tools provide a useful free baseline, while GPT-5.6 Luna can turn a verified contribution trail into a practical field brief.
 
 ## Product documentation
 
@@ -16,7 +16,7 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 
 ## Current slice
 
-- WXT and React Chrome extension with a floating on-page helper and an MV3 side panel
+- WXT and TypeScript Chrome extension with one floating on-page agent
 - GitHub URL parsing for repository, tree, and blob views
 - GitHub single-page navigation detection
 - Cloudflare Worker with `GET /health` and `POST /map`
@@ -50,7 +50,7 @@ The deterministic engine uses repository conventions, file roles, aliases, test 
 ## Workspace
 
 ```text
-apps/extension     Chrome extension, page helper, and side panel
+apps/extension     Chrome extension and floating page agent
 apps/api           Cloudflare Worker API
 packages/contracts Shared request and response types
 PRODUCT_PLAN.md    Product source of truth
@@ -84,7 +84,7 @@ In a second terminal, start the extension:
 pnpm dev:extension
 ```
 
-WXT opens a development browser with the unpacked extension installed. Visit a public GitHub repository and Wayfinder appears on the page. Select "Show me around" for a visual landmark tour, or open the full guide from the helper or Chrome toolbar.
+WXT opens a development browser with the unpacked extension installed. Visit a public GitHub repository and Wayfinder appears on the page. Select "Show me around" for a visual landmark tour, or select "Ask Wayfinder" to expand the complete agent in place.
 
 ## API smoke test
 

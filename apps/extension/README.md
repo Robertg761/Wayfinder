@@ -1,6 +1,6 @@
 # Wayfinder Chrome Extension
 
-This package contains the Wayfinder Manifest V3 extension. It follows the active public GitHub repository, renders an animated helper directly on GitHub, keeps the full repository guide in a Chrome side panel, and opens cited files at the mapped commit and line range.
+This package contains the Wayfinder Manifest V3 extension. It follows the active public GitHub repository and renders the complete agent as an animated helper directly on the page. It runs landmark tours, answers repository questions, and opens cited files at the mapped commit and line range.
 
 ## Runtime behavior
 
@@ -24,7 +24,7 @@ Then start WXT in another terminal:
 pnpm dev:extension
 ```
 
-WXT builds the unpacked extension in `.output/chrome-mv3-dev`. Open a public GitHub repository to see the page helper. The helper can run a visual landmark tour or open the full side-panel guide.
+WXT builds the unpacked extension in `.output/chrome-mv3-dev`. Open a public GitHub repository to see the page helper. The helper can run a visual landmark tour or expand in place for deeper repository questions.
 
 ## Test and build
 
@@ -46,13 +46,13 @@ The production directory is `.output/chrome-mv3`. The distributable archive is `
 5. Open a public repository on GitHub.
 6. Open a public GitHub repository and confirm the Wayfinder helper appears.
 7. Select "Show me around" and confirm it moves to and highlights each page landmark.
-8. Select "Ask the full guide" or the toolbar action to open the side panel.
+8. Select "Ask Wayfinder" and verify repository questions, evidence links, installation commands, and Trail Plans remain inside the helper.
 
 Chrome cannot load the zip directly as an unpacked extension. Extract it first if you are testing the archive instead of the build directory.
 
 ## Permissions
 
-- `sidePanel` opens the guide beside GitHub.
+- `storage` keeps repository maps and answers cached locally.
 - `storage` caches commit-aware maps and answers locally.
 - `tabs` reads the active GitHub URL and opens cited evidence in that tab.
 - Host access is limited to GitHub, the local Worker, and the deployed Wayfinder Worker.

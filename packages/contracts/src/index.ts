@@ -186,8 +186,3 @@ export interface WayfinderErrorResponse {
   message: string;
   resetAt?: string;
 }
-
-export type WayfinderMessage =
-  | { type: "wayfinder:context"; context: RepoLocation | null }
-  | { type: "wayfinder:get-context" }
-  | { type: "wayfinder:open-panel" };

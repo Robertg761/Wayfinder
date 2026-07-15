@@ -10,7 +10,7 @@ Demo repository: `openai/openai-node` at the current default-branch commit.
 2. Open `https://github.com/openai/openai-node`.
 3. Confirm `https://wayfinder-api.hopit-robert.workers.dev/health` returns `ok: true`.
 4. If credits are available, confirm health reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`.
-5. Keep the panel narrow enough to look like a normal GitHub side panel.
+5. Keep the browser at a normal laptop width so the helper movement and expanded answers remain readable.
 6. Clear prior Wayfinder turns or reopen the repository before recording.
 
 ## Primary script
@@ -19,7 +19,7 @@ Demo repository: `openai/openai-node` at the current default-branch commit.
 
 Say: "An unfamiliar repository gives you thousands of files, but not a path through them. Wayfinder is a guide that lives right on GitHub and takes you from a question to verified code evidence."
 
-Open `openai/openai-node` and let the floating helper appear. Select "Show me around." Let it travel to the repository name and one more GitHub landmark while it highlights and explains each target. Then select "Ask about this" to open the full guide. Point out the repository summary, TypeScript stack, commit identity, and ordered reading route.
+Open `openai/openai-node` and let the floating helper appear. Select "Show me around." Let it travel to the repository name and one more GitHub landmark while it highlights and explains each target. Then select "Ask about this" to expand the agent in place. Ask what the project does and point out the repository summary, TypeScript stack, commit identity, and ordered reading route.
 
 ### 0:20 to 0:45, orientation becomes navigation
 

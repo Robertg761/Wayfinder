@@ -5,8 +5,7 @@ Wayfinder separates repository facts from language-model prose. Deterministic to
 ```mermaid
 flowchart LR
   G["GitHub page"] --> C["Context script"]
-  C --> H["Floating page helper"]
-  C --> P["React side panel"]
+  C --> H["Floating page agent"]
   P --> W["Cloudflare Worker"]
   W --> M["Repository mapper"]
   M --> H["GitHub REST API"]
@@ -34,9 +33,9 @@ flowchart LR
 
 ## Extension
 
-The WXT Manifest V3 extension reads the active GitHub repository, branch or commit, directory, file, and view. A Shadow DOM page helper stays isolated from GitHub styles, discovers visible landmarks, and moves beside them during a contextual tour. A side panel keeps the deeper agent visible while the user navigates. Every answer card can open its evidence at the mapped commit, including line fragments when available.
+The WXT Manifest V3 extension reads the active GitHub repository, branch or commit, directory, file, and view. A Shadow DOM page agent stays isolated from GitHub styles, discovers visible landmarks, moves beside them during a contextual tour, and expands in place for deeper questions. Every answer card can open its evidence at the mapped commit, including line fragments when available.
 
-The page helper mounts after `DOMContentLoaded` so it cannot interfere with GitHub's parser. It watches Turbo navigation, recalculates valid targets for repository and blob views, respects reduced-motion preferences, and asks the background service worker to open the side panel only from a user gesture.
+The page helper mounts after `DOMContentLoaded` so it cannot interfere with GitHub's parser. It watches Turbo navigation, recalculates valid targets for repository and blob views, respects reduced-motion preferences, caches maps and answers in extension storage, and calls the Worker directly from the active GitHub page.
 
 Recent repository maps and answers are cached in `chrome.storage.local`. Cache keys include the commit SHA, so evidence from one revision is not silently reused for another.
 

@@ -21,12 +21,12 @@ Proof to show: one live Trail Plan, the GPT-5.6 field brief, a clicked evidence 
 
 ### Design
 
-- The side panel stays beside the repository and follows GitHub navigation.
+- The same helper handles orientation and deep repository questions without switching surfaces.
 - The on-page helper turns repository orientation into a visible guided experience before the user ever opens a panel.
 - The visual language is an editorial field guide, with Survey, Prepare, Trace, and Prove as a coherent route.
 - Commands copy in one click and repository coordinates open at the mapped commit.
 
-Proof to show: the complete journey in one uninterrupted recording at a normal side-panel width.
+Proof to show: the complete journey in one uninterrupted recording, entirely through the floating helper.
 
 ### Potential impact
 
@@ -48,7 +48,7 @@ Proof to show: explain why the obvious file is not always the correct implementa
 
 1. Run and capture one credit-backed Trail Plan with GPT-5.6.
 2. Record the three-minute primary demo and a deterministic backup.
-3. Capture consistent screenshots at the same side-panel width.
+3. Capture consistent screenshots with the helper in compact, landmark, and expanded answer states.
 4. Test Trail Plan on at least three languages and repository shapes.
 5. Add the final video, screenshots, and verified claims to Devpost.
 

@@ -1,5 +1,34 @@
-import type { WayfinderMessage } from '@wayfinder/contracts';
+import type { AgentAnswer, RepoLocation, RepoMap, RepoTour, WayfinderErrorResponse } from '@wayfinder/contracts';
+import {
+  agentCacheTtl,
+  agentResponseCacheKey,
+  getCached,
+  repositoryCacheKey,
+  repositoryCacheTtl,
+  setCached,
+  type CacheStorage,
+} from '@/lib/cache';
 import { parseGitHubUrl } from '@/lib/github-url';
+
+interface RepositoryBundle {
+  map: RepoMap;
+  tour: RepoTour;
+}
+
+const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL
+  ?? (import.meta.env.PROD ? 'https://wayfinder-api.hopit-robert.workers.dev' : 'http://localhost:8787');
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+  })[character]!);
+}
+
+function fileUrl(map: RepoMap, path: string, lines?: [number, number]): string {
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const fragment = lines ? `#L${lines[0]}-L${lines[1]}` : '';
+  return `https://github.com/${map.repo}/blob/${map.sha}/${encodedPath}${fragment}`;
+}
 
 type GuideStop = {
   label: string;
@@ -154,6 +183,7 @@ const helperStyles = `
   }
 
   .wf-bubble.open { opacity: 1; transform: none; visibility: visible; }
+  .wf-bubble.agent { width: min(430px, calc(100vw - 28px)); max-height: min(610px, calc(100vh - 28px)); border-radius: 18px 18px 5px 18px; }
 
   .wf-kicker {
     display: flex;
@@ -225,6 +255,70 @@ const helperStyles = `
     font-size: 12px !important;
   }
 
+  .wf-agent-head { padding-right: 30px; }
+  .wf-agent-head h2 { margin-bottom: 5px; }
+  .wf-agent-head p { font-size: 13px; }
+  .wf-agent-home { display: grid; gap: 12px; }
+  .wf-question-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .wf-question-grid button {
+    min-height: 58px;
+    padding: 9px 10px;
+    border: 1px solid var(--wf-line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.46);
+    color: var(--wf-ink);
+    cursor: pointer;
+    text-align: left;
+    font: 700 11px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .wf-question-grid button:hover { border-color: var(--wf-gold); background: rgba(232,167,47,.1); }
+  .wf-composer { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding-top: 11px; border-top: 1px dashed var(--wf-line); }
+  .wf-composer textarea {
+    min-height: 58px;
+    resize: vertical;
+    padding: 10px 11px;
+    border: 1px solid var(--wf-line);
+    border-radius: 10px;
+    background: #fffef9;
+    color: var(--wf-ink);
+    font: 13px/1.35 Georgia, 'Times New Roman', serif;
+  }
+  .wf-composer button {
+    align-self: stretch;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--wf-ink);
+    color: var(--wf-paper);
+    cursor: pointer;
+    font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .wf-loading { display: grid; place-items: center; min-height: 190px; text-align: center; }
+  .wf-loading-mark { width: 42px; height: 42px; margin-bottom: 15px; border: 2px solid var(--wf-line); border-top-color: var(--wf-rust); border-radius: 50%; animation: wf-spin 900ms linear infinite; }
+  .wf-answer { display: grid; gap: 13px; }
+  .wf-answer-mode { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--wf-line); border-radius: 9px; background: rgba(66,105,79,.08); color: var(--wf-moss); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .09em; text-transform: uppercase; }
+  .wf-answer-mode.model { background: rgba(232,167,47,.13); color: #7a4b00; }
+  .wf-answer-summary { color: var(--wf-ink) !important; font-size: 17px !important; line-height: 1.4 !important; }
+  .wf-answer-explanation { font-size: 13px !important; }
+  .wf-result-list, .wf-route-list, .wf-brief { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .wf-result, .wf-route-list li, .wf-brief li { padding: 10px; border: 1px solid var(--wf-line); border-radius: 10px; background: rgba(255,255,255,.48); }
+  .wf-result strong, .wf-route-list strong, .wf-brief strong { display: block; color: var(--wf-ink); font: 700 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .wf-result p, .wf-route-list p, .wf-brief p { margin-top: 5px; font-size: 12px; }
+  .wf-open, .wf-copy-command {
+    width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--wf-ink); border-radius: 8px; background: transparent; color: var(--wf-ink); cursor: pointer; text-align: left; font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .wf-copy-command { background: var(--wf-ink); color: var(--wf-paper); overflow-wrap: anywhere; }
+  .wf-evidence { display: flex; flex-wrap: wrap; gap: 6px; }
+  .wf-evidence button, .wf-followups button { padding: 7px 9px; border: 1px solid var(--wf-line); border-radius: 999px; background: transparent; color: var(--wf-moss); cursor: pointer; font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .wf-followups { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--wf-line); }
+  .wf-answer-nav { display: flex; justify-content: space-between; gap: 8px; }
+  .wf-answer-nav button { padding: 7px 10px; border: 0; background: transparent; color: var(--wf-rust); cursor: pointer; font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .wf-error { padding: 13px; border: 1px solid rgba(181,79,44,.35); border-radius: 10px; background: rgba(181,79,44,.08); }
+  .wf-error p { font-size: 13px; }
+  @keyframes wf-spin { to { transform: rotate(360deg); } }
+
   @keyframes wf-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
   @keyframes wf-seek { 0%,100% { transform: rotate(-28deg) } 48% { transform: rotate(24deg) } 60% { transform: rotate(19deg) } }
   @keyframes wf-ping { 0% { box-shadow: 0 0 0 0 rgba(181,79,44,.45) } 70%,100% { box-shadow: 0 0 0 9px rgba(181,79,44,0) } }
@@ -232,6 +326,7 @@ const helperStyles = `
   @media (prefers-reduced-motion: reduce) {
     .wf-helper, .wf-highlight, .wf-bubble { transition-duration: 0ms; }
     .wf-body, .wf-needle, .wf-ping { animation: none; }
+    .wf-loading-mark { animation: none; }
   }
 `;
 
@@ -317,6 +412,10 @@ export default defineContentScript({
     let welcomeShown = false;
     let movementTimer = 0;
     let viewportFrame = 0;
+    let currentLocation: RepoLocation | null = null;
+    let repository: RepositoryBundle | null = null;
+    let activeQuestion = '';
+    const storage = browser.storage.local as unknown as CacheStorage;
 
     const host = document.createElement('div');
     host.id = 'wayfinder-page-guide';
@@ -346,22 +445,191 @@ export default defineContentScript({
 
     const setBubblePosition = () => {
       const helperRect = helper.getBoundingClientRect();
-      const width = Math.min(326, window.innerWidth - 28);
+      const width = Math.min(bubble.classList.contains('agent') ? 430 : 326, window.innerWidth - 28);
       const left = Math.max(14, Math.min(window.innerWidth - width - 14, helperRect.right - width));
-      const preferredTop = helperRect.top - Math.min(250, bubble.scrollHeight || 220) - 14;
-      const top = preferredTop > 14 ? preferredTop : Math.min(window.innerHeight - 240, helperRect.bottom + 14);
+      const height = Math.min(bubble.scrollHeight || 220, window.innerHeight - 28);
+      const preferredTop = helperRect.top - height - 14;
+      const fallbackTop = Math.min(window.innerHeight - height - 14, helperRect.bottom + 14);
+      const top = preferredTop >= 14 ? preferredTop : Math.max(14, fallbackTop);
       bubble.style.left = `${left}px`;
       bubble.style.top = `${Math.max(14, top)}px`;
     };
 
+    const renderAgentHome = (prefill = '') => {
+      activeStep = -1;
+      highlight.classList.remove('visible');
+      helper.style.left = 'calc(100vw - 82px)';
+      helper.style.top = 'calc(100vh - 86px)';
+      bubble.classList.add('agent');
+      copy.innerHTML = `
+        <div class="wf-agent-home">
+          <div class="wf-agent-head">
+            <div class="wf-kicker"><span>Ask Wayfinder</span><span class="wf-step-count">Evidence first</span></div>
+            <h2>What are you trying to do?</h2>
+            <p>I will map the repository, answer from verified files, and take you straight to the evidence.</p>
+          </div>
+          <div class="wf-question-grid">
+            <button type="button" data-question="What does this project do?">Understand the project</button>
+            <button type="button" data-question="How do I install and run it?">Install and run it</button>
+            <button type="button" data-question="Where is the main entry point?">Find a file or feature</button>
+            <button type="button" data-question="Help me plan my first contribution">Plan a contribution</button>
+          </div>
+          <form class="wf-composer">
+            <textarea name="question" minlength="2" required placeholder="Ask about this repository">${escapeHtml(prefill)}</textarea>
+            <button type="submit">Dispatch</button>
+          </form>
+        </div>
+      `;
+      bubbleOpen = true;
+      bubble.classList.add('open');
+      window.setTimeout(setBubblePosition, 40);
+    };
+
+    const renderLoading = (question: string) => {
+      bubble.classList.add('agent');
+      copy.innerHTML = `
+        <div class="wf-loading">
+          <div class="wf-loading-mark" aria-hidden="true"></div>
+          <div><div class="wf-kicker"><span>Survey in progress</span><span class="wf-step-count">Live repository</span></div><h2>Reading the terrain</h2><p>${escapeHtml(question)}</p></div>
+        </div>
+      `;
+      setBubblePosition();
+    };
+
+    const ensureRepository = async (): Promise<RepositoryBundle> => {
+      if (repository) return repository;
+      if (!currentLocation) throw new Error('Open a public GitHub repository before asking Wayfinder.');
+      const key = repositoryCacheKey(currentLocation.owner, currentLocation.repo);
+      const cached = await getCached<RepositoryBundle>(storage, key).catch(() => null);
+      if (cached) {
+        repository = cached.value;
+        return repository;
+      }
+
+      const mapResponse = await fetch(`${apiUrl}/map`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner: currentLocation.owner, repo: currentLocation.repo }),
+      });
+      if (!mapResponse.ok) {
+        const failure = await mapResponse.json().catch(() => null) as Partial<WayfinderErrorResponse> | null;
+        throw new Error(failure?.message ?? 'Wayfinder could not map this repository.');
+      }
+      const map = await mapResponse.json() as RepoMap;
+      const tourResponse = await fetch(`${apiUrl}/tour`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ map }),
+      });
+      if (!tourResponse.ok) throw new Error('Wayfinder could not assemble the repository route.');
+      const tour = await tourResponse.json() as RepoTour;
+      repository = { map, tour };
+      await setCached(storage, key, map.repo, 'repository', repository, repositoryCacheTtl).catch(() => undefined);
+      return repository;
+    };
+
+    const pathButton = (path: string, label = path, lines?: [number, number]) => {
+      const lineData = lines ? ` data-lines="${lines[0]},${lines[1]}"` : '';
+      return `<button type="button" class="wf-open" data-path="${escapeHtml(path)}"${lineData}>${escapeHtml(label)} ↗</button>`;
+    };
+
+    const renderAnswer = (answer: AgentAnswer) => {
+      const bundle = repository;
+      if (!bundle) return;
+      const sections: string[] = [];
+
+      if (answer.brief?.length) {
+        sections.push(`<ol class="wf-brief">${answer.brief.map((step, index) => `<li><strong>${String(index + 1).padStart(2, '0')} ${escapeHtml(step.title)}</strong><p>${escapeHtml(step.action)}</p>${step.evidencePath ? pathButton(step.evidencePath) : ''}</li>`).join('')}</ol>`);
+      }
+
+      if (answer.intent === 'orientation') {
+        sections.push(`<ol class="wf-route-list">${answer.tour.stops.slice(0, 5).map((stop) => `<li><strong>${String(stop.order).padStart(2, '0')} ${escapeHtml(stop.title)}</strong><p>${escapeHtml(stop.explanation)}</p>${pathButton(stop.path, stop.path, stop.lines)}</li>`).join('')}</ol>`);
+      }
+
+      if (answer.intent === 'installation') {
+        const meta = `<div class="wf-answer-mode"><span>${escapeHtml(answer.guide.packageManager ?? 'Package manager not detected')}</span><span>${escapeHtml(answer.guide.runtimes.join(', ') || 'Runtime not specified')}</span></div>`;
+        const steps = answer.guide.steps.map((step) => `<li><strong>${String(step.order).padStart(2, '0')} ${escapeHtml(step.title)}</strong><button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>${pathButton(step.evidence.path, step.evidence.path, step.evidence.lines)}</li>`).join('');
+        sections.push(`${meta}<ol class="wf-route-list">${steps || '<li><p>No sourced installation command was found.</p></li>'}</ol>`);
+      }
+
+      if (answer.intent === 'file-find') {
+        sections.push(`<div class="wf-result-list">${answer.finder.results.slice(0, 6).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><p>${escapeHtml(result.reason)}</p>${result.snippet ? `<p><code>${escapeHtml(result.snippet)}</code></p>` : ''}${pathButton(result.path, 'Open coordinate', result.lines)}</article>`).join('') || '<div class="wf-error"><p>No credible coordinate was found. Try a filename, symbol, or narrower feature description.</p></div>'}</div>`);
+      }
+
+      if (answer.intent === 'contribution') {
+        const setup = answer.trail.guide.steps.slice(0, 2).map((step) => `<button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>`).join('');
+        const implementation = answer.trail.implementation.results[0];
+        const verification = answer.trail.verification.results[0];
+        sections.push(`<ol class="wf-route-list"><li><strong>01 Establish a baseline</strong>${setup || '<p>Review the field notes before changing the repository.</p>'}</li><li><strong>02 Open the likely implementation</strong><p>${escapeHtml(implementation?.reason ?? 'No strong implementation coordinate was found.')}</p>${implementation ? pathButton(implementation.path, implementation.path, implementation.lines) : ''}</li><li><strong>03 Follow the verification path</strong><p>${escapeHtml(verification?.reason ?? 'No related verification coordinate was found.')}</p>${verification ? pathButton(verification.path, verification.path, verification.lines) : ''}</li></ol>`);
+      }
+
+      const evidence = answer.evidencePaths?.length
+        ? `<div class="wf-evidence">${answer.evidencePaths.map((path) => `<button type="button" data-path="${escapeHtml(path)}">${escapeHtml(path)}</button>`).join('')}</div>`
+        : '';
+      const followups = answer.suggestions.length
+        ? `<div class="wf-followups">${answer.suggestions.map((suggestion) => `<button type="button" data-question="${escapeHtml(suggestion)}">${escapeHtml(suggestion)}</button>`).join('')}</div>`
+        : '';
+
+      copy.innerHTML = `
+        <div class="wf-answer">
+          <div class="wf-answer-nav"><button type="button" data-action="agent-home">← New question</button><button type="button" data-action="refresh-answer">Refresh ↻</button></div>
+          <div class="wf-kicker"><span>${escapeHtml(answer.intent.replace('-', ' '))}</span><span class="wf-step-count">${escapeHtml(bundle.map.repo)}</span></div>
+          <div class="wf-answer-mode ${answer.mode === 'gpt-5.6' ? 'model' : ''}"><span>${answer.mode === 'gpt-5.6' ? 'GPT-5.6 Luna' : 'Deterministic route'}</span><span>${answer.mode === 'gpt-5.6' ? 'Verified evidence' : 'Free mode'}</span></div>
+          <p class="wf-answer-summary">${escapeHtml(answer.summary)}</p>
+          ${answer.explanation ? `<p class="wf-answer-explanation">${escapeHtml(answer.explanation)}</p>` : ''}
+          ${sections.join('')}
+          ${evidence}
+          ${followups}
+        </div>
+      `;
+      bubble.classList.add('agent');
+      bubble.scrollTop = 0;
+      setBubblePosition();
+    };
+
+    const renderAgentError = (message: string) => {
+      copy.innerHTML = `<div class="wf-answer"><div class="wf-kicker"><span>Trail interrupted</span><span class="wf-step-count">Safe fallback</span></div><h2>I could not finish that survey.</h2><div class="wf-error"><p>${escapeHtml(message)}</p></div><div class="wf-actions"><button class="primary" type="button" data-action="retry-answer">Try again</button><button type="button" data-action="agent-home">New question</button></div></div>`;
+      setBubblePosition();
+    };
+
+    const askAgent = async (question: string, bypassCache = false) => {
+      const trimmed = question.trim();
+      if (trimmed.length < 2) return;
+      activeQuestion = trimmed;
+      renderLoading(trimmed);
+      try {
+        const bundle = await ensureRepository();
+        const key = agentResponseCacheKey(bundle.map.repo, bundle.map.sha, trimmed, currentLocation?.path ?? null);
+        if (!bypassCache) {
+          const cached = await getCached<AgentAnswer>(storage, key).catch(() => null);
+          if (cached) return renderAnswer(cached.value);
+        }
+        const response = await fetch(`${apiUrl}/agent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ map: bundle.map, query: trimmed, currentPath: currentLocation?.path ?? null }),
+        });
+        if (!response.ok) {
+          const failure = await response.json().catch(() => null) as Partial<WayfinderErrorResponse> | null;
+          throw new Error(failure?.message ?? 'The guide could not complete that dispatch.');
+        }
+        const answer = await response.json() as AgentAnswer;
+        await setCached(storage, key, bundle.map.repo, 'agent', answer, agentCacheTtl).catch(() => undefined);
+        renderAnswer(answer);
+      } catch (error) {
+        renderAgentError(error instanceof Error ? error.message : 'The guide could not complete that dispatch.');
+      }
+    };
+
     const renderWelcome = () => {
+      bubble.classList.remove('agent');
       copy.innerHTML = `
         <div class="wf-kicker"><span>Wayfinder on the page</span><span class="wf-step-count">${stops.length} landmarks</span></div>
         <h2>I found a trail through this page.</h2>
         <p>I can float to the important parts, point them out, and explain what each one tells you about the repository.</p>
         <div class="wf-actions">
           <button class="primary" type="button" data-action="start">Show me around</button>
-          <button type="button" data-action="panel">Ask the full guide</button>
+          <button type="button" data-action="agent-home">Ask Wayfinder</button>
         </div>
         <p class="wf-tip">Tip: click me anytime to bring the guide back.</p>
       `;
@@ -377,7 +645,7 @@ export default defineContentScript({
         <div class="wf-actions">
           ${activeStep > 0 ? '<button type="button" data-action="previous">Back</button>' : ''}
           <button class="primary" type="button" data-action="next">${activeStep === stops.length - 1 ? 'Finish tour' : 'Next landmark'}</button>
-          <button type="button" data-action="panel">Ask about this</button>
+          <button type="button" data-action="agent-home">Ask about this</button>
         </div>
       `;
     };
@@ -426,15 +694,10 @@ export default defineContentScript({
       copy.innerHTML = `
         <div class="wf-kicker"><span>Trail complete</span><span class="wf-step-count">Ready</span></div>
         <h2>You know the lay of the land.</h2>
-        <p>Open the full guide when you want installation steps, a file coordinate, or a contribution plan grounded in this repository.</p>
-        <div class="wf-actions"><button class="primary" type="button" data-action="panel">Open the full guide</button><button type="button" data-action="restart">Tour again</button></div>
+        <p>Ask me for installation steps, a file coordinate, or a contribution plan grounded in this repository.</p>
+        <div class="wf-actions"><button class="primary" type="button" data-action="agent-home">Ask Wayfinder</button><button type="button" data-action="restart">Tour again</button></div>
       `;
       window.setTimeout(setBubblePosition, 700);
-    };
-
-    const openPanel = () => {
-      const message: WayfinderMessage = { type: 'wayfinder:open-panel' };
-      void browser.runtime.sendMessage(message).catch(() => undefined);
     };
 
     const showWelcome = () => {
@@ -446,10 +709,43 @@ export default defineContentScript({
     };
 
     copy.addEventListener('click', (event) => {
-      const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
+      const button = (event.target as Element).closest<HTMLButtonElement>('button');
       if (!button) return;
+      const question = button.dataset.question;
+      if (question) {
+        void askAgent(question);
+        return;
+      }
+      const path = button.dataset.path;
+      if (path && repository) {
+        const lineParts = button.dataset.lines?.split(',').map(Number);
+        const lines = lineParts?.length === 2 ? [lineParts[0], lineParts[1]] as [number, number] : undefined;
+        window.location.href = fileUrl(repository.map, path, lines);
+        return;
+      }
+      const command = button.dataset.command;
+      if (command) {
+        void navigator.clipboard.writeText(command).then(() => {
+          const original = button.textContent;
+          button.textContent = 'Copied to clipboard';
+          window.setTimeout(() => { button.textContent = original; }, 1_400);
+        }).catch(() => { button.textContent = 'Copy failed'; });
+        return;
+      }
       const action = button.dataset.action;
-      if (action === 'panel') return openPanel();
+      if (action === 'agent-home') {
+        const stop = stops[activeStep];
+        renderAgentHome(stop ? `Explain ${stop.label.toLowerCase()} in this repository` : '');
+        return;
+      }
+      if (action === 'refresh-answer') {
+        void askAgent(activeQuestion, true);
+        return;
+      }
+      if (action === 'retry-answer') {
+        void askAgent(activeQuestion);
+        return;
+      }
       if (action === 'start' || action === 'restart') {
         stops = guideStops();
         if (stops.length === 0) return;
@@ -465,6 +761,13 @@ export default defineContentScript({
           moveToActiveStop();
         }
       }
+    });
+
+    copy.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const form = event.target as HTMLFormElement;
+      const question = new FormData(form).get('question');
+      if (typeof question === 'string') void askAgent(question);
     });
 
     helper.addEventListener('click', () => {
@@ -493,12 +796,11 @@ export default defineContentScript({
       highlight.classList.remove('visible');
       helper.style.left = 'calc(100vw - 82px)';
       helper.style.top = 'calc(100vh - 86px)';
-
-      const message: WayfinderMessage = {
-        type: 'wayfinder:context',
-        context: parseGitHubUrl(lastUrl),
-      };
-      void browser.runtime.sendMessage(message).catch(() => undefined);
+      const nextLocation = parseGitHubUrl(lastUrl);
+      const previousRepo = currentLocation ? `${currentLocation.owner}/${currentLocation.repo}` : null;
+      const nextRepo = nextLocation ? `${nextLocation.owner}/${nextLocation.repo}` : null;
+      currentLocation = nextLocation;
+      if (previousRepo !== nextRepo) repository = null;
 
       window.setTimeout(() => {
         stops = guideStops();
