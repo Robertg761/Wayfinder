@@ -5,6 +5,8 @@ import { generateTour } from "../src/tour";
 const map: RepoMap = {
   repo: "example/trail",
   sha: "abc1234567890",
+  requestedRef: null,
+  resolvedRef: "main",
   defaultBranch: "main",
   description: "A TypeScript client for exploring unfamiliar terrain.",
   homepage: null,

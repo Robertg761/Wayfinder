@@ -18,6 +18,8 @@ export interface RepoTreeEntry {
 export interface RepoMap {
   repo: string;
   sha: string;
+  requestedRef: string | null;
+  resolvedRef: string;
   defaultBranch: string;
   description: string | null;
   homepage: string | null;
@@ -77,6 +79,7 @@ export interface InstallStep {
 export interface InstallGuide {
   repo: string;
   sha: string;
+  audience: "use" | "develop";
   packageManager: string | null;
   runtimes: string[];
   prerequisites: InstallPrerequisite[];
@@ -147,7 +150,7 @@ export interface AgentModelUsage {
   estimatedCostUsd: number;
 }
 
-export type AgentIntent = "orientation" | "installation" | "file-find" | "contribution";
+export type AgentIntent = "orientation" | "installation" | "file-find" | "file-context" | "contribution";
 export type AgentMode = "free" | "gpt-5.6";
 
 interface AgentAnswerBase {
@@ -168,9 +171,10 @@ interface AgentAnswerBase {
 }
 
 export type AgentAnswer =
-  | (AgentAnswerBase & { intent: "orientation"; tour: RepoTour })
+  | (AgentAnswerBase & { intent: "orientation"; tour: RepoTour; guide: InstallGuide })
   | (AgentAnswerBase & { intent: "installation"; guide: InstallGuide })
   | (AgentAnswerBase & { intent: "file-find"; finder: FileFindResponse })
+  | (AgentAnswerBase & { intent: "file-context"; currentPath: string; imports: string[]; relatedPaths: string[]; tests: FileFindResponse })
   | (AgentAnswerBase & { intent: "contribution"; trail: ContributionTrail });
 
 export type WayfinderErrorCode =

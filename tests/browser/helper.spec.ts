@@ -19,6 +19,27 @@ let context: BrowserContext;
 let page: Page;
 let profile: string;
 
+async function openHelper(): Promise<void> {
+  const close = page.getByRole('button', { name: 'Close helper' });
+  if (await close.isVisible().catch(() => false)) return;
+  await page.getByRole('button', { name: 'Open Wayfinder helper' }).click();
+}
+
+async function selectMode(mode: 'Guided' | 'Quick'): Promise<void> {
+  await openHelper();
+  const firstRun = page.getByRole('button', { name: mode === 'Guided' ? 'Guide me' : 'Quick map' });
+  if (await firstRun.isVisible().catch(() => false)) {
+    if (mode === 'Quick') {
+      await page.getByRole('button', { name: 'Guide me' }).click();
+      await page.getByRole('button', { name: 'Quick', exact: true }).click();
+    } else {
+      await firstRun.click();
+    }
+    return;
+  }
+  await page.getByRole('button', { name: mode, exact: true }).click();
+}
+
 test.beforeAll(async () => {
   profile = await mkdtemp(join(tmpdir(), 'wayfinder-browser-'));
   context = await chromium.launchPersistentContext(profile, {
@@ -48,11 +69,11 @@ test('survives repeated page reloads without damaging the host page', async () =
 
 test('captures contribution intent before dispatch and supports keyboard dismissal', async () => {
   await page.goto(fixtureUrl);
-  await page.getByRole('button', { name: 'Ask Wayfinder' }).click();
+  await selectMode('Quick');
   const composer = page.getByRole('textbox', { name: 'Question for Wayfinder' });
   await expect(composer).toBeFocused();
-  await page.getByRole('button', { name: 'Plan a contribution' }).click();
-  await expect(composer).toHaveValue('I want to change [feature]. Plan my first contribution.');
+  await page.getByRole('button', { name: 'Map a change' }).click();
+  await expect(composer).toHaveValue('I want to change [feature]. Plan my contribution.');
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(() => {
     const host = document.querySelector('#wayfinder-page-guide');
@@ -71,26 +92,29 @@ test('hides the helper outside repository routes', async () => {
 
 test('resets an open tour when GitHub changes the current file', async () => {
   await page.goto(fixtureUrl);
+  await selectMode('Guided');
   await page.getByRole('button', { name: 'Show me around' }).click();
-  await expect(page.getByText('Repository coordinates')).toBeVisible();
+  await expect(page.getByText('Repository name')).toBeVisible();
   await page.evaluate(() => {
     history.pushState({}, '', '/example/wayfinder-fixture/blob/main/src/index.ts');
     document.dispatchEvent(new Event('turbo:load'));
   });
   await expect(page.getByText('No visible landmarks yet.')).toBeVisible();
-  await expect(page.getByText('Repository coordinates')).toBeHidden();
+  await expect(page.getByText('Repository name')).toBeHidden();
 });
 
 test('does not retain movement delays when reduced motion is requested', async () => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(fixtureUrl);
+  await selectMode('Guided');
   await page.getByRole('button', { name: 'Show me around' }).click();
-  await expect(page.getByText('Repository coordinates')).toBeVisible({ timeout: 700 });
+  await expect(page.getByText('Repository name')).toBeVisible({ timeout: 700 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });
 
 test('reopens with the final repository after rapid closed-state navigation', async () => {
   await page.goto(fixtureUrl);
+  await selectMode('Guided');
   await page.getByRole('button', { name: 'Close helper' }).click();
   await page.evaluate(() => {
     history.pushState({}, '', '/old/repository');
@@ -99,8 +123,26 @@ test('reopens with the final repository after rapid closed-state navigation', as
     document.dispatchEvent(new Event('turbo:load'));
   });
   await page.waitForTimeout(1_300);
-  await page.getByRole('button', { name: 'Open Wayfinder helper' }).click();
-  await expect(page.getByText('I found a trail through this page.')).toBeVisible();
+  await openHelper();
+  await expect(page.getByText('Learn this repository one landmark at a time.')).toBeVisible();
   await page.getByRole('button', { name: 'Show me around' }).click();
   await expect(page.getByRole('heading', { name: 'final / repository' })).toBeVisible();
+});
+
+test('persists quick mode and reopens without repeating first-run onboarding', async () => {
+  await page.goto(fixtureUrl);
+  await selectMode('Quick');
+  await page.getByRole('button', { name: 'Close helper' }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Open Wayfinder helper' }).click();
+  await expect(page.getByRole('heading', { name: 'Get the answer, then the evidence.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Guide me' })).toBeHidden();
+});
+
+test('opens and closes with the keyboard shortcut', async () => {
+  await page.goto(fixtureUrl);
+  await page.keyboard.press('Alt+Shift+W');
+  await expect(page.getByRole('button', { name: 'Close helper' })).toBeVisible();
+  await page.keyboard.press('Alt+Shift+W');
+  await expect(page.getByRole('button', { name: 'Close helper' })).toBeHidden();
 });

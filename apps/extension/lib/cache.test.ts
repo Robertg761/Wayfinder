@@ -29,6 +29,9 @@ function memoryStorage(): CacheStorage & { values: Record<string, unknown> } {
 describe('Wayfinder extension cache', () => {
   it('builds stable keys from normalized repository context', () => {
     expect(repositoryCacheKey('OpenAI', 'OpenAI-Node')).toBe(repositoryCacheKey('openai', 'openai-node'));
+    expect(repositoryCacheKey('openai', 'openai-node', 'feature/navigation')).not.toBe(
+      repositoryCacheKey('openai', 'openai-node', 'main'),
+    );
     expect(agentResponseCacheKey('openai/openai-node', 'abc1234', ' Where is Auth? ', 'src/client.ts'))
       .toBe(agentResponseCacheKey('OPENAI/openai-node', 'abc1234', 'where is auth?', 'src/client.ts'));
   });

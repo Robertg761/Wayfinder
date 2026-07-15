@@ -33,7 +33,7 @@ function safeDecode(value: string): string {
   }
 }
 
-export function parseGitHubUrl(input: string): RepoLocation | null {
+export function parseGitHubUrl(input: string, visibleRef?: string | null): RepoLocation | null {
   let url: URL;
   try {
     url = new URL(input);
@@ -57,11 +57,16 @@ export function parseGitHubUrl(input: string): RepoLocation | null {
 
   if (route === 'tree' || route === 'blob') {
     view = route;
-    ref = segments[3] ?? null;
-    path = segments.slice(4).join('/') || null;
+    const routeTail = segments.slice(3);
+    const normalizedVisibleRef = visibleRef?.trim().replace(/^refs\/heads\//, '') || null;
+    const visibleRefSegments = normalizedVisibleRef?.split('/').filter(Boolean) ?? [];
+    const matchesVisibleRef = visibleRefSegments.length > 0 &&
+      visibleRefSegments.every((segment, index) => routeTail[index] === segment);
+    const refLength = matchesVisibleRef ? visibleRefSegments.length : 1;
+    ref = routeTail.slice(0, refLength).join('/') || null;
+    path = routeTail.slice(refLength).join('/') || null;
   } else if (route) {
     view = 'other';
-    path = segments.slice(2).join('/') || null;
   }
 
   return {

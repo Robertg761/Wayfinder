@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FileFindResponse } from "@wayfinder/contracts";
-import { classifyAgentIntent, keepGoalLinkedVerification } from "../src/agent";
+import { classifyAgentIntent, importedSpecifiers, keepGoalLinkedVerification } from "../src/agent";
 
 describe("classifyAgentIntent", () => {
   it.each([
@@ -21,6 +21,24 @@ describe("classifyAgentIntent", () => {
     ["Help me fix the authentication bug", "contribution"],
   ] as const)("routes %s to %s", (query, intent) => {
     expect(classifyAgentIntent(query)).toBe(intent);
+  });
+
+  it("uses current-file context for dependency and paired-test questions", () => {
+    expect(classifyAgentIntent("What does this file depend on?", "src/client.ts")).toBe("file-context");
+    expect(classifyAgentIntent("Find the paired tests for this file", "src/client.ts")).toBe("file-context");
+  });
+});
+
+describe("importedSpecifiers", () => {
+  it("extracts static, side-effect, dynamic, and CommonJS imports", () => {
+    const content = [
+      "import { client } from './client';",
+      "import './register';",
+      "const lazy = import('../lazy');",
+      "const config = require('./config');",
+    ].join("\n");
+
+    expect(importedSpecifiers(content)).toEqual(['./client', './register', '../lazy', './config']);
   });
 });
 

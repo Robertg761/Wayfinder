@@ -5,6 +5,8 @@ import { findFiles, rankFileCandidates } from "../src/find";
 const map: RepoMap = {
   repo: "example/trail",
   sha: "abc1234567890",
+  requestedRef: null,
+  resolvedRef: "main",
   defaultBranch: "main",
   description: "A test repository.",
   homepage: null,

@@ -17,11 +17,14 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 ## Current slice
 
 - WXT and TypeScript Chrome extension with one floating on-page agent
-- GitHub URL parsing for repository, tree, and blob views
+- Persistent Guided and Quick experience modes with first-run pace selection
+- GitHub URL parsing for repository, tree, blob, branch, tag, and commit views
+- Requested-ref mapping with slash-containing branch support and commit-pinned evidence
 - GitHub single-page navigation detection
 - Cloudflare Worker with `GET /health` and `POST /map`
 - Free deterministic tour engine exposed through `POST /tour`
 - Evidence-backed installation guide exposed through `POST /guide/install`
+- Separate published-project and repository-development setup paths
 - Context-aware natural-language file finder exposed through `POST /find`
 - Deterministic agent router exposed through `POST /agent`
 - Multi-tool Trail Plan for contribution goals, setup, implementation, and verification
@@ -35,7 +38,11 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 - Installation checklist with documented and inferred confidence labels
 - One-click copying for sourced installation commands
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
-- Unified question composer with a persistent evidence timeline and suggested follow-ups
+- Current-file import extraction, local dependency resolution, and paired-test ranking
+- Compact repository snapshot with purpose, stack, package manager, ref, key directories, entry point, and local commands
+- Unified question composer with saved per-repository trails and suggested follow-ups
+- Saved answer continuity across evidence navigation with a Back to saved trail action
+- Quick or expanded answer depth controls and `Alt + Shift + W` keyboard access
 - Commit-aware repository and answer caching in `chrome.storage.local`
 - Edge-cached public GitHub responses with longer retention for immutable commit evidence
 - Friendly rate-limit, private-repository, authentication, and offline states
@@ -46,7 +53,9 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 - Unit tests for URL parsing, caching, clipboard behavior, repository filtering, installation guidance, and file finding
 - Browser regression tests for reload safety, GitHub context changes, keyboard dismissal, reduced motion, and non-repository routes
 
-The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, file discovery, or contribution planning. Setup answers are contributor-focused, omit published-package and placeholder commands, and expose confidence, prerequisites, and warnings. A contribution request runs several tools and combines the repository route, sourced setup commands, likely implementation, and related verification path. Recent maps and answers remain available during temporary GitHub or network failures, with visible cache timestamps and a full repository refresh control.
+The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, language signals, and direct imports. The agent router classifies each question as orientation, installation, file discovery, current-file context, or contribution planning. Setup starts by distinguishing use of a published project from local repository development. Development answers omit consumer-only and placeholder commands, while consumer answers avoid workspace setup. Both expose confidence, evidence, and warnings. A contribution request runs several tools and combines the repository route, sourced setup commands, likely implementation, and related verification path. Recent maps, answers, preferences, and saved trails remain available during temporary GitHub or network failures.
+
+Guided mode is patient and project-specific. It moves only during an explicit landmark tour, teaches the real GitHub term, and adds a fact about the repository at each stop. Quick mode stays quiet until opened, keeps the helper stationary, and leads with a compact repository snapshot and focused developer actions. Users can switch modes at any time without changing the underlying evidence or model policy.
 
 ## Workspace
 
@@ -85,7 +94,7 @@ In a second terminal, start the extension:
 pnpm dev:extension
 ```
 
-WXT opens a development browser with the unpacked extension installed. Visit a public GitHub repository and Wayfinder appears on the page. Select "Show me around" for a visual landmark tour, or select "Ask Wayfinder" to expand the complete agent in place.
+WXT opens a development browser with the unpacked extension installed. Visit a public GitHub repository and Wayfinder appears on the page. Choose "Guide me" for a visual, project-specific landmark tour or "Quick map" for a compact developer workflow. The selection is remembered and can be changed from the helper header.
 
 ## API smoke test
 
@@ -94,7 +103,7 @@ curl http://localhost:8787/health
 
 curl -X POST http://localhost:8787/map \
   -H 'Content-Type: application/json' \
-  -d '{"owner":"openai","repo":"openai-node"}'
+  -d '{"owner":"openai","repo":"openai-node","ref":"master"}'
 ```
 
 `POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes a focused question through the tour, installation guide, or file finder. Contribution goals invoke all three capabilities to build a Trail Plan. When an OpenAI key is configured, Luna receives that typed contribution evidence and produces a structured synthesis plus an ordered field brief. Focused questions stay deterministic and free. Any unverified path, invalid response, API failure, exhausted allowance, or missing key returns the deterministic answer instead.

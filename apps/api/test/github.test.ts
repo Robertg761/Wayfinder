@@ -137,6 +137,39 @@ describe("GitHub response caching", () => {
 });
 
 describe("repository map partial failures", () => {
+  it("maps the requested branch instead of silently using the default branch", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/repos/openai/openai-node")) {
+        return Response.json({
+          default_branch: "main",
+          description: "SDK",
+          homepage: null,
+          language: "TypeScript",
+          stargazers_count: 1,
+        });
+      }
+      if (url.includes("/git/trees/feature%2Fnavigation")) {
+        return Response.json({ sha: "b".repeat(40), truncated: false, tree: [{ path: "src/feature.ts", type: "blob" }] });
+      }
+      if (url.endsWith("/commits/feature%2Fnavigation")) {
+        return Response.json({ sha: "c".repeat(40) });
+      }
+      if (url.endsWith("/readme?ref=feature%2Fnavigation")) {
+        return Response.json({ content: btoa("# Feature"), encoding: "base64" });
+      }
+      return Response.json({ message: "not found" }, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    await expect(createRepoMap("openai", "openai-node", "feature/navigation")).resolves.toMatchObject({
+      requestedRef: "feature/navigation",
+      resolvedRef: "feature/navigation",
+      defaultBranch: "main",
+      sha: "c".repeat(40),
+    });
+  });
+
   it("propagates a README rate limit instead of returning a degraded map", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input);

@@ -33,11 +33,13 @@ flowchart LR
 
 ## Extension
 
-The WXT Manifest V3 extension reads the active GitHub repository, branch or commit, directory, file, and view. A Shadow DOM page agent stays isolated from GitHub styles, discovers visible landmarks, moves beside them during a contextual tour, and expands in place for deeper questions. Every answer card can open its evidence at the mapped commit, including line fragments when available.
+The WXT Manifest V3 extension reads the active GitHub repository, branch or commit, directory, file, and view. It uses GitHub's visible branch label to preserve branch names that contain slashes. The requested ref is sent to the Worker, resolved into an immutable tree SHA, and shown in answer provenance. A Shadow DOM page agent stays isolated from GitHub styles, discovers visible landmarks, moves beside them only during a contextual tour, and expands in place for deeper questions. Every answer card can open its evidence at the mapped commit, including line fragments when available.
 
-The page helper mounts after `DOMContentLoaded` so it cannot interfere with GitHub's parser. It watches Turbo navigation, recalculates valid targets for repository and blob views, respects reduced-motion preferences, caches maps and answers in extension storage, and calls the Worker directly from the active GitHub page. The character and bubble share one positioned dock, so opening, closing, asking, and changing answer content cannot separate them. Agent interactions keep the dock stationary. Landmark tours scroll first, move the complete dock with a 1.2-second non-overshooting transition, and reveal the explanation only after it arrives. Selecting `Explain this` answers about the highlighted landmark immediately instead of opening the generic question menu.
+The page helper mounts after `DOMContentLoaded` so it cannot interfere with GitHub's parser. It watches Turbo navigation, recalculates valid targets for repository and blob views, respects reduced-motion preferences, caches maps and answers in extension storage, and calls the Worker directly from the active GitHub page. The character and bubble share one positioned dock, so opening, closing, asking, and changing answer content cannot separate them. Route changes cancel any in-progress dock transition. Agent interactions keep the dock stationary. Landmark tours scroll first, move the complete dock with a 1.2-second non-overshooting transition, and reveal the explanation only after it arrives.
 
-Recent repository maps and answers are cached in `chrome.storage.local`. Cache keys include the commit SHA, so evidence from one revision is not silently reused for another.
+Preferences store Guided or Quick mode and repositories already introduced to the user. Quick mode does not auto-open on repeat visits. Saved trails retain the last answer and question for each repository, allowing evidence navigation to return to the same task. A ref change invalidates the in-memory map and answer unless the navigation is to the answer's own pinned SHA.
+
+Recent repository maps and answers are cached in `chrome.storage.local`. Repository cache keys include the requested ref, and answer cache keys include the resolved SHA, so evidence from one revision is not silently reused for another.
 
 The Worker also asks Cloudflare to edge-cache unauthenticated GitHub subrequests. Mutable metadata, README, and branch tree responses use a five-minute TTL. File responses addressed by a full commit SHA use a 24-hour TTL. Error responses are excluded, and any request carrying a GitHub token explicitly bypasses shared caching.
 
@@ -46,11 +48,11 @@ The Worker also asks Cloudflare to edge-cache unauthenticated GitHub subrequests
 The Cloudflare Worker exposes six routes:
 
 - `GET /health` reports service and model configuration state.
-- `POST /map` reads metadata, README content, setup landmarks, and a filtered repository tree.
+- `POST /map` resolves an optional requested ref, then reads metadata, README content, setup landmarks, and a filtered repository tree from that version.
 - `POST /tour` builds a deterministic reading route.
-- `POST /guide/install` extracts documented or manifest-backed setup commands with confidence labels.
+- `POST /guide/install` extracts either consumer or contributor setup commands with confidence labels.
 - `POST /find` ranks paths, then inspects only the strongest small text candidates for content and symbols.
-- `POST /agent` classifies the question, runs one typed tool for focused questions, or orchestrates tour, install, implementation, and verification evidence for a contribution goal. It then optionally requests GPT-5.6 synthesis.
+- `POST /agent` classifies the question, runs one typed tool for focused questions, resolves current-file imports and paired tests when appropriate, or orchestrates tour, install, implementation, and verification evidence for a contribution goal. It then optionally requests GPT-5.6 synthesis.
 
 This edge layer reduces repeated GitHub quota use without caching user questions, generated answers, or authenticated repository data.
 

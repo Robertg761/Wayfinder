@@ -9,6 +9,8 @@ import type {
 import { fetchRepoFile, isBlockingGitHubError } from "./github";
 
 interface PackageJson {
+  name?: string;
+  private?: boolean;
   packageManager?: string;
   engines?: Record<string, string>;
   scripts?: Record<string, string>;
@@ -174,7 +176,11 @@ function shallowestPath(paths: string[], fileName: string): string | null {
     .sort((left, right) => left.split("/").length - right.split("/").length || left.localeCompare(right))[0] ?? null;
 }
 
-export function generateInstallGuide(map: RepoMap, files: Record<string, string>): InstallGuide {
+export function generateInstallGuide(
+  map: RepoMap,
+  files: Record<string, string>,
+  audience: "use" | "develop" = "develop",
+): InstallGuide {
   const paths = Object.keys(files);
   const readmePath = paths
     .filter((path) => /(^|\/)readme([^/]*)?\.md$/i.test(path))
@@ -192,14 +198,16 @@ export function generateInstallGuide(map: RepoMap, files: Record<string, string>
     .flatMap((path) => extractMarkdownCommands(files[path] ?? (path === readmePath ? readme ?? "" : ""), path))
     .filter((step, index, all) => all.findIndex((candidate) => candidate.command === step.command) === index)
     .map((step, index) => ({ ...step, order: index + 1 }));
-  const omittedConsumerSteps = documentedSteps.filter((step) =>
+  const consumerSteps = documentedSteps.filter((step) =>
     step.title === "Install the published package" || /<[^>]+>/.test(step.command));
-  const steps = documentedSteps.filter((step) => !omittedConsumerSteps.includes(step));
+  const steps = audience === "use"
+    ? consumerSteps.filter((step) => !/<[^>]+>/.test(step.command))
+    : documentedSteps.filter((step) => !consumerSteps.includes(step));
   const seenCommands = new Set(steps.map((step) => step.command.toLowerCase().replace(/\s+/g, " ").trim()));
   const prerequisites: InstallPrerequisite[] = [];
   const runtimes = new Set<string>();
   const warnings: string[] = [];
-  if (omittedConsumerSteps.length > 0) {
+  if (audience === "develop" && consumerSteps.length > 0) {
     warnings.push("Published-package and placeholder commands were omitted because this guide prepares the repository for local contribution.");
   }
 
@@ -222,6 +230,39 @@ export function generateInstallGuide(map: RepoMap, files: Record<string, string>
   const managerSet = new Set([...(declaredManager ? [declaredManager] : []), ...lockManagers]);
   if (managerSet.size > 1) {
     warnings.push("Multiple root package-manager signals were found: " + [...managerSet].join(", ") + ". Follow the README when they conflict.");
+  }
+
+  if (audience === "use") {
+    if (steps.length === 0 && packageJson?.name && !packageJson.private && packageManager) {
+      const command = packageManager === "yarn"
+        ? "yarn add " + packageJson.name
+        : packageManager === "bun"
+          ? "bun add " + packageJson.name
+          : packageManager + " install " + packageJson.name;
+      addUniqueStep(
+        steps,
+        seenCommands,
+        "Install the published package",
+        command,
+        evidence(packagePath!, lineFor(files[packagePath!], '"name"')),
+        "inferred",
+      );
+      warnings.push("The package command is inferred from the root package name. Confirm it against the repository usage documentation.");
+    }
+    if (packageJson?.private) warnings.push("The root package is marked private and may not be available as a published package.");
+    if (steps.length === 0) warnings.push("No trustworthy consumer installation command was found. This project may only be intended to run from source.");
+    steps.forEach((step, index) => { step.order = index + 1; });
+    return {
+      repo: map.repo,
+      sha: map.sha,
+      audience,
+      packageManager,
+      runtimes: [],
+      prerequisites: [],
+      steps: steps.slice(0, 8),
+      warnings,
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   if (packagePath && packageJson?.engines?.node) {
@@ -343,6 +384,7 @@ export function generateInstallGuide(map: RepoMap, files: Record<string, string>
   return {
     repo: map.repo,
     sha: map.sha,
+    audience,
     packageManager,
     runtimes: [...runtimes],
     prerequisites,
@@ -362,7 +404,11 @@ function setupPathScore(path: string): number {
   return depth * 1_000 + priority * 100 + path.length;
 }
 
-export async function createInstallGuide(map: RepoMap, token?: string): Promise<InstallGuide> {
+export async function createInstallGuide(
+  map: RepoMap,
+  token?: string,
+  audience: "use" | "develop" = "develop",
+): Promise<InstallGuide> {
   const setupPaths = [...new Set([
     ...map.setupFiles,
     ...map.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path),
@@ -380,5 +426,9 @@ export async function createInstallGuide(map: RepoMap, token?: string): Promise<
     return content === null ? null : [path, content] as const;
   }));
 
-  return generateInstallGuide(map, Object.fromEntries(loaded.filter((item): item is readonly [string, string] => item !== null)));
+  return generateInstallGuide(
+    map,
+    Object.fromEntries(loaded.filter((item): item is readonly [string, string] => item !== null)),
+    audience,
+  );
 }

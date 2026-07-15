@@ -108,6 +108,14 @@ function answerEvidencePaths(answer: AgentAnswer): Set<string> {
     ]);
   }
 
+  if (answer.intent === "file-context") {
+    return new Set([
+      answer.currentPath,
+      ...answer.relatedPaths,
+      ...answer.tests.results.map((result) => result.path),
+    ]);
+  }
+
   return new Set(answer.finder.results.map((result) => result.path));
 }
 

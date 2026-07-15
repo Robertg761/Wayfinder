@@ -63,8 +63,8 @@ describe("agentStarters", () => {
 
 describe("landmarkDetail", () => {
   it("adds useful context beyond the tour caption", () => {
-    expect(landmarkDetail("Repository coordinates")).toContain("clone URLs");
-    expect(landmarkDetail("Branch marker")).toContain("commit");
-    expect(landmarkDetail("Line coordinates")).toContain("reproducible citation");
+    expect(landmarkDetail("Repository name")).toContain("clone URLs");
+    expect(landmarkDetail("Current branch")).toContain("commit");
+    expect(landmarkDetail("Line numbers")).toContain("reproducible citation");
   });
 });

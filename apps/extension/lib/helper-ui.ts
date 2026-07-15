@@ -26,13 +26,13 @@ export const agentStarters: AgentStarter[] = [
 ];
 
 const landmarkDetails: Record<string, string> = {
-  "Repository coordinates": "The owner and repository name define the scope for clone URLs, issues, releases, and every file citation. Wayfinder keeps that identity attached to its evidence so results do not leak across projects.",
-  "Branch marker": "Changing this selection changes the version of the project you are reading. Wayfinder resolves answers to a commit so a later branch update cannot silently change the evidence behind an answer.",
-  "Terrain map": "Top-level folders expose the project's broad architecture before you read implementation details. Source and test directories usually form the most useful pair, while manifests and configuration explain how the pieces run together.",
-  "Field notes": "The README is the author's intended entrance to the project. It is best for purpose and setup vocabulary, while source files remain the stronger evidence for how a feature is actually implemented.",
-  "Current coordinate": "The breadcrumb shows exactly where this file sits inside the repository. Moving left through its segments widens the context from file to folder to the project root.",
-  "Source landmark": "Start with the file's public shape: exports, types, classes, and top-level functions. That gives you a useful outline before you spend time inside individual branches and helper calls.",
-  "Line coordinates": "A line selection turns a general file reference into a reproducible citation. It lets another contributor open the same evidence without searching through the entire file.",
+  "Repository name": "The owner and repository name define the scope for clone URLs, issues, releases, and every file citation. Wayfinder keeps that identity attached to its evidence so results do not leak across projects.",
+  "Current branch": "Changing this selection changes the version of the project you are reading. Wayfinder resolves answers to a commit so a later branch update cannot silently change the evidence behind an answer.",
+  "File tree": "Top-level folders expose the project's broad architecture before you read implementation details. Source and test directories usually form the most useful pair, while manifests and configuration explain how the pieces run together.",
+  "README": "The README is the author's intended entrance to the project. It is best for purpose and setup vocabulary, while source files remain the stronger evidence for how a feature is actually implemented.",
+  "File breadcrumb": "The breadcrumb shows exactly where this file sits inside the repository. Moving left through its segments widens the context from file to folder to the project root.",
+  "Source file": "Start with the file's public shape: exports, types, classes, and top-level functions. That gives you a useful outline before you spend time inside individual branches and helper calls.",
+  "Line numbers": "A line selection turns a general file reference into a reproducible citation. It lets another contributor open the same evidence without searching through the entire file.",
 };
 
 export function landmarkDetail(label: string): string {

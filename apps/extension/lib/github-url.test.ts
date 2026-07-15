@@ -34,6 +34,23 @@ describe('parseGitHubUrl', () => {
     });
   });
 
+  it('uses the visible branch label to preserve refs containing slashes', () => {
+    expect(parseGitHubUrl(
+      'https://github.com/example/project/blob/feature/navigation/src/index.ts',
+      'feature/navigation',
+    )).toMatchObject({
+      ref: 'feature/navigation',
+      path: 'src/index.ts',
+    });
+  });
+
+  it('does not treat issue and pull request routes as repository paths', () => {
+    expect(parseGitHubUrl('https://github.com/example/project/issues/42')).toMatchObject({
+      view: 'other',
+      path: null,
+    });
+  });
+
   it('rejects non-repository GitHub routes and other hosts', () => {
     expect(parseGitHubUrl('https://github.com/settings/profile')).toBeNull();
     expect(parseGitHubUrl('https://example.com/openai/openai-node')).toBeNull();

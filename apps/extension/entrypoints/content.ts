@@ -17,6 +17,26 @@ interface RepositoryBundle {
   tour: RepoTour;
 }
 
+type ExperienceMode = 'guided' | 'quick';
+type AnswerDepth = 'concise' | 'expanded';
+
+interface WayfinderPreferences {
+  mode: ExperienceMode | null;
+  seenRepos: string[];
+}
+
+interface SavedTrail {
+  question: string;
+  answer: AgentAnswer;
+  savedAt: string;
+}
+
+const preferencesKey = 'wayfinder:preferences:v1';
+
+function trailKey(repo: string): string {
+  return `wayfinder:trail:${repo.toLowerCase()}`;
+}
+
 class WayfinderRequestError extends Error {
   constructor(
     message: string,
@@ -94,6 +114,7 @@ const helperStyles = `
     pointer-events: none;
     transition: left 1200ms cubic-bezier(.22,.61,.36,1), top 1200ms cubic-bezier(.22,.61,.36,1);
   }
+  .wf-dock.settled { transition: none; }
 
   .wf-helper {
     position: absolute;
@@ -187,6 +208,8 @@ const helperStyles = `
     border: 2px solid var(--wf-paper);
     animation: wf-ping 2.4s ease-out infinite;
   }
+  :host([data-mode="quick"]) .wf-ping,
+  :host([data-seen="true"]) .wf-ping { display: none; }
 
   .wf-bubble {
     position: absolute;
@@ -284,6 +307,10 @@ const helperStyles = `
   }
 
   .wf-agent-head { padding-right: 30px; }
+  .wf-mode-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--wf-line); border-radius: 999px; background: rgba(255,255,255,.52); }
+  .wf-mode-switch button { padding: 5px 8px; border: 0; border-radius: 999px; background: transparent; color: #756d61; cursor: pointer; font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+  .wf-mode-switch button.active { background: var(--wf-ink); color: var(--wf-paper); }
+  .wf-mode-switch button:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; }
   .wf-agent-head h2 { margin-bottom: 5px; }
   .wf-agent-head p { font-size: 13px; }
   .wf-agent-home { display: grid; gap: 12px; }
@@ -338,6 +365,21 @@ const helperStyles = `
   .wf-result, .wf-route-list li, .wf-brief li { padding: 10px; border: 1px solid var(--wf-line); border-radius: 10px; background: rgba(255,255,255,.48); }
   .wf-result strong, .wf-route-list strong, .wf-brief strong { display: block; color: var(--wf-ink); font: 700 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
   .wf-result p, .wf-route-list p, .wf-brief p { margin-top: 5px; font-size: 12px; }
+  .wf-snapshot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .wf-fact { min-width: 0; padding: 10px; border: 1px solid var(--wf-line); border-radius: 10px; background: rgba(255,255,255,.5); }
+  .wf-fact.wide { grid-column: 1 / -1; }
+  .wf-fact span { display: block; margin-bottom: 5px; color: #756d61; font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; }
+  .wf-fact strong { display: block; color: var(--wf-ink); font: 700 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .wf-signal-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+  .wf-signal { padding: 3px 5px; border-radius: 999px; background: rgba(66,105,79,.09); color: var(--wf-moss); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .wf-project-fact { margin-top: 12px; padding: 10px; border-left: 3px solid var(--wf-moss); background: rgba(66,105,79,.08); }
+  .wf-project-fact strong { display: block; margin-bottom: 3px; color: var(--wf-moss); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+  .wf-boundary { padding: 9px 10px; border: 1px solid rgba(232,167,47,.4); border-radius: 9px; background: rgba(232,167,47,.09); color: #62543b; font: 12px/1.4 Georgia, 'Times New Roman', serif; }
+  .wf-detail-toggle { display: flex; gap: 5px; }
+  .wf-detail-toggle button { padding: 5px 7px; border: 1px solid var(--wf-line); border-radius: 999px; background: transparent; color: var(--wf-moss); cursor: pointer; font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+  .wf-answer.concise .wf-detail { display: none; }
+  details.wf-detail { padding: 8px 10px; border: 1px solid var(--wf-line); border-radius: 10px; }
+  details.wf-detail summary { cursor: pointer; color: var(--wf-moss); font: 700 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
   .wf-open, .wf-copy-command {
     width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--wf-ink); border-radius: 8px; background: transparent; color: var(--wf-ink); cursor: pointer; text-align: left; font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -374,52 +416,61 @@ function firstVisible(selectors: string[]): Element | null {
   return null;
 }
 
+function visibleBranchRef(): string | null {
+  const element = firstVisible([
+    'button[data-hotkey="w"] span[data-component="text"]',
+    'button[data-hotkey="w"]',
+    'summary[title*="Switch branches"] span',
+  ]);
+  return element?.textContent?.trim().split(/\s*\n\s*/)[0] || null;
+}
+
 function guideStops(): GuideStop[] {
-  const location = parseGitHubUrl(window.location.href);
+  const location = parseGitHubUrl(window.location.href, visibleBranchRef());
   if (!location) return [];
 
   const candidates: Array<Omit<GuideStop, 'target'> & { selectors: string[] }> = location.view === 'blob'
     ? [
         {
-          label: 'Current coordinate',
-          title: 'You are inside one file',
+          label: 'File breadcrumb',
+          title: 'See where this file lives',
           explanation: 'This breadcrumb is your trail back through the repository. Each segment opens a wider part of the project.',
           selectors: ['nav[aria-label="Breadcrumbs"]', '[data-testid="breadcrumbs"]', '.react-code-file-contents + nav'],
         },
         {
-          label: 'Source landmark',
+          label: 'Source file',
           title: 'Read the shape before the details',
           explanation: 'This is the file Wayfinder brought you to. Scan exports, types, and top-level functions first, then follow the line markers.',
           selectors: ['[data-testid="code-viewer"]', '.react-code-file-contents', 'table.highlight'],
         },
         {
-          label: 'Line coordinates',
-          title: 'Every line is a shareable coordinate',
+          label: 'Line numbers',
+          title: 'Every line is a shareable reference',
           explanation: 'Click a line number to pin it in the URL. Wayfinder uses these same coordinates when it cites evidence.',
           selectors: ['[data-line-number]', '.blob-num', 'td[id^="L"]'],
         },
       ]
     : [
         {
-          label: 'Repository coordinates',
+          label: 'Repository name',
           title: `${location.owner} / ${location.repo}`,
           explanation: 'This is the project boundary. Wayfinder reads the public tree inside it and keeps every answer tied to this repository.',
           selectors: ['[itemprop="name"]', 'strong[itemprop="name"]', 'h1 strong a'],
         },
         {
-          label: 'Branch marker',
-          title: 'Choose the trail you are reading',
+          label: 'Current branch',
+          title: 'Choose the version you are reading',
           explanation: 'The branch controls which version of every file you see. Start on the default branch unless an issue points somewhere else.',
           selectors: ['button[data-hotkey="w"]', '[data-testid="anchor-button"] span[data-component="text"]', 'summary[title*="Switch branches"]'],
         },
         {
-          label: 'Terrain map',
-          title: 'The file tree tells a story',
+          label: 'File tree',
+          title: 'Folders reveal the project shape',
           explanation: 'Folders reveal the architecture. Start with field notes and package files, then follow source and tests as a pair.',
           selectors: ['table[aria-labelledby="folders-and-files"]', 'table[aria-label="Folders and files"]', 'div[role="grid"]'],
         },
         {
-          label: 'Field notes',
+          label: 'README',
           title: 'Begin with the README',
           explanation: 'This is the project narrative: what it does, how to install it, and the vocabulary you will see in the code.',
           selectors: ['#readme', '[data-testid="readme"]', 'article.markdown-body'],
@@ -453,10 +504,58 @@ export default defineContentScript({
     let repositoryCachedAt: string | null = null;
     let answerCachedAt: string | null = null;
     let repositoryCacheState: 'fresh' | 'cached' | 'stale' = 'fresh';
+    let experienceMode: ExperienceMode | null = null;
+    let answerDepth: AnswerDepth = 'concise';
+    let preferencesLoaded = false;
+    let seenRepos: string[] = [];
+    let activeAnswer: AgentAnswer | null = null;
     let requestVersion = 0;
     let activeRequest: AbortController | null = null;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const storage = browser.storage.local as unknown as CacheStorage;
+
+    const loadPreferences = async () => {
+      if (preferencesLoaded) return;
+      const values: Record<string, unknown> = await storage.get(preferencesKey).catch(() => ({}));
+      const stored = values[preferencesKey] as Partial<WayfinderPreferences> | undefined;
+      experienceMode = stored?.mode === 'guided' || stored?.mode === 'quick' ? stored.mode : null;
+      seenRepos = Array.isArray(stored?.seenRepos) ? stored.seenRepos.filter((repo): repo is string => typeof repo === 'string').slice(0, 100) : [];
+      preferencesLoaded = true;
+      if (experienceMode) host.dataset.mode = experienceMode;
+    };
+
+    const savePreferences = async () => {
+      if (experienceMode) host.dataset.mode = experienceMode;
+      await storage.set({ [preferencesKey]: { mode: experienceMode, seenRepos } satisfies WayfinderPreferences }).catch(() => undefined);
+    };
+
+    const rememberRepo = () => {
+      if (!currentLocation) return;
+      const repo = `${currentLocation.owner}/${currentLocation.repo}`.toLowerCase();
+      seenRepos = [repo, ...seenRepos.filter((candidate) => candidate !== repo)].slice(0, 100);
+      host.dataset.seen = 'true';
+      void savePreferences();
+    };
+
+    const saveTrail = async () => {
+      if (!activeAnswer) return;
+      await storage.set({
+        [trailKey(activeAnswer.repo)]: {
+          question: activeQuestion,
+          answer: activeAnswer,
+          savedAt: new Date().toISOString(),
+        } satisfies SavedTrail,
+      }).catch(() => undefined);
+    };
+
+    const loadTrail = async (repo: string) => {
+      const key = trailKey(repo);
+      const values: Record<string, unknown> = await storage.get(key).catch(() => ({}));
+      const stored = values[key] as SavedTrail | undefined;
+      if (!stored?.answer || stored.answer.repo.toLowerCase() !== repo.toLowerCase()) return;
+      activeAnswer = stored.answer;
+      activeQuestion = stored.question;
+    };
 
     const host = document.createElement('div');
     host.id = 'wayfinder-page-guide';
@@ -486,6 +585,13 @@ export default defineContentScript({
     const bubble = shadow.querySelector<HTMLElement>('.wf-bubble')!;
     const copy = shadow.querySelector<HTMLDivElement>('.wf-copy')!;
     const close = shadow.querySelector<HTMLButtonElement>('.wf-close')!;
+    const openStateObserver = new MutationObserver(() => {
+      const open = bubble.classList.contains('open');
+      helper.setAttribute('aria-expanded', String(open));
+      helper.setAttribute('aria-label', open ? 'Close Wayfinder helper' : 'Open Wayfinder helper');
+    });
+    helper.setAttribute('aria-expanded', 'false');
+    openStateObserver.observe(bubble, { attributes: true, attributeFilter: ['class'] });
 
     const setBubblePosition = () => {
       const dockRect = dock.getBoundingClientRect();
@@ -502,35 +608,72 @@ export default defineContentScript({
       window.setTimeout(() => shadow.querySelector<HTMLTextAreaElement>('#wf-question')?.focus(), 0);
     };
 
+    const modeSwitch = () => experienceMode ? `
+      <div class="wf-mode-switch" aria-label="Wayfinder experience mode">
+        <button type="button" data-mode="guided" class="${experienceMode === 'guided' ? 'active' : ''}" aria-pressed="${experienceMode === 'guided'}">Guided</button>
+        <button type="button" data-mode="quick" class="${experienceMode === 'quick' ? 'active' : ''}" aria-pressed="${experienceMode === 'quick'}">Quick</button>
+      </div>
+    ` : '';
+
+    const contextActions = (currentPath: string | null) => {
+      if (currentPath) {
+        return [
+          ['Summarize this file', `Summarize the role of ${currentPath} and its important public surface`],
+          ['Find its tests', `Find the tests paired with ${currentPath}`],
+          ['Trace dependencies', `What does ${currentPath} depend on and where should I read next?`],
+          ['Map change impact', `If I change ${currentPath}, what implementation and verification files should I inspect?`],
+        ];
+      }
+      return experienceMode === 'quick'
+        ? [
+            ['Repository snapshot', 'Give me a 60-second overview of this repository'],
+            ['Understand architecture', 'Give me an architecture tour of this repository'],
+            ['Find implementation', 'Find the primary implementation for [feature]'],
+            ['Find tests', 'Where are the tests for [feature]?'],
+            ['Set up locally', 'Help me develop this repository locally'],
+            ['Map a change', 'I want to change [feature]. Plan my contribution.'],
+          ]
+        : agentStarters.map((starter) => [starter.label, starter.question] as [string, string]);
+    };
+
     const renderAgentHome = (prefill = '') => {
       surface = 'agent';
       activeStep = -1;
       tourMoving = false;
       window.clearTimeout(movementTimer);
       window.clearTimeout(arrivalTimer);
+      dock.classList.add('settled');
+      window.setTimeout(() => dock.classList.remove('settled'), 1_250);
       highlight.classList.remove('visible');
       helper.classList.add('stationed');
       bubble.classList.add('agent');
       const currentPath = currentLocation?.path;
-      const contextStarter = currentPath
-        ? `<button type="button" data-question="${escapeHtml(`Explain the role of ${currentPath} in this repository`)}">Explain this file</button>`
+      const actions = contextActions(currentPath ?? null);
+      const boundary = currentLocation?.view === 'other'
+        ? '<div class="wf-boundary">This GitHub page is not a source path. I will use repository-level evidence and will not treat the issue or pull request number as a folder.</div>'
+        : '';
+      const trailAction = activeAnswer
+        ? '<button type="button" data-action="back-to-trail">Back to saved trail</button>'
         : '';
       copy.innerHTML = `
         <div class="wf-agent-home">
           <div class="wf-agent-head">
-            <div class="wf-kicker"><span>Ask Wayfinder</span><span class="wf-step-count">${currentPath ? escapeHtml(currentPath) : 'Evidence first'}</span></div>
-            <h2>${currentPath ? 'What do you want to learn here?' : 'What are you trying to do?'}</h2>
-            <p>${currentPath ? 'I will use this file as the starting coordinate and keep every answer tied to repository evidence.' : 'I will map the repository, answer from verified files, and take you straight to the evidence.'}</p>
+            <div class="wf-kicker"><span>${experienceMode === 'quick' ? 'Quick map' : 'Ask Wayfinder'}</span>${modeSwitch()}</div>
+            <h2>${currentPath ? 'What do you need from this file?' : experienceMode === 'quick' ? 'Get the answer, then the evidence.' : 'What are you trying to do?'}</h2>
+            <p>${currentPath ? `Starting from ${escapeHtml(currentPath)}.` : experienceMode === 'quick' ? 'Compact repository intelligence with branch-pinned evidence.' : 'I will explain the repository one useful step at a time.'}</p>
           </div>
+          ${boundary}
           <div class="wf-question-grid">
-            ${contextStarter}
-            ${agentStarters.map((starter) => `<button type="button" ${starter.requiresInput ? 'data-prefill' : 'data-question'}="${escapeHtml(starter.question)}">${escapeHtml(starter.label)}</button>`).join('')}
+            ${actions.map(([label, question]) => `<button type="button" ${question.includes('[feature]') ? 'data-prefill' : 'data-question'}="${escapeHtml(question)}">${escapeHtml(label)}</button>`).join('')}
+            ${trailAction}
           </div>
+          ${!currentPath ? '<div class="wf-actions"><button type="button" data-action="setup-choice">Use or develop this project</button></div>' : ''}
           <form class="wf-composer">
             <label class="wf-sr-only" for="wf-question">Question for Wayfinder</label>
             <textarea id="wf-question" name="question" minlength="2" required placeholder="${currentPath ? `Ask about ${escapeHtml(currentPath)}` : 'Ask about this repository'}">${escapeHtml(prefill)}</textarea>
-            <button type="submit">Dispatch</button>
+            <button type="submit">Ask</button>
           </form>
+          <p class="wf-tip">Shortcut: Alt + Shift + W</p>
         </div>
       `;
       bubbleOpen = true;
@@ -557,10 +700,32 @@ export default defineContentScript({
       setBubblePosition();
     };
 
+    const renderSetupChoice = () => {
+      surface = 'agent';
+      helper.classList.add('stationed');
+      bubble.classList.add('agent', 'open');
+      bubbleOpen = true;
+      copy.innerHTML = `
+        <div class="wf-agent-home">
+          <div class="wf-agent-head">
+            <div class="wf-kicker"><span>Setup intent</span>${modeSwitch()}</div>
+            <h2>What are you setting up?</h2>
+            <p>These are different paths, so I will not mix published-package commands with contributor setup.</p>
+          </div>
+          <div class="wf-question-grid">
+            <button type="button" data-question="Help me use this project as a consumer or published package">Use this project</button>
+            <button type="button" data-question="Help me develop this repository locally">Develop this repository</button>
+          </div>
+          <div class="wf-actions"><button type="button" data-action="agent-home">Back</button></div>
+        </div>
+      `;
+      setBubblePosition();
+    };
+
     const ensureRepository = async (forceRefresh = false, signal?: AbortSignal): Promise<RepositoryBundle> => {
       if (repository && !forceRefresh) return repository;
       if (!currentLocation) throw new WayfinderRequestError('Open a public GitHub repository before asking Wayfinder.', 'repository-unavailable');
-      const key = repositoryCacheKey(currentLocation.owner, currentLocation.repo);
+      const key = repositoryCacheKey(currentLocation.owner, currentLocation.repo, currentLocation.ref);
       const cached = await getCached<RepositoryBundle>(storage, key).catch(() => null);
       const stale = cached ?? await getCached<RepositoryBundle>(storage, key, Date.now(), true).catch(() => null);
       if (cached && !forceRefresh) {
@@ -574,7 +739,7 @@ export default defineContentScript({
         const mapResponse = await fetch(`${apiUrl}/map`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ owner: currentLocation.owner, repo: currentLocation.repo }),
+          body: JSON.stringify({ owner: currentLocation.owner, repo: currentLocation.repo, ref: currentLocation.ref }),
           signal,
         });
         if (!mapResponse.ok) {
@@ -625,10 +790,45 @@ export default defineContentScript({
       return `<button type="button" class="wf-open" data-path="${escapeHtml(path)}"${lineData}>${escapeHtml(label)} ↗</button>`;
     };
 
+    const repositorySnapshot = (bundle: RepositoryBundle, guide?: Extract<AgentAnswer, { intent: 'orientation' }>['guide']) => {
+      const { map, tour } = bundle;
+      const rootFiles = new Set(map.setupFiles.filter((path) => !path.includes('/')).map((path) => path.toLowerCase()));
+      const packageManager = rootFiles.has('pnpm-lock.yaml') ? 'pnpm'
+        : rootFiles.has('yarn.lock') ? 'yarn'
+          : rootFiles.has('bun.lock') || rootFiles.has('bun.lockb') ? 'bun'
+            : rootFiles.has('package-lock.json') ? 'npm'
+              : rootFiles.has('uv.lock') ? 'uv'
+                : rootFiles.has('poetry.lock') ? 'poetry'
+                  : rootFiles.has('package.json') ? 'Node package manager' : 'Not detected';
+      const directories = map.tree
+        .filter((entry) => entry.type === 'tree' && !entry.path.includes('/'))
+        .map((entry) => entry.path)
+        .sort((left, right) => {
+          const priority = (path: string) => /^(src|app|lib|packages?)$/i.test(path) ? 0 : /^(test|tests|__tests__)$/i.test(path) ? 1 : /^(docs?|examples?)$/i.test(path) ? 2 : 3;
+          return priority(left) - priority(right) || left.localeCompare(right);
+        })
+        .slice(0, 6);
+      const entryPoint = tour.entryPoints[0]?.path ?? 'Not confidently detected';
+      const commands = guide?.steps.slice(0, 4).map((step) => step.command) ?? [];
+      return `
+        <div class="wf-snapshot">
+          <div class="wf-fact wide"><span>Purpose</span><strong>${escapeHtml(tour.summary)}</strong></div>
+          <div class="wf-fact"><span>Stack</span><strong>${escapeHtml(tour.stack.join(', ') || map.language || 'Not detected')}</strong></div>
+          <div class="wf-fact"><span>Package manager</span><strong>${escapeHtml(packageManager)}</strong></div>
+          <div class="wf-fact wide"><span>Viewed version</span><strong>${escapeHtml(map.resolvedRef)} at ${escapeHtml(map.sha.slice(0, 12))}</strong></div>
+          <div class="wf-fact wide"><span>Key directories</span><strong>${escapeHtml(directories.join(', ') || 'Repository root')}</strong></div>
+          <div class="wf-fact wide"><span>Likely entry point</span><strong>${escapeHtml(entryPoint)}</strong>${entryPoint !== 'Not confidently detected' ? pathButton(entryPoint, 'Open entry point') : ''}</div>
+          <div class="wf-fact wide"><span>Local workflow</span><strong>${escapeHtml(commands.join(' · ') || 'No trustworthy setup commands found')}</strong></div>
+        </div>
+      `;
+    };
+
     const renderAnswer = (answer: AgentAnswer) => {
       const bundle = repository;
       if (!bundle) return;
       surface = 'agent';
+      activeAnswer = answer;
+      void saveTrail();
       const sections: string[] = [];
 
       if (answer.brief?.length) {
@@ -636,7 +836,8 @@ export default defineContentScript({
       }
 
       if (answer.intent === 'orientation') {
-        sections.push(`<ol class="wf-route-list">${answer.tour.stops.slice(0, 5).map((stop) => `<li><strong>${String(stop.order).padStart(2, '0')} ${escapeHtml(stop.title)}</strong><p>${escapeHtml(stop.explanation)}</p>${pathButton(stop.path, stop.path, stop.lines)}</li>`).join('')}</ol>`);
+        sections.push(repositorySnapshot(bundle, answer.guide));
+        sections.push(`<details class="wf-detail" ${experienceMode === 'guided' ? 'open' : ''}><summary>Recommended reading route</summary><ol class="wf-route-list">${answer.tour.stops.slice(0, 5).map((stop) => `<li><strong>${String(stop.order).padStart(2, '0')} ${escapeHtml(stop.path)}</strong><p>${escapeHtml(stop.explanation)}</p>${pathButton(stop.path, 'Open file', stop.lines)}</li>`).join('')}</ol></details>`);
       }
 
       if (answer.intent === 'installation') {
@@ -650,7 +851,18 @@ export default defineContentScript({
       }
 
       if (answer.intent === 'file-find') {
-        sections.push(`<div class="wf-result-list">${answer.finder.results.slice(0, 6).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><p>${escapeHtml(result.reason)}</p>${result.snippet ? `<p><code>${escapeHtml(result.snippet)}</code></p>` : ''}${pathButton(result.path, 'Open coordinate', result.lines)}</article>`).join('') || '<div class="wf-error"><p>No credible coordinate was found. Try a filename, symbol, or narrower feature description.</p></div>'}</div>`);
+        sections.push(`<div class="wf-result-list">${answer.finder.results.slice(0, 6).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><span class="wf-confidence">${escapeHtml(result.confidence)} match</span><p>${escapeHtml(result.reason)}</p><div class="wf-signal-list">${result.signals.map((signal) => `<span class="wf-signal">${escapeHtml(signal.replaceAll('-', ' '))}</span>`).join('')}</div>${result.snippet ? `<p class="wf-detail"><code>${escapeHtml(result.snippet)}</code></p>` : ''}${pathButton(result.path, 'Open coordinate', result.lines)}</article>`).join('') || '<div class="wf-error"><p>No credible coordinate was found. Try a filename, symbol, or narrower feature description.</p></div>'}</div>`);
+      }
+
+      if (answer.intent === 'file-context') {
+        const imports = answer.imports.length
+          ? `<div class="wf-fact wide"><span>Direct imports</span><strong>${answer.imports.map(escapeHtml).join(' · ')}</strong></div>`
+          : '<div class="wf-fact wide"><span>Direct imports</span><strong>No imports were confidently extracted</strong></div>';
+        const related = answer.relatedPaths.length
+          ? `<ol class="wf-route-list">${answer.relatedPaths.map((path) => `<li><strong>${escapeHtml(path)}</strong>${pathButton(path, 'Open dependency')}</li>`).join('')}</ol>`
+          : '<div class="wf-boundary">No local dependency path could be resolved from this file. Package imports may point outside the repository.</div>';
+        const tests = answer.tests.results.slice(0, 4).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><span class="wf-confidence">${escapeHtml(result.confidence)} match</span><p>${escapeHtml(result.reason)}</p>${pathButton(result.path, 'Open test', result.lines)}</article>`).join('');
+        sections.push(`<div class="wf-snapshot"><div class="wf-fact wide"><span>Current file</span><strong>${escapeHtml(answer.currentPath)}</strong></div>${imports}</div><div class="wf-detail"><div class="wf-kicker"><span>Local dependencies</span></div>${related}</div><div><div class="wf-kicker"><span>Likely paired tests</span></div><div class="wf-result-list">${tests || '<div class="wf-boundary">No credible paired test was found.</div>'}</div></div>`);
       }
 
       if (answer.intent === 'contribution' && !answer.brief?.length) {
@@ -666,12 +878,19 @@ export default defineContentScript({
       const followups = answer.suggestions.length
         ? `<div class="wf-followups">${answer.suggestions.map((suggestion) => `<button type="button" data-question="${escapeHtml(suggestion)}">${escapeHtml(suggestion)}</button>`).join('')}</div>`
         : '';
+      const refWarning = bundle.map.requestedRef && bundle.map.requestedRef !== bundle.map.resolvedRef
+        ? `<ul class="wf-warning-list"><li>You opened ${escapeHtml(bundle.map.requestedRef)}, but the repository map resolved ${escapeHtml(bundle.map.resolvedRef)}. Verify the branch before acting on this answer.</li></ul>`
+        : '';
+      const provenance = answer.mode === 'gpt-5.6'
+        ? ['AI-assisted plan', 'Repository evidence verified']
+        : ['Verified repository map', `${bundle.map.resolvedRef} · ${bundle.map.sha.slice(0, 8)}`];
 
       copy.innerHTML = `
-        <div class="wf-answer">
-          <div class="wf-answer-nav"><button type="button" data-action="agent-home">← New question</button><button type="button" data-action="refresh-answer">Refresh repository ↻</button></div>
+        <div class="wf-answer ${answerDepth === 'concise' ? 'concise' : ''}">
+          <div class="wf-answer-nav"><button type="button" data-action="agent-home">← New question</button>${modeSwitch()}</div>
           <div class="wf-kicker"><span>${escapeHtml(answer.intent.replace('-', ' '))}</span><span class="wf-step-count">${escapeHtml(bundle.map.repo)}</span></div>
-          <div class="wf-answer-mode ${answer.mode === 'gpt-5.6' ? 'model' : ''}"><span>${answer.mode === 'gpt-5.6' ? 'GPT-5.6 Luna' : 'Deterministic route'}</span><span>${answer.mode === 'gpt-5.6' ? 'Verified evidence' : 'Free mode'}</span></div>
+          <div class="wf-answer-mode ${answer.mode === 'gpt-5.6' ? 'model' : ''}"><span>${escapeHtml(provenance[0])}</span><span>${escapeHtml(provenance[1])}</span></div>
+          ${refWarning}
           ${cacheNote()}
           <h2 class="wf-sr-only">Wayfinder trail report</h2>
           <p class="wf-answer-summary">${escapeHtml(answer.summary)}</p>
@@ -679,6 +898,7 @@ export default defineContentScript({
           ${sections.join('')}
           ${evidence}
           ${followups}
+          <div class="wf-answer-nav"><div class="wf-detail-toggle"><button type="button" data-depth="concise">Make concise</button><button type="button" data-depth="expanded">Explain more</button></div><button type="button" data-action="refresh-answer">Refresh ↻</button></div>
         </div>
       `;
       bubble.classList.add('agent');
@@ -756,6 +976,23 @@ export default defineContentScript({
     const renderWelcome = () => {
       surface = 'welcome';
       bubble.classList.remove('agent');
+      if (!experienceMode) {
+        copy.innerHTML = `
+          <div class="wf-kicker"><span>Wayfinder</span><span class="wf-step-count">Choose your pace</span></div>
+          <h2>How should I help?</h2>
+          <p>Choose a guided explanation or a compact project map. You can switch anytime.</p>
+          <div class="wf-actions">
+            <button class="primary" type="button" data-action="choose-guided">Guide me</button>
+            <button type="button" data-action="choose-quick">Quick map</button>
+          </div>
+          <p class="wf-tip">Guided explains GitHub as you go. Quick stays quiet and leads with the answer.</p>
+        `;
+        return;
+      }
+      if (experienceMode === 'quick') {
+        renderAgentHome();
+        return;
+      }
       if (stops.length === 0) {
         copy.innerHTML = `
           <div class="wf-kicker"><span>Wayfinder on the page</span><span class="wf-step-count">Repository context</span></div>
@@ -766,25 +1003,38 @@ export default defineContentScript({
         return;
       }
       copy.innerHTML = `
-        <div class="wf-kicker"><span>Wayfinder on the page</span><span class="wf-step-count">${stops.length} landmarks</span></div>
-        <h2>I found a trail through this page.</h2>
-        <p>I can float to the important parts, point them out, and explain what each one tells you about the repository.</p>
+        <div class="wf-kicker"><span>Guided mode</span>${modeSwitch()}</div>
+        <h2>Learn this repository one landmark at a time.</h2>
+        <p>I will move only when pointing something out, explain the GitHub term, and connect it to a fact about this project.</p>
         <div class="wf-actions">
           <button class="primary" type="button" data-action="start">Show me around</button>
-          <button type="button" data-action="agent-home">Ask Wayfinder</button>
+          <button type="button" data-action="agent-home">Ask a question</button>
         </div>
-        <p class="wf-tip">Tip: click me anytime to bring the guide back.</p>
+        <p class="wf-tip">Click me anytime or press Alt + Shift + W.</p>
       `;
+    };
+
+    const projectFact = (stop: GuideStop): string | null => {
+      if (!repository) return null;
+      const { map, tour } = repository;
+      if (stop.label === 'Repository name') return map.description || tour.summary;
+      if (stop.label === 'Current branch') return `${map.resolvedRef} is the version Wayfinder mapped at commit ${map.sha.slice(0, 12)}. The default branch is ${map.defaultBranch}.`;
+      if (stop.label === 'File tree') return `Detected stack: ${tour.stack.join(', ') || map.language || 'not confidently detected'}. Likely entry point: ${tour.entryPoints[0]?.path ?? 'not confidently detected'}.`;
+      if (stop.label === 'README') return tour.summary;
+      if (currentLocation?.path) return `Current file: ${currentLocation.path}. Wayfinder will use it as the starting context for questions.`;
+      return null;
     };
 
     const renderStep = () => {
       const stop = stops[activeStep];
       if (!stop) return;
       surface = 'tour';
+      const fact = projectFact(stop);
       copy.innerHTML = `
         <div class="wf-kicker"><span>${stop.label}</span><span class="wf-step-count">${activeStep + 1} / ${stops.length}</span></div>
         <h2>${stop.title}</h2>
         <p>${stop.explanation}</p>
+        ${fact ? `<div class="wf-project-fact"><strong>In this project</strong><p>${escapeHtml(fact)}</p></div>` : ''}
         <div class="wf-actions">
           ${activeStep > 0 ? '<button type="button" data-action="previous">Back</button>' : ''}
           <button class="primary" type="button" data-action="next">${activeStep === stops.length - 1 ? 'Finish tour' : 'Next landmark'}</button>
@@ -899,9 +1149,36 @@ export default defineContentScript({
       setBubblePosition();
     };
 
+    const startGuidedTour = async () => {
+      stops = guideStops();
+      if (stops.length === 0) return;
+      rememberRepo();
+      renderLoading('Mapping project facts for the guided tour');
+      await ensureRepository(false).catch(() => null);
+      activeStep = 0;
+      moveToActiveStop();
+    };
+
     copy.addEventListener('click', (event) => {
       const button = (event.target as Element).closest<HTMLButtonElement>('button');
       if (!button) return;
+      const selectedMode = button.dataset.mode as ExperienceMode | undefined;
+      if (selectedMode === 'guided' || selectedMode === 'quick') {
+        experienceMode = selectedMode;
+        answerDepth = selectedMode === 'quick' ? 'concise' : 'expanded';
+        rememberRepo();
+        void savePreferences();
+        if (activeAnswer && repository) renderAnswer(activeAnswer);
+        else if (selectedMode === 'guided') showWelcome();
+        else renderAgentHome();
+        return;
+      }
+      const selectedDepth = button.dataset.depth as AnswerDepth | undefined;
+      if ((selectedDepth === 'concise' || selectedDepth === 'expanded') && activeAnswer) {
+        answerDepth = selectedDepth;
+        renderAnswer(activeAnswer);
+        return;
+      }
       const question = button.dataset.question;
       if (question) {
         void askAgent(question);
@@ -933,6 +1210,38 @@ export default defineContentScript({
         renderAgentHome();
         return;
       }
+      if (action === 'back-to-trail' && activeAnswer) {
+        const savedAnswer = activeAnswer;
+        void ensureRepository(false).then((bundle) => {
+          if (bundle.map.sha !== savedAnswer.sha) {
+            activeAnswer = null;
+            renderAgentHome();
+            return;
+          }
+          renderAnswer(savedAnswer);
+        }).catch(() => renderAgentHome());
+        return;
+      }
+      if (action === 'setup-choice') {
+        renderSetupChoice();
+        return;
+      }
+      if (action === 'choose-guided') {
+        experienceMode = 'guided';
+        answerDepth = 'expanded';
+        rememberRepo();
+        void savePreferences();
+        showWelcome();
+        return;
+      }
+      if (action === 'choose-quick') {
+        experienceMode = 'quick';
+        answerDepth = 'concise';
+        rememberRepo();
+        void savePreferences();
+        void askAgent('Give me a 60-second overview of this repository');
+        return;
+      }
       if (action === 'ask-highlight') {
         const stop = stops[activeStep];
         if (stop) renderHighlightedAnswer(stop);
@@ -952,10 +1261,7 @@ export default defineContentScript({
         return;
       }
       if (action === 'start' || action === 'restart') {
-        stops = guideStops();
-        if (stops.length === 0) return;
-        activeStep = 0;
-        moveToActiveStop();
+        void startGuidedTour();
       } else if (action === 'previous') {
         activeStep = Math.max(0, activeStep - 1);
         moveToActiveStop();
@@ -997,6 +1303,11 @@ export default defineContentScript({
     });
 
     const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.altKey && event.shiftKey && event.key.toLowerCase() === 'w') {
+        event.preventDefault();
+        helper.click();
+        return;
+      }
       if (event.key !== 'Escape' || !bubbleOpen) return;
       event.preventDefault();
       bubbleOpen = false;
@@ -1017,12 +1328,17 @@ export default defineContentScript({
       tourMoving = false;
       window.clearTimeout(movementTimer);
       window.clearTimeout(arrivalTimer);
+      dock.classList.add('settled');
+      window.setTimeout(() => dock.classList.remove('settled'), 1_250);
       highlight.classList.remove('visible');
       helper.classList.add('stationed');
-      const nextLocation = parseGitHubUrl(lastUrl);
+      const nextLocation = parseGitHubUrl(lastUrl, visibleBranchRef());
       const previousRepo = currentLocation ? `${currentLocation.owner}/${currentLocation.repo}` : null;
+      const previousRef = currentLocation?.ref ?? null;
       const nextRepo = nextLocation ? `${nextLocation.owner}/${nextLocation.repo}` : null;
       const repoChanged = previousRepo !== nextRepo;
+      const pinnedEvidenceNavigation = Boolean(nextLocation?.ref && repository?.map.sha === nextLocation.ref);
+      const refChanged = !repoChanged && previousRef !== nextLocation?.ref && !pinnedEvidenceNavigation;
       currentLocation = nextLocation;
       const publishedUrl = lastUrl;
       host.hidden = !nextLocation;
@@ -1030,26 +1346,35 @@ export default defineContentScript({
         bubbleOpen = false;
         bubble.classList.remove('open');
       }
-      if (repoChanged) {
+      if (repoChanged || refChanged) {
         repository = null;
         repositoryCachedAt = null;
         repositoryCacheState = 'fresh';
+        activeAnswer = null;
       }
       if (!bubbleOpen) copy.replaceChildren();
 
       window.setTimeout(() => {
         if (window.location.href !== publishedUrl || lastUrl !== publishedUrl) return;
-        stops = guideStops();
-        if (!welcomeShown && stops.length > 0) {
-          welcomeShown = true;
-          showWelcome();
-        } else if (bubbleOpen && nextLocation) {
-          if (surface === 'agent') renderAgentHome();
-          else renderWelcome();
-          setBubblePosition();
-        } else if (!bubbleOpen) {
-          copy.replaceChildren();
-        }
+        void loadPreferences().then(async () => {
+          if (window.location.href !== publishedUrl || lastUrl !== publishedUrl) return;
+          stops = guideStops();
+          const normalizedRepo = nextRepo?.toLowerCase() ?? null;
+          const seen = normalizedRepo ? seenRepos.includes(normalizedRepo) : false;
+          host.dataset.seen = String(seen);
+          if (repoChanged && nextRepo) await loadTrail(nextRepo);
+          if (!welcomeShown && stops.length > 0 && (!experienceMode || (experienceMode === 'guided' && !seen))) {
+            welcomeShown = true;
+            showWelcome();
+          } else if (bubbleOpen && nextLocation) {
+            if (surface === 'agent' && activeAnswer && repository) renderAnswer(activeAnswer);
+            else if (surface === 'agent') renderAgentHome();
+            else renderWelcome();
+            setBubblePosition();
+          } else if (!bubbleOpen) {
+            copy.replaceChildren();
+          }
+        });
       }, 1_200);
     };
 
@@ -1079,6 +1404,7 @@ export default defineContentScript({
       window.clearTimeout(arrivalTimer);
       window.clearInterval(locationTimer);
       activeRequest?.abort();
+      openStateObserver.disconnect();
       window.cancelAnimationFrame(viewportFrame);
       document.removeEventListener('DOMContentLoaded', mountHelper);
       window.removeEventListener('popstate', schedulePublish);

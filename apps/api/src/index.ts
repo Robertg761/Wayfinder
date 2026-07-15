@@ -27,6 +27,7 @@ interface Env {
 const mapRequestSchema = z.object({
   owner: z.string().min(1).max(100).regex(/^(?!\.{1,2}$)[a-zA-Z0-9_.-]+$/),
   repo: z.string().min(1).max(100).regex(/^(?!\.{1,2}$)[a-zA-Z0-9_.-]+$/),
+  ref: z.string().trim().min(1).max(255).regex(/^(?!\.|\/)(?!.*(?:^|\/)\.\.?\/?$)[^\u0000-\u001f\u007f~^:?*[\\]+$/).nullable().optional(),
 });
 
 const repositoryPathSchema = z.string()
@@ -41,6 +42,8 @@ const repositoryPathSchema = z.string()
 const repoMapSchema = z.object({
   repo: z.string().min(3).max(201).regex(/^(?!\.{1,2}\/)(?!.*\/\.{1,2}$)[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/),
   sha: z.string().regex(/^[a-f0-9]{7,64}$/i),
+  requestedRef: z.string().min(1).max(255).nullable(),
+  resolvedRef: z.string().min(1).max(255),
   defaultBranch: z.string().min(1).max(255),
   description: z.string().max(500).nullable(),
   homepage: z.string().max(2_048).nullable(),
@@ -58,7 +61,10 @@ const repoMapSchema = z.object({
 });
 
 const tourRequestSchema = z.object({ map: repoMapSchema });
-const installRequestSchema = z.object({ map: repoMapSchema });
+const installRequestSchema = z.object({
+  map: repoMapSchema,
+  audience: z.enum(["use", "develop"]).optional(),
+});
 const findRequestSchema = z.object({
   map: repoMapSchema,
   query: z.string().trim().min(2).max(240),
@@ -208,7 +214,7 @@ export default {
     if (request.method === "POST" && url.pathname === "/map") {
       try {
         const input = mapRequestSchema.parse(await request.json());
-        return json(await createRepoMap(input.owner, input.repo, env.GITHUB_TOKEN));
+        return json(await createRepoMap(input.owner, input.repo, input.ref ?? null, env.GITHUB_TOKEN));
       } catch (error) {
         return requestFailure(error, "map_failed", 502);
       }
@@ -226,7 +232,7 @@ export default {
     if (request.method === "POST" && url.pathname === "/guide/install") {
       try {
         const input = installRequestSchema.parse(await request.json());
-        return json(await createInstallGuide(input.map as RepoMap, env.GITHUB_TOKEN));
+        return json(await createInstallGuide(input.map as RepoMap, env.GITHUB_TOKEN, input.audience ?? "develop"));
       } catch (error) {
         return requestFailure(error, "install_guide_failed");
       }

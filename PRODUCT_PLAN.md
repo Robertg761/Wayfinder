@@ -1,7 +1,7 @@
 # Wayfinder Product Plan
 
 **Status:** Active source of truth  
-**Updated:** July 13, 2026  
+**Updated:** July 15, 2026
 **Product:** Chrome extension for public GitHub repositories
 
 ## 1. North Star
@@ -104,12 +104,21 @@ These can be revisited only after the four MVP user journeys are reliable.
 
 ### 6.1 Default floating helper
 
-The helper opens with an orientation card and expands in place into the full agent. It should suggest concrete actions instead of showing an empty chat box:
+The helper asks the user to choose a pace once, then remembers the selection:
+
+- **Guided:** Project-specific GitHub education, progressive disclosure, and explicit landmark movement
+- **Quick:** A quiet, stationary helper with compact repository intelligence and developer-focused actions
+
+The names describe the current experience rather than labeling the user's ability. A user can switch modes at any time. Mode changes presentation, pacing, motion, and answer density. It does not change evidence requirements or model spending.
+
+The helper expands in place into the full agent and suggests concrete actions instead of showing an empty chat box:
 
 - Show me where to start
 - How do I install this?
 - Find the main entry point
 - Where are the tests?
+
+On a file page, the actions change to summarize the current file, extract imports, resolve local dependencies, find paired tests, and map likely change impact.
 
 ### 6.2 Answer structure
 
@@ -173,11 +182,12 @@ Inputs:
 
 - Repository owner
 - Repository name
+- Optional branch, tag, or commit reference
 
 Outputs:
 
 - Repository metadata
-- Default branch and commit SHA
+- Requested ref, resolved ref, default branch, and commit-pinned tree SHA
 - README content
 - Filtered file tree
 - Language and popularity signals

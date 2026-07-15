@@ -6,6 +6,8 @@ function makeMap(overrides: Partial<RepoMap> = {}): RepoMap {
   return {
     repo: "example/trail",
     sha: "abc1234567890",
+    requestedRef: null,
+    resolvedRef: "main",
     defaultBranch: "main",
     description: "A test repository.",
     homepage: null,
@@ -122,5 +124,22 @@ describe("generateInstallGuide", () => {
 
     expect(guide.steps.map((step) => step.command)).toEqual(["pnpm install", "pnpm test", "pnpm build"]);
     expect(guide.warnings[0]).toContain("omitted");
+  });
+
+  it("keeps consumer installation separate from repository development", () => {
+    const readme = ["# Trail", "## Installation", "```bash", "npm install trail-sdk", "```"].join("\n");
+    const map = makeMap({ readme, setupFiles: ["README.md", "package.json"] });
+    const files = {
+      "README.md": readme,
+      "package.json": JSON.stringify({ name: "trail-sdk", packageManager: "npm@11", scripts: { test: "vitest" } }),
+    };
+
+    const consumer = generateInstallGuide(map, files, "use");
+    const contributor = generateInstallGuide(map, files, "develop");
+
+    expect(consumer.audience).toBe("use");
+    expect(consumer.steps.map((step) => step.command)).toEqual(["npm install trail-sdk"]);
+    expect(contributor.audience).toBe("develop");
+    expect(contributor.steps.map((step) => step.command)).toEqual(["npm install", "npm test"]);
   });
 });

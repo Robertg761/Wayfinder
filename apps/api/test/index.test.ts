@@ -5,6 +5,8 @@ function validMap(overrides: Record<string, unknown> = {}) {
   return {
     repo: "openai/openai-node",
     sha: "a".repeat(40),
+    requestedRef: null,
+    resolvedRef: "main",
     defaultBranch: "main",
     description: null,
     homepage: null,
@@ -12,7 +14,7 @@ function validMap(overrides: Record<string, unknown> = {}) {
     stars: 1,
     readme: "# OpenAI Node",
     tree: [{ path: "src/index.ts", type: "blob", size: 100 }],
-    setupFiles: ["README.md"],
+    setupFiles: [],
     truncated: false,
     generatedAt: "2026-07-14T12:00:00.000Z",
     ...overrides,

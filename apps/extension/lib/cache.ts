@@ -42,8 +42,8 @@ function hashText(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-export function repositoryCacheKey(owner: string, repo: string): string {
-  return "wayfinder:repository:" + normalize(owner) + "/" + normalize(repo);
+export function repositoryCacheKey(owner: string, repo: string, ref?: string | null): string {
+  return "wayfinder:repository:" + normalize(owner) + "/" + normalize(repo) + ":" + normalize(ref ?? "default");
 }
 
 export function agentResponseCacheKey(repo: string, sha: string, query: string, currentPath: string | null): string {

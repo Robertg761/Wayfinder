@@ -67,6 +67,10 @@ interface GitHubTreeResponse {
   }>;
 }
 
+interface GitHubCommitResponse {
+  sha: string;
+}
+
 interface GitHubReadmeResponse {
   content: string;
   encoding: string;
@@ -311,27 +315,31 @@ export async function fetchRepoFile(
   return decodeBase64(response.content).slice(0, 80_000);
 }
 
-export async function createRepoMap(owner: string, repo: string, token?: string): Promise<RepoMap> {
+export async function createRepoMap(owner: string, repo: string, requestedRef?: string | null, token?: string): Promise<RepoMap> {
   const prefix = "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo);
   const metadata = await githubFetch<GitHubRepoResponse>(prefix, token);
+  const resolvedRef = requestedRef?.trim() || metadata.default_branch;
 
-  const [tree, readme] = await Promise.all([
-    githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(metadata.default_branch) + "?recursive=1", token),
-    githubFetch<GitHubReadmeResponse>(prefix + "/readme", token).catch((error) => {
+  const [tree, readme, commit] = await Promise.all([
+    githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(resolvedRef) + "?recursive=1", token),
+    githubFetch<GitHubReadmeResponse>(prefix + "/readme?ref=" + encodeURIComponent(resolvedRef), token).catch((error) => {
       if (error instanceof GitHubApiError && error.code === "repository-unavailable") return null;
       throw error;
     }),
+    githubFetch<GitHubCommitResponse>(prefix + "/commits/" + encodeURIComponent(resolvedRef), token),
   ]);
 
   const rootTree = tree.truncated || tree.tree.length > 4_000
-    ? await githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(metadata.default_branch), token)
+    ? await githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(resolvedRef), token)
     : null;
   const filteredTree = compactTree(dedupeTree(filterTree([...(rootTree?.tree ?? []), ...tree.tree])));
   const setupFiles = collectSetupFiles([...(rootTree?.tree ?? []), ...tree.tree]);
 
   return {
     repo: owner + "/" + repo,
-    sha: tree.sha,
+    sha: commit.sha,
+    requestedRef: requestedRef?.trim() || null,
+    resolvedRef,
     defaultBranch: metadata.default_branch,
     description: metadata.description,
     homepage: metadata.homepage,
