@@ -100,6 +100,10 @@ function isAuxiliaryPath(path: string): boolean {
   return /(^|\/)(examples?|demos?|evals?|bench(?:es)?|benchmarks?|fixtures?|templates?|playgrounds?)(\/|$)/i.test(path);
 }
 
+function isTestSupportPath(path: string): boolean {
+  return /(^|\/)(conftest\.[^/]+|test_apps|type_check|fixtures?|helpers?|support)(\/|$)/i.test(path);
+}
+
 function words(value: string): string[] {
   return value
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -197,6 +201,10 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
         score -= 45;
       } else if (!askingForTests && isTest) {
         score -= askingForImplementation ? 52 : 18;
+      }
+
+      if (askingForTests && isTestSupportPath(path) && !/\b(type|typing|typecheck|fixture|helper|support|config)\b/i.test(query)) {
+        score -= 45;
       }
 
       if (currentDir && (path.startsWith(currentDir.toLowerCase() + "/") || currentDir.toLowerCase().startsWith(path.split("/").slice(0, -1).join("/")))) {

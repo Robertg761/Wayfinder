@@ -47,4 +47,17 @@ describe("keepGoalLinkedVerification", () => {
     expect(filtered.results).toEqual([]);
     expect(filtered.warnings.at(-1)).toContain("no verification coordinate was claimed");
   });
+
+  it("matches a routing goal to route evidence without accepting generic app fixtures", () => {
+    const routingFinder: FileFindResponse = {
+      ...finder,
+      results: [
+        { path: "tests/test_apps/cliapp/app.py", score: 0.9, confidence: "strong", reason: "Generic app fixture.", signals: ["test-pair"], snippet: "testapp = Flask('testapp')" },
+        { path: "tests/test_basic.py", score: 0.8, confidence: "strong", reason: "Runtime route test.", signals: ["test-pair", "content"], snippet: "@app.route('/users')" },
+      ],
+    };
+
+    expect(keepGoalLinkedVerification(routingFinder, "Improve request routing").results.map((result) => result.path))
+      .toEqual(["tests/test_basic.py"]);
+  });
 });

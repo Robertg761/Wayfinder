@@ -35,6 +35,10 @@ const map: RepoMap = {
     { path: "tests", type: "tree" },
     { path: "tests/auth.test.ts", type: "blob", size: 2_000 },
     { path: "tests/api-resources/audio/speech.test.ts", type: "blob", size: 2_000 },
+    { path: "tests/test_basic.py", type: "blob", size: 20_000 },
+    { path: "tests/conftest.py", type: "blob", size: 2_000 },
+    { path: "tests/test_apps/cliapp/app.py", type: "blob", size: 2_000 },
+    { path: "tests/type_check/typing_route.py", type: "blob", size: 2_000 },
     { path: "ecosystem-tests/browser/src/test.ts", type: "blob", size: 2_000 },
   ],
 };
@@ -58,6 +62,19 @@ describe("rankFileCandidates", () => {
     expect(results[0].entry.path).toBe("tests/api-resources/audio/speech.test.ts");
     expect(results.findIndex((result) => result.entry.path === "ecosystem-tests/browser/src/test.ts"))
       .toBeGreaterThan(0);
+  });
+
+  it("prefers behavioral tests over support fixtures for a routing goal", () => {
+    const response = findFiles(map, "routing tests specs", {
+      "tests/test_basic.py": "def test_route_matching():\n    @app.route('/users')\n    assert client.get('/users').status_code == 200",
+      "tests/conftest.py": "from flask.globals import app_ctx as _app_ctx",
+      "tests/test_apps/cliapp/app.py": "testapp = Flask('testapp')",
+      "tests/type_check/typing_route.py": "@app.route('/str')\ndef hello() -> str: ...",
+    });
+
+    expect(response.results[0].path).toBe("tests/test_basic.py");
+    expect(response.results.findIndex((result) => result.path === "tests/type_check/typing_route.py"))
+      .not.toBe(0);
   });
 
   it("uses the current directory as a contextual signal", () => {

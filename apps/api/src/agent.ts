@@ -37,7 +37,7 @@ export function keepGoalLinkedVerification(finder: FileFindResponse, goal: strin
   if (concepts.length === 0) return finder;
   const results = finder.results.filter((result) => {
     const evidence = (result.path + " " + (result.snippet ?? "")).toLowerCase();
-    return concepts.some((concept) => evidence.includes(concept));
+    return concepts.some((concept) => evidence.includes(concept) || evidence.includes(concept.slice(0, 4)));
   });
 
   return {
@@ -61,10 +61,8 @@ async function createContributionTrail(
     createInstallGuide(map, token),
     createFileFind(map, concepts + " primary implementation source", currentPath, token),
   ]);
-  const implementationPath = implementation.results[0]?.path ?? "";
-  const verificationFocus = (concepts + " " + implementationPath.replace(/([a-z0-9])([A-Z])/g, "$1 $2")).trim();
-  const verificationCandidate = await createFileFind(map, verificationFocus + " tests specs", currentPath, token);
-  const verification = keepGoalLinkedVerification(verificationCandidate, goal + " " + implementationPath);
+  const verificationCandidate = await createFileFind(map, concepts + " tests specs", currentPath, token);
+  const verification = keepGoalLinkedVerification(verificationCandidate, goal);
 
   return {
     repo: map.repo,
