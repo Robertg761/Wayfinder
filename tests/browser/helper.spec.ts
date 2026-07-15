@@ -88,3 +88,19 @@ test('does not retain movement delays when reduced motion is requested', async (
   await expect(page.getByText('Repository coordinates')).toBeVisible({ timeout: 700 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });
+
+test('reopens with the final repository after rapid closed-state navigation', async () => {
+  await page.goto(fixtureUrl);
+  await page.getByRole('button', { name: 'Close helper' }).click();
+  await page.evaluate(() => {
+    history.pushState({}, '', '/old/repository');
+    document.dispatchEvent(new Event('turbo:load'));
+    history.pushState({}, '', '/final/repository');
+    document.dispatchEvent(new Event('turbo:load'));
+  });
+  await page.waitForTimeout(1_300);
+  await page.getByRole('button', { name: 'Open Wayfinder helper' }).click();
+  await expect(page.getByText('I found a trail through this page.')).toBeVisible();
+  await page.getByRole('button', { name: 'Show me around' }).click();
+  await expect(page.getByRole('heading', { name: 'final / repository' })).toBeVisible();
+});

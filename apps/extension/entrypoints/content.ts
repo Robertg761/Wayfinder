@@ -1024,6 +1024,7 @@ export default defineContentScript({
       const nextRepo = nextLocation ? `${nextLocation.owner}/${nextLocation.repo}` : null;
       const repoChanged = previousRepo !== nextRepo;
       currentLocation = nextLocation;
+      const publishedUrl = lastUrl;
       host.hidden = !nextLocation;
       if (!nextLocation) {
         bubbleOpen = false;
@@ -1034,9 +1035,10 @@ export default defineContentScript({
         repositoryCachedAt = null;
         repositoryCacheState = 'fresh';
       }
+      if (!bubbleOpen) copy.replaceChildren();
 
       window.setTimeout(() => {
-        if (window.location.href !== lastUrl) return;
+        if (window.location.href !== publishedUrl || lastUrl !== publishedUrl) return;
         stops = guideStops();
         if (!welcomeShown && stops.length > 0) {
           welcomeShown = true;
@@ -1045,6 +1047,8 @@ export default defineContentScript({
           if (surface === 'agent') renderAgentHome();
           else renderWelcome();
           setBubblePosition();
+        } else if (!bubbleOpen) {
+          copy.replaceChildren();
         }
       }, 1_200);
     };
