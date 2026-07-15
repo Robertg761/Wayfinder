@@ -1,6 +1,6 @@
 # Wayfinder Chrome Extension
 
-This package contains the Wayfinder Manifest V3 extension. It follows the active public GitHub repository, renders the repository guide in a Chrome side panel, and opens cited files at the mapped commit and line range.
+This package contains the Wayfinder Manifest V3 extension. It follows the active public GitHub repository, renders an animated helper directly on GitHub, keeps the full repository guide in a Chrome side panel, and opens cited files at the mapped commit and line range.
 
 ## Runtime behavior
 
@@ -24,7 +24,7 @@ Then start WXT in another terminal:
 pnpm dev:extension
 ```
 
-WXT builds the unpacked extension in `.output/chrome-mv3-dev`. Open a public GitHub repository and select Wayfinder from the Chrome toolbar.
+WXT builds the unpacked extension in `.output/chrome-mv3-dev`. Open a public GitHub repository to see the page helper. The helper can run a visual landmark tour or open the full side-panel guide.
 
 ## Test and build
 
@@ -44,7 +44,9 @@ The production directory is `.output/chrome-mv3`. The distributable archive is `
 3. Select Load unpacked.
 4. Choose `apps/extension/.output/chrome-mv3`.
 5. Open a public repository on GitHub.
-6. Select the Wayfinder toolbar action to open the side panel.
+6. Open a public GitHub repository and confirm the Wayfinder helper appears.
+7. Select "Show me around" and confirm it moves to and highlights each page landmark.
+8. Select "Ask the full guide" or the toolbar action to open the side panel.
 
 Chrome cannot load the zip directly as an unpacked extension. Extract it first if you are testing the archive instead of the build directory.
 

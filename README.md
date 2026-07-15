@@ -1,6 +1,6 @@
 # Wayfinder
 
-Wayfinder is a context-aware repository guide that lives beside GitHub. It helps someone understand an unfamiliar codebase, install and run it, locate important files, and plan a first contribution with confidence. Deterministic repository tools provide a useful free baseline, while GPT-5.6 Luna can turn a verified contribution trail into a practical field brief.
+Wayfinder is a context-aware repository guide that lives directly on GitHub. A small animated compass helper travels to important landmarks on the page, highlights them, and explains what they reveal about the repository. Its full side-panel agent helps someone understand an unfamiliar codebase, install and run it, locate important files, and plan a first contribution with confidence. Deterministic repository tools provide a useful free baseline, while GPT-5.6 Luna can turn a verified contribution trail into a practical field brief.
 
 ## Product documentation
 
@@ -16,7 +16,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 
 ## Current slice
 
-- WXT and React Chrome extension with an MV3 side panel
+- WXT and React Chrome extension with a floating on-page helper and an MV3 side panel
 - GitHub URL parsing for repository, tree, and blob views
 - GitHub single-page navigation detection
 - Cloudflare Worker with `GET /health` and `POST /map`
@@ -31,6 +31,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Filtered GitHub tree, README, metadata, language, and star count
 - Package-manager, runtime, setup-command, and environment evidence detection
 - Clickable tour stops that open real files and line ranges on GitHub
+- Animated page landmarks that move the helper to repository controls, file trees, READMEs, and code regions
 - Installation checklist with documented and inferred confidence labels
 - One-click copying for sourced installation commands
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
@@ -49,7 +50,7 @@ The deterministic engine uses repository conventions, file roles, aliases, test 
 ## Workspace
 
 ```text
-apps/extension     Chrome extension and side panel
+apps/extension     Chrome extension, page helper, and side panel
 apps/api           Cloudflare Worker API
 packages/contracts Shared request and response types
 PRODUCT_PLAN.md    Product source of truth
@@ -83,7 +84,7 @@ In a second terminal, start the extension:
 pnpm dev:extension
 ```
 
-WXT opens a development browser with the unpacked extension installed. Visit a public GitHub repository and open Wayfinder from the Chrome toolbar.
+WXT opens a development browser with the unpacked extension installed. Visit a public GitHub repository and Wayfinder appears on the page. Select "Show me around" for a visual landmark tour, or open the full guide from the helper or Chrome toolbar.
 
 ## API smoke test
 

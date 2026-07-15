@@ -12,7 +12,7 @@ An evidence-first agent that guides you through any unfamiliar GitHub repository
 
 ## Short description
 
-Wayfinder is a Chrome side-panel agent for GitHub. It shows developers where to start, extracts sourced installation steps, finds where a feature is implemented, and turns a contribution goal into an evidence-backed Trail Plan. GPT-5.6 reasons across the typed tool results to produce an ordered field brief, while strict path validation prevents it from inventing repository coordinates.
+Wayfinder is a floating repository guide and Chrome side-panel agent for GitHub. Its animated compass helper travels to real page landmarks, points them out, and explains what they reveal. The full agent extracts sourced installation steps, finds where a feature is implemented, and turns a contribution goal into an evidence-backed Trail Plan. GPT-5.6 reasons across the typed tool results to produce an ordered field brief, while strict path validation prevents it from inventing repository coordinates.
 
 ## Inspiration
 
@@ -22,7 +22,7 @@ General chat tools can help, but they make users move context out of GitHub and 
 
 ## What it does
 
-Wayfinder lives in a Chrome side panel and follows the repository, directory, or file currently open in GitHub.
+Wayfinder first appears as a small helper directly on GitHub. It can lead a visual tour of the repository name, branch, file tree, README, breadcrumbs, code, and line coordinates. The full guide lives in a Chrome side panel and follows the repository, directory, or file currently open in GitHub.
 
 It can:
 
@@ -42,7 +42,7 @@ Paid synthesis is protected by a Cloudflare rate-limit binding and a persistent 
 
 ## How we built it
 
-The Chrome extension uses WXT, React, TypeScript, and Manifest V3. A content script tracks GitHub single-page navigation and sends the active repository context to the side panel.
+The Chrome extension uses WXT, React, TypeScript, and Manifest V3. A content script tracks GitHub single-page navigation, renders the isolated Shadow DOM helper, maps visible landmarks, and sends the active repository context to the side panel.
 
 A TypeScript Cloudflare Worker provides explicit repository tools:
 
@@ -109,15 +109,20 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 ## Links
 
 - Public health endpoint: `https://wayfinder-api.hopit-robert.workers.dev/health`
-- Source repository: add after publishing
+- Source repository: `https://github.com/Robertg761/Wayfinder`
 - Demo video: add after recording
+
+Verified screenshot candidates:
+
+- `docs/assets/wayfinder-page-helper-welcome.jpg`
+- `docs/assets/wayfinder-page-helper-landmark.jpg`
 
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
 - Current Worker version: `5e1c4017-5fb7-4da2-abec-0031d605b163`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `6e7e119e3f73218306534881df2eee946aaf517ebfa28c929e69ac0ea401ccc3`
+- Archive SHA-256: `03dc3b75a6ef97db696c5e5eeb2542d989284d978b324696aa07595b59dd0695`
 - Automated checks: 78 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

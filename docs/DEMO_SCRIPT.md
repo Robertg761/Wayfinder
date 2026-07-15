@@ -17,9 +17,9 @@ Demo repository: `openai/openai-node` at the current default-branch commit.
 
 ### 0:00 to 0:20, the problem
 
-Say: "An unfamiliar repository gives you thousands of files, but not a path through them. Wayfinder is a guide that lives beside GitHub and takes you from a question to verified code evidence."
+Say: "An unfamiliar repository gives you thousands of files, but not a path through them. Wayfinder is a guide that lives right on GitHub and takes you from a question to verified code evidence."
 
-Open the Wayfinder panel on `openai/openai-node`. Point out the repository summary, TypeScript stack, commit identity, and ordered reading route.
+Open `openai/openai-node` and let the floating helper appear. Select "Show me around." Let it travel to the repository name and one more GitHub landmark while it highlights and explains each target. Then select "Ask about this" to open the full guide. Point out the repository summary, TypeScript stack, commit identity, and ordered reading route.
 
 ### 0:20 to 0:45, orientation becomes navigation
 

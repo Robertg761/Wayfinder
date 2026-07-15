@@ -6,7 +6,7 @@ Official source: `https://openai.devpost.com/`
 
 ## Winning thesis
 
-Wayfinder should be judged as the missing contributor workflow inside GitHub, not as a repository chatbot. Its signature moment is Trail Plan: a developer states a contribution goal and receives an ordered, clickable route through repository orientation, sourced setup, the likely implementation, and related verification.
+Wayfinder should be judged as the missing contributor workflow inside GitHub, not as a repository chatbot. Its immediate signature moment is the animated compass helper floating to a real GitHub landmark, outlining it, and explaining why it matters. Its deeper signature moment is Trail Plan: a developer states a contribution goal and receives an ordered, clickable route through repository orientation, sourced setup, the likely implementation, and related verification.
 
 ## Criteria mapping
 
@@ -22,6 +22,7 @@ Proof to show: one live Trail Plan, the GPT-5.6 field brief, a clicked evidence 
 ### Design
 
 - The side panel stays beside the repository and follows GitHub navigation.
+- The on-page helper turns repository orientation into a visible guided experience before the user ever opens a panel.
 - The visual language is an editorial field guide, with Survey, Prepare, Trace, and Prove as a coherent route.
 - Commands copy in one click and repository coordinates open at the mapped commit.
 

@@ -1,6 +1,6 @@
 {
   "name": "@wayfinder/extension",
-  "description": "A guided, interactive tour for any GitHub repository.",
+  "description": "A floating guide that points out, explains, and maps any GitHub repository.",
   "private": true,
   "version": "0.1.0",
   "type": "module",

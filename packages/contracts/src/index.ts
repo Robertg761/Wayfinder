@@ -189,4 +189,5 @@ export interface WayfinderErrorResponse {
 
 export type WayfinderMessage =
   | { type: "wayfinder:context"; context: RepoLocation | null }
-  | { type: "wayfinder:get-context" };
+  | { type: "wayfinder:get-context" }
+  | { type: "wayfinder:open-panel" };

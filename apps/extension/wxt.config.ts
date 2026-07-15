@@ -5,7 +5,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
     name: 'Wayfinder',
-    description: 'Turn any GitHub repository into a guided, interactive code tour.',
+    description: 'A floating guide that points out, explains, and maps any GitHub repository.',
     permissions: ['sidePanel', 'storage', 'tabs'],
     host_permissions: [
       'https://github.com/*',
