@@ -82,10 +82,12 @@ const helperStyles = `
     background: transparent;
     cursor: pointer;
     filter: drop-shadow(0 9px 10px rgba(24, 22, 18, 0.24));
-    transition: left 680ms cubic-bezier(.2,.84,.24,1.12), top 680ms cubic-bezier(.2,.84,.24,1.12), transform 180ms ease;
+    transition: left 1200ms cubic-bezier(.22,.61,.36,1), top 1200ms cubic-bezier(.22,.61,.36,1), transform 180ms ease;
   }
 
   .wf-helper:hover { transform: translateY(-3px) rotate(-2deg); }
+  .wf-helper.stationed:hover { transform: none; }
+  .wf-helper.stationed .wf-body { animation: none; }
   .wf-helper:focus-visible { outline: 3px solid #58a6ff; outline-offset: 5px; border-radius: 50%; }
 
   .wf-body {
@@ -411,7 +413,9 @@ export default defineContentScript({
     let bubbleOpen = false;
     let welcomeShown = false;
     let movementTimer = 0;
+    let arrivalTimer = 0;
     let viewportFrame = 0;
+    let tourMoving = false;
     let currentLocation: RepoLocation | null = null;
     let repository: RepositoryBundle | null = null;
     let activeQuestion = '';
@@ -458,8 +462,7 @@ export default defineContentScript({
     const renderAgentHome = (prefill = '') => {
       activeStep = -1;
       highlight.classList.remove('visible');
-      helper.style.left = 'calc(100vw - 82px)';
-      helper.style.top = 'calc(100vh - 86px)';
+      helper.classList.add('stationed');
       bubble.classList.add('agent');
       copy.innerHTML = `
         <div class="wf-agent-home">
@@ -650,7 +653,7 @@ export default defineContentScript({
       `;
     };
 
-    const positionAtActiveStop = (settleBubble = false) => {
+    const positionAtActiveStop = () => {
       const stop = stops[activeStep];
       if (!stop || !document.contains(stop.target)) return;
       const rect = stop.target.getBoundingClientRect();
@@ -663,9 +666,12 @@ export default defineContentScript({
       highlight.style.width = `${Math.min(window.innerWidth - Math.max(4, rect.left - 5) - 4, rect.width + 10)}px`;
       highlight.style.height = `${Math.min(window.innerHeight - Math.max(4, rect.top - 5) - 4, rect.height + 10)}px`;
       highlight.classList.add('visible');
+    };
+
+    const revealActiveStop = () => {
+      positionAtActiveStop();
       renderStep();
       setBubblePosition();
-      if (settleBubble) window.setTimeout(setBubblePosition, 720);
       bubbleOpen = true;
       bubble.classList.add('open');
     };
@@ -673,15 +679,30 @@ export default defineContentScript({
     const moveToActiveStop = () => {
       const stop = stops[activeStep];
       if (!stop || !document.contains(stop.target)) return;
+      tourMoving = true;
+      helper.classList.remove('stationed');
+      bubbleOpen = false;
+      bubble.classList.remove('open', 'agent');
+      highlight.classList.remove('visible');
       stop.target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       window.clearTimeout(movementTimer);
-      movementTimer = window.setTimeout(() => positionAtActiveStop(true), 520);
+      window.clearTimeout(arrivalTimer);
+      movementTimer = window.setTimeout(() => {
+        positionAtActiveStop();
+        arrivalTimer = window.setTimeout(() => {
+          tourMoving = false;
+          revealActiveStop();
+        }, 1_220);
+      }, 850);
     };
 
     const syncViewport = () => {
       window.cancelAnimationFrame(viewportFrame);
       viewportFrame = window.requestAnimationFrame(() => {
-        if (activeStep >= 0) positionAtActiveStop();
+        if (activeStep >= 0 && !tourMoving) {
+          positionAtActiveStop();
+          if (bubbleOpen) setBubblePosition();
+        }
         else if (bubbleOpen) setBubblePosition();
       });
     };
@@ -689,8 +710,7 @@ export default defineContentScript({
     const endTour = () => {
       activeStep = -1;
       highlight.classList.remove('visible');
-      helper.style.left = 'calc(100vw - 82px)';
-      helper.style.top = 'calc(100vh - 86px)';
+      helper.classList.add('stationed');
       copy.innerHTML = `
         <div class="wf-kicker"><span>Trail complete</span><span class="wf-step-count">Ready</span></div>
         <h2>You know the lay of the land.</h2>
@@ -793,9 +813,11 @@ export default defineContentScript({
       if (window.location.href === lastUrl) return;
       lastUrl = window.location.href;
       activeStep = -1;
+      tourMoving = false;
+      window.clearTimeout(movementTimer);
+      window.clearTimeout(arrivalTimer);
       highlight.classList.remove('visible');
-      helper.style.left = 'calc(100vw - 82px)';
-      helper.style.top = 'calc(100vh - 86px)';
+      helper.classList.add('stationed');
       const nextLocation = parseGitHubUrl(lastUrl);
       const previousRepo = currentLocation ? `${currentLocation.owner}/${currentLocation.repo}` : null;
       const nextRepo = nextLocation ? `${nextLocation.owner}/${nextLocation.repo}` : null;
@@ -808,7 +830,8 @@ export default defineContentScript({
           welcomeShown = true;
           showWelcome();
         } else if (bubbleOpen) {
-          renderWelcome();
+          if (bubble.classList.contains('agent')) renderAgentHome();
+          else renderWelcome();
           setBubblePosition();
         }
       }, 1_200);
@@ -839,6 +862,7 @@ export default defineContentScript({
 
     return () => {
       window.clearTimeout(movementTimer);
+      window.clearTimeout(arrivalTimer);
       window.cancelAnimationFrame(viewportFrame);
       document.removeEventListener('DOMContentLoaded', mountHelper);
       window.removeEventListener('popstate', schedulePublish);

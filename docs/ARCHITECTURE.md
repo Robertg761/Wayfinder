@@ -4,29 +4,29 @@ Wayfinder separates repository facts from language-model prose. Deterministic to
 
 ```mermaid
 flowchart LR
-  G["GitHub page"] --> C["Context script"]
-  C --> H["Floating page agent"]
+  G["GitHub page"] --> CS["Context script"]
+  CS --> P["Floating page agent"]
   P --> W["Cloudflare Worker"]
   W --> M["Repository mapper"]
-  M --> H["GitHub REST API"]
+  M --> GH["GitHub REST API"]
   W --> R["Intent router"]
   R --> T["Tour tool"]
   R --> I["Install tool"]
   R --> F["File finder"]
-  R --> C["Contribution orchestrator"]
-  C --> T
-  C --> I
-  C --> F
+  R --> CO["Contribution orchestrator"]
+  CO --> T
+  CO --> I
+  CO --> F
   T --> E["Typed evidence"]
   I --> E
   F --> E
   E --> O{"OpenAI key configured?"}
-  O -->|"No"| A["Free evidence answer"]
+  O -->|"No"| D["Free evidence answer"]
   O -->|"Yes"| X["GPT-5.6 Responses API"]
   X --> V["Schema and path validator"]
   V -->|"Valid"| S["Grounded synthesis"]
-  V -->|"Invalid or unavailable"| A
-  A --> P
+  V -->|"Invalid or unavailable"| D
+  D --> P
   S --> P
   P --> N["Open exact GitHub evidence"]
 ```
@@ -35,7 +35,7 @@ flowchart LR
 
 The WXT Manifest V3 extension reads the active GitHub repository, branch or commit, directory, file, and view. A Shadow DOM page agent stays isolated from GitHub styles, discovers visible landmarks, moves beside them during a contextual tour, and expands in place for deeper questions. Every answer card can open its evidence at the mapped commit, including line fragments when available.
 
-The page helper mounts after `DOMContentLoaded` so it cannot interfere with GitHub's parser. It watches Turbo navigation, recalculates valid targets for repository and blob views, respects reduced-motion preferences, caches maps and answers in extension storage, and calls the Worker directly from the active GitHub page.
+The page helper mounts after `DOMContentLoaded` so it cannot interfere with GitHub's parser. It watches Turbo navigation, recalculates valid targets for repository and blob views, respects reduced-motion preferences, caches maps and answers in extension storage, and calls the Worker directly from the active GitHub page. Agent interactions keep the helper stationary. Landmark tours scroll first, move the helper with a 1.2-second non-overshooting transition, and reveal the explanation only after it arrives.
 
 Recent repository maps and answers are cached in `chrome.storage.local`. Cache keys include the commit SHA, so evidence from one revision is not silently reused for another.
 

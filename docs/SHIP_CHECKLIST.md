@@ -97,7 +97,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-7d29ffad5e1ba9f94800d680106c35fca4da8bc40bc8da925b5093932a96ff61
+cb84005e1ed8e871865d38e7e63101fab5596a9e4b72a2315805c60ce037d531
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.
