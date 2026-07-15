@@ -74,7 +74,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The test suite covers 76 cases across URL context, public request validation, model allowance fallback, global budget accounting, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, feature-aware test pairing, file ranking, and model fallback.
+- The test suite covers 78 cases across URL context, public request validation, model allowance fallback, global budget accounting, local and edge caching, clipboard behavior, repository mapping, tours, installation extraction, contribution routing, goal-linked test pairing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -115,9 +115,9 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `6e0084fa-937d-47fa-902b-73c614c06147`
+- Current Worker version: `5e1c4017-5fb7-4da2-abec-0031d605b163`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `bd0811b3cb73ca4fef9e1461f3259b268620acbe5dae7c080e2c30e733856b13`
-- Automated checks: 76 tests, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `6e7e119e3f73218306534881df2eee946aaf517ebfa28c929e69ac0ea401ccc3`
+- Automated checks: 78 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

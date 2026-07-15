@@ -63,10 +63,10 @@ Do not use `LUNA_EFFORTS=low,medium,high` during routine development. That makes
 | Case | Low quality | Low tokens | Low cost | Low latency | Escalation needed |
 | --- | --- | ---: | ---: | ---: | --- |
 | TypeScript speech | Pass | 2,462 | $0.004062 | 4,770 ms | No |
-| Python routing | Retrieval evidence needs improvement | 2,265 | $0.004435 | 3,621 ms | No, fix deterministic retrieval |
+| Python routing | Pass after retrieval fix | 2,378 | $0.004663 | 3,729 ms | No |
 | Go authentication | Pass | 2,416 | $0.004651 | 3,162 ms | No |
 
-The first low-reasoning run used 7,143 total tokens and cost an estimated $0.013148 across three calls. Low reasoning produced clear, grounded field briefs. The Flask case should not move to medium reasoning because its weakness is the verification coordinate supplied by the deterministic retrieval layer, not the model's synthesis.
+The first low-reasoning run used 7,143 total tokens and cost an estimated $0.013148 across three calls. Low reasoning produced clear, grounded field briefs. The first Flask result exposed a deterministic retrieval weakness, so reasoning was not increased. After removing implementation-path noise and demoting test-support fixtures, the production rerun mapped routing to `tests/test_basic.py`, `tests/test_blueprints.py`, and `tests/test_cli.py` and passed at low reasoning.
 
 A separate production Worker check used the TypeScript speech case. It returned `gpt-5.6-luna` at low reasoning, cited the expected speech implementation and test, used 2,483 tokens, took 2,739 ms, and cost an estimated $0.004188.
 

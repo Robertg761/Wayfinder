@@ -25,7 +25,7 @@ Updated July 14, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 76 automated tests pass
+- [x] All 78 automated tests pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification
@@ -35,6 +35,7 @@ Updated July 14, 2026.
 - [x] Production preview passes at 320 pixels with no page-level horizontal overflow
 - [x] Public installation answer and command-copy interaction verified in the narrow preview
 - [x] Deprecated pagination wrapper regression fixed and tested
+- [x] Contribution verification remains goal-linked and demotes test-support fixtures
 - [x] Architecture document
 - [x] Timed demo script
 - [x] Devpost story draft
@@ -44,7 +45,7 @@ Updated July 14, 2026.
 
 - [x] Add `OPENAI_API_KEY` as a Cloudflare Worker secret
 - [x] Run the three-case low-reasoning Luna evaluation and record usage, latency, and quality
-- [x] Keep low reasoning after identifying the Flask weakness as deterministic retrieval rather than synthesis quality
+- [x] Fix the Flask retrieval weakness and confirm the rerun passes at low reasoning
 - [x] Confirm `/health` reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`
 - [x] Run one live GPT-5.6 question through the deployed `/agent` endpoint
 - [x] Confirm the response has `mode: gpt-5.6`, model `gpt-5.6-luna`, low reasoning, and only valid evidence paths
@@ -56,7 +57,7 @@ Add the secret with:
 pnpm --filter @wayfinder/api exec wrangler secret put OPENAI_API_KEY
 ```
 
-Luna is fixed in source. The verified production Worker version is `6e0084fa-937d-47fa-902b-73c614c06147`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
+Luna is fixed in source. The verified production Worker version is `5e1c4017-5fb7-4da2-abec-0031d605b163`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
 
 ## Needs manual Chrome verification
 
@@ -92,7 +93,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-bd0811b3cb73ca4fef9e1461f3259b268620acbe5dae7c080e2c30e733856b13
+6e7e119e3f73218306534881df2eee946aaf517ebfa28c929e69ac0ea401ccc3
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

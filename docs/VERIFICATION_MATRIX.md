@@ -30,6 +30,8 @@ Worker version `ea9f71ea-ff43-4a7e-890f-cd3340403b28` added the persistent globa
 
 Worker version `6e0084fa-937d-47fa-902b-73c614c06147` verified the rotated `$100` ledger in production with `$0.021542` spent, zero reserved, and `$99.978458` remaining.
 
+Worker version `5e1c4017-5fb7-4da2-abec-0031d605b163` fixed goal-linked contribution verification. The Flask routing rerun replaced generic CLI fixtures with `tests/test_basic.py`, `tests/test_blueprints.py`, and `tests/test_cli.py`. Luna passed at low reasoning with 2,378 tokens, 3,729 ms latency, and an estimated cost of `$0.004663`. Total tracked model spend after propagation verification was `$0.030982`.
+
 The public boundary also rejects malformed JSON and normalized-path violations with HTTP 400. Health reports model configuration, protection, and effective enablement separately.
 
 ## Defects found and fixed
