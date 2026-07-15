@@ -7,7 +7,7 @@
     "enabled": true
   },
   "vars": {
-    "MODEL_BUDGET_USD": "5"
+    "MODEL_BUDGET_USD": "100"
   },
   "durable_objects": {
     "bindings": [

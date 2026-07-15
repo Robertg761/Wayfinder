@@ -15,10 +15,10 @@ const emptyLedger: ModelBudgetLedger = {
 };
 
 describe("model budget", () => {
-  it("defaults to a five dollar lifetime limit", () => {
-    expect(budgetLimitMicroUsd()).toBe(5_000_000);
+  it("defaults to the full event credit balance", () => {
+    expect(budgetLimitMicroUsd()).toBe(100_000_000);
     expect(budgetLimitMicroUsd("2.5")).toBe(2_500_000);
-    expect(budgetLimitMicroUsd("invalid")).toBe(5_000_000);
+    expect(budgetLimitMicroUsd("invalid")).toBe(100_000_000);
   });
 
   it("reserves a conservative amount before a request", () => {

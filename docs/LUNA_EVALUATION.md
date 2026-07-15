@@ -6,9 +6,9 @@ Wayfinder uses only `gpt-5.6-luna`. The production default is low reasoning. Med
 
 Paid synthesis runs only for contribution Trail Plans. Orientation, installation, and file-location questions remain deterministic. The existing Cloudflare binding permits 10 model attempts per connecting IP per minute in each Cloudflare location, and a denied or unavailable allowance returns the free answer.
 
-A SQLite-backed Durable Object adds a global lifetime cap of `$5`. It reserves a conservative maximum before each call and reconciles successful calls to actual token cost. The ledger started with the `$0.017336` spent during the initial evaluation and public verification. If the global budget service is missing, unavailable, or exhausted, model mode fails closed to the deterministic answer.
+A SQLite-backed Durable Object adds a global lifetime cap equal to the full `$100` event credit balance. It reserves a conservative maximum before each call and reconciles successful calls to actual token cost. The ledger started with the `$0.017336` spent during the initial evaluation and public verification. If the global budget service is missing, unavailable, or exhausted, model mode fails closed to the deterministic answer.
 
-The production guard check reported `$0.004206` for one low-reasoning speech Trail Plan. The persistent ledger moved by exactly that amount, from `$0.017336` to `$0.021542`, released its reservation to zero, and reported `$4.978458` remaining.
+The production guard check reported `$0.004206` for one low-reasoning speech Trail Plan. The persistent ledger moved by exactly that amount, from `$0.017336` to `$0.021542`, and released its reservation to zero. After assigning the full event balance, `$99.978458` remains.
 
 Each successful response records:
 

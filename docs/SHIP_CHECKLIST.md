@@ -18,7 +18,7 @@ Updated July 14, 2026.
 - [x] Automatic deterministic fallback
 - [x] Server-side OpenAI credential boundary and `store: false`
 - [x] Paid synthesis protected by a Cloudflare rate-limit binding with deterministic fallback
-- [x] Persistent global `$5` model budget with conservative reservation and actual-cost reconciliation
+- [x] Persistent global `$100` event-credit budget with conservative reservation and actual-cost reconciliation
 - [x] Production budget ledger reconciles a live call exactly and releases its reservation
 - [x] Public Worker deployment
 - [x] Production extension points to the public Worker

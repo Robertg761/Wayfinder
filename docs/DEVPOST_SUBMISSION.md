@@ -38,7 +38,7 @@ It can:
 
 The free deterministic route remains fully functional. If the OpenAI key is missing, the model API is unavailable, structured output is invalid, or GPT-5.6 names a path outside the evidence set, Wayfinder returns the deterministic answer automatically.
 
-Paid synthesis is protected by a Cloudflare rate-limit binding and a persistent global `$5` budget. A SQLite-backed Durable Object serializes spend reservations across all users, reconciles successful calls to actual Luna token usage, and fails closed to the deterministic answer. Cost protection therefore does not turn into a user-facing outage.
+Paid synthesis is protected by a Cloudflare rate-limit binding and a persistent global budget matching the `$100` event credit balance. A SQLite-backed Durable Object serializes spend reservations across all users, reconciles successful calls to actual Luna token usage, and fails closed to the deterministic answer. Cost protection therefore does not turn into a user-facing outage.
 
 ## How we built it
 

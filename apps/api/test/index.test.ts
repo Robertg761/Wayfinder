@@ -38,8 +38,8 @@ function budgetNamespace(): DurableObjectNamespace {
     fetch: vi.fn(async () => Response.json({
       spentMicroUsd: 17_336,
       reservedMicroUsd: 0,
-      limitMicroUsd: 5_000_000,
-      remainingMicroUsd: 4_982_664,
+      limitMicroUsd: 100_000_000,
+      remainingMicroUsd: 99_982_664,
     })),
   };
   return {
@@ -100,7 +100,7 @@ describe("public API request boundaries", () => {
       OPENAI_API_KEY: "secret",
       MODEL_RATE_LIMITER: rateLimiter(true),
       MODEL_BUDGET: budgetNamespace(),
-      MODEL_BUDGET_USD: "5",
+      MODEL_BUDGET_USD: "100",
     });
 
     await expect(configuredOnly.json()).resolves.toMatchObject({
@@ -125,8 +125,8 @@ describe("public API request boundaries", () => {
       modelEnabled: true,
       modelBudget: {
         spentUsd: 0.017336,
-        limitUsd: 5,
-        remainingUsd: 4.982664,
+        limitUsd: 100,
+        remainingUsd: 99.982664,
       },
     });
   });

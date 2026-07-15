@@ -27,7 +27,7 @@ Wayfinder is a context-aware repository guide that lives beside GitHub. It helps
 - Multi-tool Trail Plan for contribution goals, setup, implementation, and verification
 - Budget-controlled GPT-5.6 Luna synthesis for contribution Trail Plans through the OpenAI Responses API
 - Strict structured model output with evidence-grounded action plans, exact-path validation, and automatic free-mode fallback
-- Persistent global `$5` Luna budget cap with conservative pre-call reservations and actual-cost reconciliation
+- Persistent global `$100` Luna budget cap with conservative pre-call reservations and actual-cost reconciliation
 - Filtered GitHub tree, README, metadata, language, and star count
 - Package-manager, runtime, setup-command, and environment evidence detection
 - Clickable tour stops that open real files and line ranges on GitHub
@@ -69,7 +69,7 @@ Add a GitHub token to `apps/api/.dev.vars` for a higher API rate limit. Public r
 
 Add an OpenAI API key to the same file to enable GPT-5.6 Luna synthesis for contribution Trail Plans. The key stays in the Worker and is never exposed to the extension. Without it, the deterministic agent remains fully functional. Luna is fixed in source, reasoning defaults to `low`, and `OPENAI_REASONING_EFFORT` can temporarily select `medium` or `high` for controlled evaluation.
 
-The Worker requires both its Cloudflare per-client rate-limit binding and its global Durable Object budget before it enables paid synthesis. The rate limiter allows 10 model attempts per client per minute in each Cloudflare location. The persistent budget reserves a conservative worst-case amount before each request and reconciles it to actual token cost afterward. It stops paid synthesis at `$5` of lifetime Wayfinder model spend. Exhausted or unavailable protection returns the deterministic answer instead of failing the request.
+The Worker requires both its Cloudflare per-client rate-limit binding and its global Durable Object budget before it enables paid synthesis. The rate limiter allows 10 model attempts per client per minute in each Cloudflare location. The persistent budget reserves a conservative worst-case amount before each request and reconciles it to actual token cost afterward. It stops paid synthesis at the full `$100` event credit balance. Exhausted or unavailable protection returns the deterministic answer instead of failing the request.
 
 Start the Worker:
 
