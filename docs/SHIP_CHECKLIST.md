@@ -57,7 +57,7 @@ Add the secret with:
 pnpm --filter @wayfinder/api exec wrangler secret put OPENAI_API_KEY
 ```
 
-Luna is fixed in source. The verified production Worker version is `5e1c4017-5fb7-4da2-abec-0031d605b163`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
+Luna is fixed in source. The verified production Worker version is `05944911-a15f-472c-9bf2-956b939a9686`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
 
 ## Needs manual Chrome verification
 
@@ -68,11 +68,13 @@ Luna is fixed in source. The verified production Worker version is `5e1c4017-5fb
 - [x] Confirm `Explain this` answers about the highlighted landmark without moving or opening generic starters
 - [ ] Install the production zip in a clean Chrome profile
 - [x] Confirm orientation loads from the public Worker
-- [ ] Run the installation and pagination questions from the demo script
-- [ ] Click a tour stop, install source, and file result
-- [ ] Confirm GitHub navigation updates the current context
+- [x] Run the installation and contribution questions from the demo script
+- [x] Click a tour stop, install source, and file result
+- [x] Confirm GitHub navigation updates the current context
 - [x] Confirm the attached helper dock has no clipping, separation, overlap, or horizontal scroll
-- [ ] Confirm cache timestamps and manual refresh controls
+- [x] Confirm cache timestamps and full repository refresh controls
+- [x] Confirm three consecutive GitHub reloads preserve both the host page and helper
+- [x] Run automated browser coverage for reloads, navigation, keyboard dismissal, reduced motion, and non-repository routes
 - [ ] Capture the four screenshots listed in `docs/DEMO_SCRIPT.md` (two verified helper frames are already in `docs/assets`)
 
 ## Needs submission assets

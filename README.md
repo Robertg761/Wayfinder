@@ -44,8 +44,9 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 - Shared TypeScript contracts across the extension and Worker
 - Editorial field-guide interface with loading, empty, ready, and error states
 - Unit tests for URL parsing, caching, clipboard behavior, repository filtering, installation guidance, and file finding
+- Browser regression tests for reload safety, GitHub context changes, keyboard dismissal, reduced motion, and non-repository routes
 
-The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, file discovery, or contribution planning. A contribution request runs several tools and combines the repository route, sourced setup commands, likely implementation, and related verification path. Recent maps and answers remain available during temporary GitHub or network failures, with visible cache timestamps and manual refresh controls.
+The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, and language signals. The agent router classifies each question as orientation, installation, file discovery, or contribution planning. Setup answers are contributor-focused, omit published-package and placeholder commands, and expose confidence, prerequisites, and warnings. A contribution request runs several tools and combines the repository route, sourced setup commands, likely implementation, and related verification path. Recent maps and answers remain available during temporary GitHub or network failures, with visible cache timestamps and a full repository refresh control.
 
 ## Workspace
 
@@ -107,6 +108,7 @@ The public Worker is deployed at [wayfinder-api.hopit-robert.workers.dev](https:
 ```bash
 pnpm typecheck
 pnpm test
+pnpm test:browser
 pnpm build
 pnpm eval:luna
 ```

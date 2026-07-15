@@ -8,5 +8,7 @@ node_modules/
 .wxt/
 .output/
 coverage/
+playwright-report/
+test-results/
 dist/
 *.log

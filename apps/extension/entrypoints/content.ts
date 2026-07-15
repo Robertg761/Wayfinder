@@ -985,6 +985,9 @@ export default defineContentScript({
       bubbleOpen = true;
       bubble.classList.add('open');
       setBubblePosition();
+      const composer = shadow.querySelector<HTMLTextAreaElement>('#wf-question');
+      if (composer) composer.focus({ preventScroll: true });
+      else bubble.focus({ preventScroll: true });
     });
 
     close.addEventListener('click', () => {
@@ -993,14 +996,14 @@ export default defineContentScript({
       helper.focus({ preventScroll: true });
     });
 
-    shadow.addEventListener('keydown', (event) => {
-      const keyboardEvent = event as KeyboardEvent;
-      if (keyboardEvent.key !== 'Escape' || !bubbleOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !bubbleOpen) return;
       event.preventDefault();
       bubbleOpen = false;
       bubble.classList.remove('open');
-      helper.focus({ preventScroll: true });
-    });
+      window.setTimeout(() => helper.focus({ preventScroll: true }), 50);
+    };
+    document.addEventListener('keydown', closeOnEscape, true);
 
     const publishLocation = () => {
       scheduled = false;
@@ -1076,6 +1079,7 @@ export default defineContentScript({
       document.removeEventListener('DOMContentLoaded', mountHelper);
       window.removeEventListener('popstate', schedulePublish);
       document.removeEventListener('turbo:load', schedulePublish);
+      document.removeEventListener('keydown', closeOnEscape, true);
       window.removeEventListener('resize', syncViewport);
       window.removeEventListener('scroll', syncViewport, { capture: true });
       host.remove();

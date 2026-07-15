@@ -60,6 +60,8 @@ Repository maps posted back by the extension are treated as untrusted input. The
 
 A missing README is an allowed repository shape. GitHub rate limits, authentication failures, malformed upstream responses, and network failures are not converted into a missing README, so the extension can show the correct retry or fallback state.
 
+The content script mounts at document idle and checks URL identity without observing GitHub's entire document tree. Every navigation invalidates the active request token, aborts in-flight network work, clears tour state, and rebuilds the open helper surface from the new repository or file context. This prevents an older response or tour control from being applied to a newer GitHub page.
+
 ## GPT-5.6 boundary
 
 The OpenAI key exists only in the Worker environment. The model request uses the Responses API with:

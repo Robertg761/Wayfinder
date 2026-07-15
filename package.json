@@ -13,6 +13,10 @@
     "eval:luna": "pnpm --filter @wayfinder/api test:luna",
     "smoke:public": "node scripts/verify-public.mjs",
     "test": "pnpm -r test",
+    "test:browser": "pnpm --filter @wayfinder/extension build && playwright test",
     "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
   }
 }
