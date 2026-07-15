@@ -9,7 +9,9 @@ This package contains the Wayfinder Manifest V3 extension. It follows the active
 - `WXT_WAYFINDER_API_URL` overrides either default.
 - Repository maps and recent answers are cached in `chrome.storage.local`.
 - No OpenAI credential is stored in or sent to the extension.
-- Asking questions keeps the helper fixed in place. Tour movement is paced and the explanation opens only after the helper reaches a landmark.
+- The character and bubble are one attached dock. Asking questions, changing answers, closing, and reopening keep that dock fixed in place.
+- Tour movement is paced and the explanation opens only after the complete dock reaches a landmark.
+- `Explain this` answers about the highlighted landmark immediately. Generic starter questions appear only when the user explicitly opens the general question surface.
 
 ## Develop locally
 

@@ -122,7 +122,7 @@ Verified screenshot candidates:
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
 - Current Worker version: `5e1c4017-5fb7-4da2-abec-0031d605b163`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `cb84005e1ed8e871865d38e7e63101fab5596a9e4b72a2315805c60ce037d531`
-- Automated checks: 78 tests, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `fd100fd8a9b8f0f6958cdfc7a2a64684ec98a11a8a93b7f089f48ed0bdf94464`
+- Automated checks: 85 tests, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

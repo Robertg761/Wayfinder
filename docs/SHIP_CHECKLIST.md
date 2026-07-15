@@ -65,13 +65,13 @@ Luna is fixed in source. The verified production Worker version is `5e1c4017-5fb
 - [x] Load the production unpacked build and confirm the extension is enabled
 - [x] Confirm the floating helper appears automatically on a public repository
 - [x] Complete all four on-page landmarks and confirm the helper moves, highlights, scrolls, and explains each target
-- [ ] Confirm `Ask about this` expands the helper into the full agent
+- [x] Confirm `Explain this` answers about the highlighted landmark without moving or opening generic starters
 - [ ] Install the production zip in a clean Chrome profile
-- [ ] Confirm orientation loads from the public Worker
+- [x] Confirm orientation loads from the public Worker
 - [ ] Run the installation and pagination questions from the demo script
 - [ ] Click a tour stop, install source, and file result
 - [ ] Confirm GitHub navigation updates the current context
-- [ ] Confirm the narrow panel has no clipping, overlap, or horizontal scroll
+- [x] Confirm the attached helper dock has no clipping, separation, overlap, or horizontal scroll
 - [ ] Confirm cache timestamps and manual refresh controls
 - [ ] Capture the four screenshots listed in `docs/DEMO_SCRIPT.md` (two verified helper frames are already in `docs/assets`)
 
@@ -97,7 +97,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-cb84005e1ed8e871865d38e7e63101fab5596a9e4b72a2315805c60ce037d531
+fd100fd8a9b8f0f6958cdfc7a2a64684ec98a11a8a93b7f089f48ed0bdf94464
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

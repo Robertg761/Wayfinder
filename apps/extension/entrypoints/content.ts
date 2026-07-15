@@ -9,6 +9,7 @@ import {
   type CacheStorage,
 } from '@/lib/cache';
 import { parseGitHubUrl } from '@/lib/github-url';
+import { agentStarters, landmarkDetail, measuredBubbleHeight, placeBubble } from '@/lib/helper-ui';
 
 interface RepositoryBundle {
   map: RepoMap;
@@ -70,10 +71,19 @@ const helperStyles = `
 
   .wf-highlight.visible { opacity: 1; }
 
-  .wf-helper {
+  .wf-dock {
     position: fixed;
     left: calc(100vw - 82px);
     top: calc(100vh - 86px);
+    width: 56px;
+    height: 64px;
+    pointer-events: none;
+    transition: left 1200ms cubic-bezier(.22,.61,.36,1), top 1200ms cubic-bezier(.22,.61,.36,1);
+  }
+
+  .wf-helper {
+    position: absolute;
+    inset: 0;
     width: 56px;
     height: 64px;
     pointer-events: auto;
@@ -82,7 +92,7 @@ const helperStyles = `
     background: transparent;
     cursor: pointer;
     filter: drop-shadow(0 9px 10px rgba(24, 22, 18, 0.24));
-    transition: left 1200ms cubic-bezier(.22,.61,.36,1), top 1200ms cubic-bezier(.22,.61,.36,1), transform 180ms ease;
+    transition: transform 180ms ease;
   }
 
   .wf-helper:hover { transform: translateY(-3px) rotate(-2deg); }
@@ -165,7 +175,9 @@ const helperStyles = `
   }
 
   .wf-bubble {
-    position: fixed;
+    position: absolute;
+    left: 0;
+    top: 0;
     width: min(326px, calc(100vw - 28px));
     max-height: min(430px, calc(100vh - 28px));
     overflow: auto;
@@ -326,7 +338,7 @@ const helperStyles = `
   @keyframes wf-ping { 0% { box-shadow: 0 0 0 0 rgba(181,79,44,.45) } 70%,100% { box-shadow: 0 0 0 9px rgba(181,79,44,0) } }
 
   @media (prefers-reduced-motion: reduce) {
-    .wf-helper, .wf-highlight, .wf-bubble { transition-duration: 0ms; }
+    .wf-dock, .wf-helper, .wf-highlight, .wf-bubble { transition-duration: 0ms; }
     .wf-body, .wf-needle, .wf-ping { animation: none; }
     .wf-loading-mark { animation: none; }
   }
@@ -416,6 +428,7 @@ export default defineContentScript({
     let arrivalTimer = 0;
     let viewportFrame = 0;
     let tourMoving = false;
+    let surface: 'welcome' | 'tour' | 'agent' | 'context' | 'complete' = 'welcome';
     let currentLocation: RepoLocation | null = null;
     let repository: RepositoryBundle | null = null;
     let activeQuestion = '';
@@ -429,18 +442,21 @@ export default defineContentScript({
       <style>${helperStyles}</style>
       <div class="wf-layer" aria-live="polite">
         <div class="wf-highlight" aria-hidden="true"></div>
-        <button class="wf-helper" type="button" aria-label="Open Wayfinder helper" title="Wayfinder">
-          <span class="wf-body"><span class="wf-face"></span><span class="wf-needle"></span></span>
-          <span class="wf-feet"></span>
-          <span class="wf-ping"></span>
-        </button>
-        <aside class="wf-bubble" aria-label="Wayfinder helper">
-          <button class="wf-close" type="button" aria-label="Close helper">×</button>
-          <div class="wf-copy"></div>
-        </aside>
+        <div class="wf-dock">
+          <button class="wf-helper" type="button" aria-label="Open Wayfinder helper" title="Wayfinder">
+            <span class="wf-body"><span class="wf-face"></span><span class="wf-needle"></span></span>
+            <span class="wf-feet"></span>
+            <span class="wf-ping"></span>
+          </button>
+          <aside class="wf-bubble" aria-label="Wayfinder helper">
+            <button class="wf-close" type="button" aria-label="Close helper">×</button>
+            <div class="wf-copy"></div>
+          </aside>
+        </div>
       </div>
     `;
 
+    const dock = shadow.querySelector<HTMLDivElement>('.wf-dock')!;
     const helper = shadow.querySelector<HTMLButtonElement>('.wf-helper')!;
     const highlight = shadow.querySelector<HTMLDivElement>('.wf-highlight')!;
     const bubble = shadow.querySelector<HTMLElement>('.wf-bubble')!;
@@ -448,19 +464,21 @@ export default defineContentScript({
     const close = shadow.querySelector<HTMLButtonElement>('.wf-close')!;
 
     const setBubblePosition = () => {
-      const helperRect = helper.getBoundingClientRect();
+      const dockRect = dock.getBoundingClientRect();
       const width = Math.min(bubble.classList.contains('agent') ? 430 : 326, window.innerWidth - 28);
-      const left = Math.max(14, Math.min(window.innerWidth - width - 14, helperRect.right - width));
-      const height = Math.min(bubble.scrollHeight || 220, window.innerHeight - 28);
-      const preferredTop = helperRect.top - height - 14;
-      const fallbackTop = Math.min(window.innerHeight - height - 14, helperRect.bottom + 14);
-      const top = preferredTop >= 14 ? preferredTop : Math.max(14, fallbackTop);
-      bubble.style.left = `${left}px`;
-      bubble.style.top = `${Math.max(14, top)}px`;
+      const height = measuredBubbleHeight(bubble.getBoundingClientRect().height, bubble.scrollHeight, window.innerHeight);
+      const placement = placeBubble(dockRect, width, height, window.innerWidth);
+      bubble.dataset.side = placement.side;
+      bubble.style.left = `${placement.left}px`;
+      bubble.style.top = `${placement.top}px`;
     };
 
     const renderAgentHome = (prefill = '') => {
+      surface = 'agent';
       activeStep = -1;
+      tourMoving = false;
+      window.clearTimeout(movementTimer);
+      window.clearTimeout(arrivalTimer);
       highlight.classList.remove('visible');
       helper.classList.add('stationed');
       bubble.classList.add('agent');
@@ -472,10 +490,7 @@ export default defineContentScript({
             <p>I will map the repository, answer from verified files, and take you straight to the evidence.</p>
           </div>
           <div class="wf-question-grid">
-            <button type="button" data-question="What does this project do?">Understand the project</button>
-            <button type="button" data-question="How do I install and run it?">Install and run it</button>
-            <button type="button" data-question="Where is the main entry point?">Find a file or feature</button>
-            <button type="button" data-question="Help me plan my first contribution">Plan a contribution</button>
+            ${agentStarters.map((starter) => `<button type="button" data-question="${escapeHtml(starter.question)}">${escapeHtml(starter.label)}</button>`).join('')}
           </div>
           <form class="wf-composer">
             <textarea name="question" minlength="2" required placeholder="Ask about this repository">${escapeHtml(prefill)}</textarea>
@@ -489,6 +504,13 @@ export default defineContentScript({
     };
 
     const renderLoading = (question: string) => {
+      surface = 'agent';
+      activeStep = -1;
+      tourMoving = false;
+      window.clearTimeout(movementTimer);
+      window.clearTimeout(arrivalTimer);
+      helper.classList.add('stationed');
+      highlight.classList.remove('visible');
       bubble.classList.add('agent');
       copy.innerHTML = `
         <div class="wf-loading">
@@ -539,6 +561,7 @@ export default defineContentScript({
     const renderAnswer = (answer: AgentAnswer) => {
       const bundle = repository;
       if (!bundle) return;
+      surface = 'agent';
       const sections: string[] = [];
 
       if (answer.brief?.length) {
@@ -591,6 +614,7 @@ export default defineContentScript({
     };
 
     const renderAgentError = (message: string) => {
+      surface = 'agent';
       copy.innerHTML = `<div class="wf-answer"><div class="wf-kicker"><span>Trail interrupted</span><span class="wf-step-count">Safe fallback</span></div><h2>I could not finish that survey.</h2><div class="wf-error"><p>${escapeHtml(message)}</p></div><div class="wf-actions"><button class="primary" type="button" data-action="retry-answer">Try again</button><button type="button" data-action="agent-home">New question</button></div></div>`;
       setBubblePosition();
     };
@@ -625,6 +649,7 @@ export default defineContentScript({
     };
 
     const renderWelcome = () => {
+      surface = 'welcome';
       bubble.classList.remove('agent');
       copy.innerHTML = `
         <div class="wf-kicker"><span>Wayfinder on the page</span><span class="wf-step-count">${stops.length} landmarks</span></div>
@@ -641,6 +666,7 @@ export default defineContentScript({
     const renderStep = () => {
       const stop = stops[activeStep];
       if (!stop) return;
+      surface = 'tour';
       copy.innerHTML = `
         <div class="wf-kicker"><span>${stop.label}</span><span class="wf-step-count">${activeStep + 1} / ${stops.length}</span></div>
         <h2>${stop.title}</h2>
@@ -648,9 +674,33 @@ export default defineContentScript({
         <div class="wf-actions">
           ${activeStep > 0 ? '<button type="button" data-action="previous">Back</button>' : ''}
           <button class="primary" type="button" data-action="next">${activeStep === stops.length - 1 ? 'Finish tour' : 'Next landmark'}</button>
-          <button type="button" data-action="agent-home">Ask about this</button>
+          <button type="button" data-action="ask-highlight">Explain this</button>
         </div>
       `;
+    };
+
+    const renderHighlightedAnswer = (stop: GuideStop) => {
+      surface = 'context';
+      tourMoving = false;
+      helper.classList.add('stationed');
+      const excerpt = (stop.target.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 220);
+      copy.innerHTML = `
+        <div class="wf-answer">
+          <div class="wf-kicker"><span>About this landmark</span><span class="wf-step-count">${escapeHtml(stop.label)}</span></div>
+          <h2>${escapeHtml(stop.title)}</h2>
+          <p class="wf-answer-summary">${escapeHtml(stop.explanation)}</p>
+          <p class="wf-answer-explanation">${escapeHtml(landmarkDetail(stop.label))}</p>
+          ${excerpt ? `<div class="wf-result"><strong>What is highlighted</strong><p>${escapeHtml(excerpt)}</p></div>` : ''}
+          <div class="wf-actions">
+            <button class="primary" type="button" data-action="context-followup">Ask a follow-up</button>
+            <button type="button" data-action="next">Continue tour</button>
+          </div>
+        </div>
+      `;
+      bubble.classList.remove('agent');
+      bubbleOpen = true;
+      bubble.classList.add('open');
+      setBubblePosition();
     };
 
     const positionAtActiveStop = () => {
@@ -659,8 +709,8 @@ export default defineContentScript({
       const rect = stop.target.getBoundingClientRect();
       const helperX = rect.right + 16 + 56 < window.innerWidth ? rect.right + 16 : Math.max(14, rect.left - 70);
       const helperY = Math.max(14, Math.min(window.innerHeight - 78, rect.top + Math.min(18, rect.height / 3)));
-      helper.style.left = `${helperX}px`;
-      helper.style.top = `${helperY}px`;
+      dock.style.left = `${helperX}px`;
+      dock.style.top = `${helperY}px`;
       highlight.style.left = `${Math.max(4, rect.left - 5)}px`;
       highlight.style.top = `${Math.max(4, rect.top - 5)}px`;
       highlight.style.width = `${Math.min(window.innerWidth - Math.max(4, rect.left - 5) - 4, rect.width + 10)}px`;
@@ -680,6 +730,7 @@ export default defineContentScript({
       const stop = stops[activeStep];
       if (!stop || !document.contains(stop.target)) return;
       tourMoving = true;
+      surface = 'tour';
       helper.classList.remove('stationed');
       bubbleOpen = false;
       bubble.classList.remove('open', 'agent');
@@ -699,7 +750,7 @@ export default defineContentScript({
     const syncViewport = () => {
       window.cancelAnimationFrame(viewportFrame);
       viewportFrame = window.requestAnimationFrame(() => {
-        if (activeStep >= 0 && !tourMoving) {
+        if (surface === 'tour' && activeStep >= 0 && !tourMoving) {
           positionAtActiveStop();
           if (bubbleOpen) setBubblePosition();
         }
@@ -708,6 +759,7 @@ export default defineContentScript({
     };
 
     const endTour = () => {
+      surface = 'complete';
       activeStep = -1;
       highlight.classList.remove('visible');
       helper.classList.add('stationed');
@@ -754,8 +806,17 @@ export default defineContentScript({
       }
       const action = button.dataset.action;
       if (action === 'agent-home') {
+        renderAgentHome();
+        return;
+      }
+      if (action === 'ask-highlight') {
         const stop = stops[activeStep];
-        renderAgentHome(stop ? `Explain ${stop.label.toLowerCase()} in this repository` : '');
+        if (stop) renderHighlightedAnswer(stop);
+        return;
+      }
+      if (action === 'context-followup') {
+        const stop = stops[activeStep];
+        renderAgentHome(stop ? `Tell me more about the ${stop.label.toLowerCase()} that was highlighted` : '');
         return;
       }
       if (action === 'refresh-answer') {
@@ -796,8 +857,7 @@ export default defineContentScript({
         bubble.classList.remove('open');
         return;
       }
-      if (activeStep >= 0) renderStep();
-      else renderWelcome();
+      if (!copy.hasChildNodes()) renderWelcome();
       bubbleOpen = true;
       bubble.classList.add('open');
       setBubblePosition();
@@ -821,8 +881,9 @@ export default defineContentScript({
       const nextLocation = parseGitHubUrl(lastUrl);
       const previousRepo = currentLocation ? `${currentLocation.owner}/${currentLocation.repo}` : null;
       const nextRepo = nextLocation ? `${nextLocation.owner}/${nextLocation.repo}` : null;
+      const repoChanged = previousRepo !== nextRepo;
       currentLocation = nextLocation;
-      if (previousRepo !== nextRepo) repository = null;
+      if (repoChanged) repository = null;
 
       window.setTimeout(() => {
         stops = guideStops();
@@ -830,8 +891,8 @@ export default defineContentScript({
           welcomeShown = true;
           showWelcome();
         } else if (bubbleOpen) {
-          if (bubble.classList.contains('agent')) renderAgentHome();
-          else renderWelcome();
+          if (repoChanged && surface === 'agent') renderAgentHome();
+          else if (repoChanged) renderWelcome();
           setBubblePosition();
         }
       }, 1_200);
