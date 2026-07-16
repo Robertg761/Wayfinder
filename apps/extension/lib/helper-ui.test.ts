@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentStarters, landmarkDetail, measuredBubbleHeight, placeBubble } from "./helper-ui";
+import { agentStarters, landmarkDetail, measuredBubbleHeight, placeBubble, resolveAnswerDepth } from "./helper-ui";
 
 describe("placeBubble", () => {
   it("keeps a bottom-right bubble attached above its dock", () => {
@@ -37,15 +37,51 @@ describe("placeBubble", () => {
       maxHeight: 332,
     });
   });
+
+  it("never forces a minimum height beyond a very short viewport opening", () => {
+    expect(placeBubble({ left: 100, right: 156, top: 50, height: 20 }, 120, 220, 320, 100)).toEqual({
+      left: -64,
+      top: -36,
+      side: "above",
+      maxHeight: 22,
+    });
+  });
 });
 
 describe("measuredBubbleHeight", () => {
-  it("uses the rendered panel height instead of its much larger scroll content", () => {
-    expect(measuredBubbleHeight(610, 1_600, 900)).toBe(610);
+  it("uses natural content height so a stale inline clamp can expand", () => {
+    expect(measuredBubbleHeight(220, 380, 900)).toBe(380);
+  });
+
+  it("applies guided and agent design caps", () => {
+    expect(measuredBubbleHeight(610, 1_600, 900)).toBe(430);
+    expect(measuredBubbleHeight(430, 1_600, 900, 610)).toBe(610);
+  });
+
+  it("clamps natural content to a short viewport", () => {
+    expect(measuredBubbleHeight(430, 900, 300, 610)).toBe(272);
   });
 
   it("falls back safely before the panel has rendered", () => {
     expect(measuredBubbleHeight(0, 0, 900)).toBe(220);
+  });
+});
+
+describe("resolveAnswerDepth", () => {
+  it("uses a valid stored value before the mode default", () => {
+    expect(resolveAnswerDepth("concise", "guided")).toBe("concise");
+    expect(resolveAnswerDepth("expanded", "quick")).toBe("expanded");
+  });
+
+  it("keeps legacy preferences backward compatible", () => {
+    expect(resolveAnswerDepth(undefined, "guided")).toBe("expanded");
+    expect(resolveAnswerDepth(undefined, "quick")).toBe("concise");
+    expect(resolveAnswerDepth(undefined, null)).toBe("concise");
+  });
+
+  it("uses the mode fallback for invalid stored data", () => {
+    expect(resolveAnswerDepth("verbose", "guided")).toBe("expanded");
+    expect(resolveAnswerDepth(1, "quick")).toBe("concise");
   });
 });
 

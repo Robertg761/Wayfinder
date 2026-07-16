@@ -51,7 +51,7 @@ export function placeBubble(
   const roomAbove = Math.max(0, dock.top - margin * 2);
   const roomBelow = Math.max(0, viewportHeight - dock.top - dock.height - margin * 2);
   const side = bubbleHeight <= roomAbove || roomAbove >= roomBelow ? "above" : "below";
-  const maxHeight = Math.max(120, Math.min(bubbleHeight, side === "above" ? roomAbove : roomBelow));
+  const maxHeight = Math.max(0, Math.min(bubbleHeight, side === "above" ? roomAbove : roomBelow));
   return {
     left: screenLeft - dock.left,
     top: side === "above" ? -maxHeight - margin : dock.height + margin,
@@ -60,11 +60,23 @@ export function placeBubble(
   };
 }
 
+export type AnswerDepth = "concise" | "expanded";
+export type ExperienceMode = "guided" | "quick";
+
 export function measuredBubbleHeight(
   renderedHeight: number,
   scrollHeight: number,
   viewportHeight: number,
+  designCap = 430,
 ): number {
-  const measured = renderedHeight || scrollHeight || 220;
-  return Math.min(measured, viewportHeight - 28);
+  const measured = scrollHeight || renderedHeight || 220;
+  return Math.min(measured, designCap, Math.max(0, viewportHeight - 28));
+}
+
+export function resolveAnswerDepth(
+  storedDepth: unknown,
+  mode: ExperienceMode | null,
+): AnswerDepth {
+  if (storedDepth === "concise" || storedDepth === "expanded") return storedDepth;
+  return mode === "guided" ? "expanded" : "concise";
 }

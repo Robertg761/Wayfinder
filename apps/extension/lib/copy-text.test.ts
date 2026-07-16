@@ -15,6 +15,16 @@ describe('copyText', () => {
     await expect(copyText('pnpm install', { writeText })).resolves.toBe(false);
   });
 
+  it('allows a successful retry after a clipboard failure', async () => {
+    const writeText = vi.fn()
+      .mockRejectedValueOnce(new Error('permission denied'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(copyText('pnpm install', { writeText })).resolves.toBe(false);
+    await expect(copyText('pnpm install', { writeText })).resolves.toBe(true);
+    expect(writeText).toHaveBeenCalledTimes(2);
+  });
+
   it('reports failure when no clipboard is available', async () => {
     await expect(copyText('pnpm install', null)).resolves.toBe(false);
   });
