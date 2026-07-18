@@ -8,6 +8,8 @@ import {
   filterTree,
   githubCacheTtl,
   githubFetch,
+  GitHubApiError,
+  isBlockingGitHubError,
   shouldIncludePath,
 } from "../src/github";
 
@@ -91,8 +93,16 @@ describe("repository tree filtering", () => {
       code: "repository-unavailable",
     });
     expect(describeGitHubFailure(403, "45", null)).toMatchObject({
+      code: "repository-unavailable",
+    });
+    expect(describeGitHubFailure(403, "45", null, "You have exceeded a secondary rate limit.")).toMatchObject({
       code: "github-rate-limited",
     });
+    expect(describeGitHubFailure(403, "45", null, "Resource not accessible", true)).toMatchObject({
+      code: "github-auth-failed",
+    });
+    expect(isBlockingGitHubError(new GitHubApiError("repository-unavailable", "missing", 404))).toBe(false);
+    expect(isBlockingGitHubError(new GitHubApiError("repository-unavailable", "forbidden", 403))).toBe(true);
   });
 });
 
@@ -101,6 +111,7 @@ describe("GitHub response caching", () => {
     expect(githubCacheTtl("/repos/openai/openai-node")).toBe(300);
     expect(githubCacheTtl("/repos/openai/openai-node/contents/src/index.ts?ref=main")).toBe(300);
     expect(githubCacheTtl("/repos/openai/openai-node/contents/src/index.ts?ref=" + "a".repeat(40))).toBe(86_400);
+    expect(githubCacheTtl("/repos/openai/openai-node/git/trees/" + "a".repeat(40) + "?recursive=1")).toBe(86_400);
   });
 
   it("configures unauthenticated GitHub requests for edge caching", async () => {
@@ -134,12 +145,22 @@ describe("GitHub response caching", () => {
     });
     expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty("cf");
   });
+
+  it("bounds stalled upstream requests and returns a typed availability error", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new DOMException("timed out", "TimeoutError"));
+
+    await expect(githubFetch("/repos/openai/openai-node", undefined, { fetcher, timeoutMs: 25 }))
+      .rejects.toMatchObject({ code: "upstream-unavailable", status: 504 });
+    expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe("repository map partial failures", () => {
   it("maps the requested branch instead of silently using the default branch", async () => {
+    const requestedUrls: string[] = [];
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input);
+      requestedUrls.push(url);
       if (url.endsWith("/repos/openai/openai-node")) {
         return Response.json({
           default_branch: "main",
@@ -149,13 +170,13 @@ describe("repository map partial failures", () => {
           stargazers_count: 1,
         });
       }
-      if (url.includes("/git/trees/feature%2Fnavigation")) {
+      if (url.includes("/git/trees/" + "c".repeat(40))) {
         return Response.json({ sha: "b".repeat(40), truncated: false, tree: [{ path: "src/feature.ts", type: "blob" }] });
       }
       if (url.endsWith("/commits/feature%2Fnavigation")) {
         return Response.json({ sha: "c".repeat(40) });
       }
-      if (url.endsWith("/readme?ref=feature%2Fnavigation")) {
+      if (url.endsWith("/readme?ref=" + "c".repeat(40))) {
         return Response.json({ content: btoa("# Feature"), encoding: "base64" });
       }
       return Response.json({ message: "not found" }, { status: 404 });
@@ -168,6 +189,8 @@ describe("repository map partial failures", () => {
       defaultBranch: "main",
       sha: "c".repeat(40),
     });
+    expect(requestedUrls.some((url) => url.includes("/git/trees/feature%2Fnavigation"))).toBe(false);
+    expect(requestedUrls.some((url) => url.endsWith("/readme?ref=feature%2Fnavigation"))).toBe(false);
   });
 
   it("propagates a README rate limit instead of returning a degraded map", async () => {
@@ -185,6 +208,7 @@ describe("repository map partial failures", () => {
       if (url.includes("/git/trees/")) {
         return Response.json({ sha: "a".repeat(40), truncated: false, tree: [] });
       }
+      if (url.endsWith("/commits/main")) return Response.json({ sha: "a".repeat(40) });
       return Response.json({ message: "rate limited" }, {
         status: 429,
         headers: { "x-ratelimit-reset": "1784030400" },

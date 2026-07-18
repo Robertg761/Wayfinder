@@ -1,26 +1,28 @@
 # Public Verification Matrix
 
-Updated July 16, 2026.
+Updated July 18, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Current Worker version: `60bc20e8-71a3-41b3-a870-71ae8a63ad04`
+Current Worker version: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
 
-Full cross-repository matrix baseline: `fe43d4c2-c27c-476e-a982-dcb2a7ddb041`
+Full cross-repository matrix baseline: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
 
-The matrix runs through the public Worker without an OpenAI key or GitHub token. Each case maps the current default-branch commit, requests orientation, requests installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
+The matrix runs through the public Worker without sending an OpenAI key or GitHub token. Each focused case stays on the deterministic route, maps the current default-branch commit, requests orientation, checks both developer and end-user installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
 
 ## Results
 
 | Shape | Repository and commit | Tour | Install | File question | Strongest coordinate | Result |
 |---|---|---:|---:|---|---|---|
-| TypeScript SDK | `openai/openai-node@62554053803dea45bf949699c7ea9d1a414df615` | 6 stops | 4 steps | Where is pagination implemented? | `src/core/pagination.ts` | Pass, strong |
-| Python framework | `pallets/flask@36e4a824f340fdee7ed50937ba8e7f6bc7d17f81` | 6 stops | 1 step | Where is request routing implemented? | `src/flask/sansio/app.py` | Pass, strong |
-| Rust CLI | `BurntSushi/ripgrep@d5b85d44057ff729a89be9c6549958c45d95aa99` | 6 stops | 12 steps | Which file defines the command line executable? | `crates/core/main.rs` | Pass, strong |
-| Go CLI | `cli/cli@c14cbaa24a75272958161751240fd538a68e6c04` | 6 stops | 2 steps | Where is authentication handled? | `pkg/cmd/auth/login/login.go` | Pass, strong |
-| Truncated monorepo | `vercel/next.js@7ffacec8ef5a58e6997b322056d2c56bb54452b1` | 6 stops | 10 steps | Where is routing implemented? | `packages/next/src/shared/lib/router/routes/app.ts` | Pass, likely |
+| TypeScript SDK | `openai/openai-node@2706888499a777b47d851aeb479f846f80932765` | 6 stops | 4 dev / 3 use | Where is pagination implemented? | `src/core/pagination.ts` | Pass, strong |
+| Python framework | `pallets/flask@36e4a824f340fdee7ed50937ba8e7f6bc7d17f81` | 6 stops | 1 dev / release fallback | Where is request routing implemented? | `src/flask/sansio/scaffold.py` | Pass, strong |
+| Rust CLI | `BurntSushi/ripgrep@227381db0ee83dfa4341f1e27ff9617c0f5ad992` | 6 stops | 6 dev / 6 use | Which file defines the command line executable? | `crates/core/main.rs` | Pass, strong |
+| Go CLI | `cli/cli@2af8c115be240a8018add33bf5c7a9ba5070a62c` | 6 stops | 2 dev / release fallback | Where is authentication handled? | `pkg/cmd/auth/login/login.go` | Pass, strong |
+| Truncated monorepo | `vercel/next.js@0491db047b8f9c4a5f9d0285ad9ed514bb134873` | 6 stops | 10 dev / release fallback | Where is routing implemented? | `packages/next/src/shared/lib/router/routes/app.ts` | Pass, likely |
 
-Flask and GitHub CLI correctly warn that their inspected setup instructions are structural inferences rather than explicit contributor commands. The warning is part of the expected result.
+Flask, GitHub CLI, and Next.js correctly keep repository-development setup separate from end-user guidance. When no documented consumer command exists, they return a conditional latest-release fallback instead of presenting contributor setup as installation.
+
+Worker version `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf` passed the complete matrix after the task-execution hardening release. Health reported the public API limiter active, all five repositories returned an explicit non-manifest runtime entry point, developer and consumer audiences stayed separate, and every representative evidence path resolved at the mapped commit SHA. The model budget remained at `$0.043734`, confirming that the focused matrix stayed deterministic.
 
 The full matrix passed again after deploying unauthenticated GitHub subrequest caching.
 

@@ -123,6 +123,40 @@ function answerEvidencePaths(answer: AgentAnswer): Set<string> {
   return new Set(crediblePaths(answer.finder.results));
 }
 
+function answerEvidenceCommands(answer: AgentAnswer): Set<string> {
+  if (answer.intent === "installation" || answer.intent === "orientation") {
+    return new Set(answer.guide.steps.map((step) => step.command));
+  }
+  if (answer.intent === "contribution") {
+    return new Set(answer.trail.guide.steps.map((step) => step.command));
+  }
+  return new Set();
+}
+
+function containsUnsupportedEvidence(
+  synthesis: z.infer<typeof synthesisSchema>,
+  allowedPaths: Set<string>,
+  allowedCommands: Set<string>,
+): boolean {
+  const text = [
+    synthesis.summary,
+    synthesis.explanation,
+    ...synthesis.brief.flatMap((step) => [step.title, step.action]),
+  ].join("\n");
+  const pathLike = text.match(/\b(?:[a-zA-Z0-9_.@-]+\/)+[a-zA-Z0-9_.@-]+(?:\.[a-zA-Z0-9]+)?\b/g) ?? [];
+  if (pathLike.some((path) => !allowedPaths.has(path))) return true;
+
+  const codeSpans = [...text.matchAll(/`([^`]+)`/g)].map((match) => match[1].trim());
+  if (codeSpans.some((value) => !allowedPaths.has(value) && !allowedCommands.has(value))) return true;
+
+  let proseWithoutSupportedCommands = text;
+  for (const command of [...allowedCommands].sort((left, right) => right.length - left.length)) {
+    proseWithoutSupportedCommands = proseWithoutSupportedCommands.replaceAll(command, "");
+  }
+  const unsupportedCommand = /(?:^|[\n.!?]\s+)(?:run|execute|type|use)?\s*(?:sudo\s+)?(?:rm|rmdir|del|format|mkfs|dd|git\s+(?:reset|clean)|curl|wget|npm|npx|pnpm|yarn|bun|deno|pip|pip3|pipx|poetry|uv|cargo|go|brew|apt|apt-get|docker|make|just|python|python3|node)\b/i;
+  return unsupportedCommand.test(proseWithoutSupportedCommands) || /(?:&&|\|\||\$\(|\s\|\s|\s>[>]?)\s*\S/.test(proseWithoutSupportedCommands);
+}
+
 function outputText(body: unknown): string | null {
   const parsed = responseSchema.safeParse(body);
   if (!parsed.success) return null;
@@ -195,6 +229,7 @@ export async function synthesizeAgentAnswer(
           "A pinned repository map proves that a path exists at the commit; it does not prove that two files are related.",
           "Treat possible matches and warnings as uncertainty, never as confirmed implementation, caller, or test evidence.",
           "Use only exact paths present in the evidence when filling evidencePaths.",
+          "Do not introduce or suggest a shell command unless that exact command appears in the supplied deterministic evidence.",
           "If the evidence is incomplete, say what is missing and suggest a supported next question.",
           "For a contribution request, use brief to turn the evidence into an ordered first-contribution plan that separates setup, implementation, and verification.",
           "Be concise, practical, and welcoming to a developer who is new to the repository.",
@@ -214,6 +249,7 @@ export async function synthesizeAgentAnswer(
           },
         },
       }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) return answer;
@@ -225,8 +261,10 @@ export async function synthesizeAgentAnswer(
     if (!synthesis.success) return answer;
 
     const allowedPaths = answerEvidencePaths(answer);
+    const allowedCommands = answerEvidenceCommands(answer);
     if (synthesis.data.evidencePaths.some((path) => !allowedPaths.has(path))) return answer;
     if (synthesis.data.brief.some((step) => step.evidencePath !== null && !allowedPaths.has(step.evidencePath))) return answer;
+    if (containsUnsupportedEvidence(synthesis.data, allowedPaths, allowedCommands)) return answer;
 
     return {
       ...answer,

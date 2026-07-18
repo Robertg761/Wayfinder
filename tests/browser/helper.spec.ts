@@ -23,14 +23,17 @@ function fixtureHtml(url: string): string {
   const parsed = new URL(url);
   const [, owner = 'example', repo = 'wayfinder-fixture'] = parsed.pathname.split('/');
   const releaseAssets = `<a href="/${owner}/${repo}/releases/download/v1.0.0/Wayfinder-macos-arm64.dmg">Wayfinder-macos-arm64.dmg</a>
+         <a href="/${owner}/${repo}/releases/download/v1.0.0/Wayfinder-macos-x64.dmg">Wayfinder-macos-x64.dmg</a>
          <a href="/${owner}/${repo}/releases/download/v1.0.0/Wayfinder-windows-x64.exe">Wayfinder-windows-x64.exe</a>
          <a href="/${owner}/${repo}/releases/download/v1.0.0/Wayfinder-linux-x86_64.AppImage">Wayfinder-linux-x86_64.AppImage</a>`;
+  const olderReleaseAssets = `<a href="/${owner}/${repo}/releases/download/v0.9.0/Wayfinder-macos-universal.dmg">Wayfinder-macos-universal.dmg</a>`;
   const delayedReleaseAssets = repo === 'wayfinder-delayed-assets';
   const fileSurface = parsed.pathname.includes('/releases')
     ? `<section data-testid="release-card" style="margin-top: 1200px">
          <h2>Wayfinder v1.0.0</h2>
          <div id="release-assets">${delayedReleaseAssets ? '' : releaseAssets}</div>
        </section>
+       <section data-testid="release-card"><h2>Wayfinder v0.9.0</h2>${olderReleaseAssets}</section>
        ${delayedReleaseAssets ? `<script>setTimeout(() => { document.querySelector('#release-assets').innerHTML = ${JSON.stringify(releaseAssets)}; }, 2600);</script>` : ''}`
     : parsed.pathname.includes('/blob/')
     ? `<nav aria-label="Breadcrumbs">${repo} / src / index.ts</nav>
@@ -88,6 +91,7 @@ function tourFor(map: ReturnType<typeof mapFor>) {
     sha: map.sha,
     summary: map.description,
     stack: ['TypeScript', 'Node.js'],
+    runtimeEntryPoint: { path: 'src/index.ts', why: 'Primary runtime entry point.' },
     entryPoints: [{ path: 'src/index.ts', why: 'Primary entry point.' }],
     stops: [{ order: 1, title: 'Start here', path: 'src/index.ts', lines: [1, 40], explanation: 'Primary entry point.', lookFor: 'Exports.' }],
   };
@@ -102,8 +106,8 @@ function developGuide(map: ReturnType<typeof mapFor>) {
     runtimes: ['Node.js >=22'],
     prerequisites: [{ text: 'Use Node.js 22.', evidence: { path: 'package.json', lines: [1, 12] }, confidence: 'documented' }],
     steps: [
-      { order: 1, title: 'Run the tests', command: 'pnpm test', evidence: { path: 'package.json', lines: [6, 10] }, confidence: 'documented' },
-      { order: 2, title: 'Install dependencies', command: 'pnpm install', evidence: { path: 'package.json', lines: [1, 12] }, confidence: 'documented' },
+      { order: 1, title: 'Install dependencies', command: 'pnpm install', evidence: { path: 'package.json', lines: [1, 12] }, confidence: 'documented' },
+      { order: 2, title: 'Run the tests', command: 'pnpm test', evidence: { path: 'package.json', lines: [6, 10] }, confidence: 'documented' },
     ],
     warnings: [],
     generatedAt: '2026-07-15T12:00:00.000Z',
@@ -256,7 +260,7 @@ async function handleApi(route: Route): Promise<void> {
       return;
     }
     await route.fulfill({ json: {
-      repo: map.repo, sha: map.sha, query, intent: 'orientation', mode: 'free',
+      repo: map.repo, sha: map.sha, query, intent: 'orientation', mode: /ai provenance/i.test(query) ? 'gpt-5.6' : 'free',
       summary: `${map.repo} orientation`, explanation: 'A detailed fixture explanation used to exercise the expanded answer surface.',
       suggestions: ['Where are the tests?'], evidencePaths: ['src/index.ts'], generatedAt: '2026-07-15T12:00:00.000Z',
       tour: tourFor(map), guide,
@@ -572,6 +576,17 @@ test('renders a compact quick snapshot with setup commands in workflow order', a
   await expect(page.getByText('pnpm install · pnpm test')).toBeVisible();
 });
 
+test('describes AI output as synthesis while limiting verification to evidence links', async () => {
+  await page.goto(fixtureUrl);
+  await selectMode('Quick');
+  const composer = page.getByRole('textbox', { name: 'Question for Wayfinder' });
+  await composer.fill('Show AI provenance');
+  await page.getByRole('button', { name: 'Ask', exact: true }).click();
+  await expect(page.getByText('AI synthesis', { exact: true })).toBeVisible();
+  await expect(page.getByText('Evidence links verified', { exact: true })).toBeVisible();
+  await expect(page.getByText('Repository evidence verified', { exact: true })).toBeHidden();
+});
+
 test('asks whether setup means using or developing the project', async () => {
   await page.goto(fixtureUrl);
   await selectMode('Quick');
@@ -634,6 +649,8 @@ test('asks for the operating system when the browser cannot identify it, then hi
   await expect(page.getByRole('heading', { name: 'Which computer are you using?' })).toBeVisible();
   await expect(page.getByRole('button', { name: /macOS/ })).toBeFocused();
   await page.getByRole('button', { name: /Windows —/ }).click();
+  await expect(page.getByRole('heading', { name: 'Which processor does this computer use?' })).toBeVisible();
+  await page.getByRole('button', { name: /x64 —/ }).click();
   await expect(page.getByRole('heading', { name: 'Wayfinder-windows-x64.exe' })).toBeVisible();
   await expect(page.getByText('Download this highlighted file for Windows.')).toBeVisible();
   await expect.poll(() => page.evaluate(() => {
@@ -657,9 +674,38 @@ test('waits for GitHub release assets that render after navigation before choosi
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
   await page.getByRole('button', { name: 'Open Releases' }).click();
   await expect(page).toHaveURL(`${delayedFixtureUrl}/releases`);
-  await expect(page.getByRole('heading', { name: 'Wayfinder-macos-arm64.dmg' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Which processor does this computer use?' })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('button', { name: /Intel —/ }).click();
+  await expect(page.getByRole('heading', { name: 'Wayfinder-macos-x64.dmg' })).toBeVisible();
   await expect(page.getByText('Step 2 of 2', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Download this file' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Wayfinder-macos-universal.dmg' })).toBeHidden();
+});
+
+test('keeps pending navigation guides isolated to the tab that created them', async () => {
+  const releaseUrl = `${fixtureUrl}/releases`;
+  await page.goto(fixtureUrl);
+  await page.evaluate((href) => {
+    sessionStorage.setItem('wayfinder:pending-guide:v1', JSON.stringify({
+      repo: 'example/wayfinder-fixture',
+      kind: 'releases',
+      platform: 'macos',
+      architecture: 'arm64',
+      href,
+      createdAt: new Date().toISOString(),
+    }));
+  }, releaseUrl);
+
+  const second = await context.newPage();
+  await second.route('https://github.com/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/html', body: fixtureHtml(route.request().url()) });
+  });
+  await second.route(/^(?:http:\/\/localhost:8787|https:\/\/wayfinder-api\.hopit-robert\.workers\.dev)\//, handleApi);
+
+  await Promise.all([page.goto(releaseUrl), second.goto(releaseUrl)]);
+  await expect(page.getByRole('heading', { name: 'Wayfinder-macos-arm64.dmg' })).toBeVisible();
+  await expect(second.getByRole('heading', { name: 'Wayfinder-macos-arm64.dmg' })).toBeHidden();
+  await second.close();
 });
 
 test('expands from onboarding to the agent surface without retaining stale scroll', async () => {
@@ -1033,6 +1079,11 @@ test('reparses slash-containing refs when the branch control settles', async () 
   await selectMode('Quick');
   await expect(page.getByText('Starting from navigation/src/index.ts.')).toBeVisible();
   await page.getByRole('button', { name: 'main' }).evaluate((button) => { button.textContent = 'feature/navigation'; });
+  await page.evaluate(() => {
+    document.body.style.minHeight = '3200px';
+    window.scrollTo(0, 1800);
+  });
+  await expect.poll(() => page.getByRole('button', { name: 'feature/navigation' }).evaluate((button) => button.getBoundingClientRect().bottom)).toBeLessThan(0);
   await page.evaluate(() => document.dispatchEvent(new Event('turbo:load')));
   await expect(page.getByText('Starting from src/index.ts.')).toBeVisible();
 });

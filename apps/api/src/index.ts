@@ -1,6 +1,6 @@
 import type { RepoMap, WayfinderErrorCode } from "@wayfinder/contracts";
 import { z } from "zod";
-import { classifyAgentIntent, createAgentAnswer } from "./agent";
+import { classifyAgentIntent, createAgentAnswer, hasSpecificContributionGoal } from "./agent";
 import { createRepoMap, GitHubApiError } from "./github";
 import { createFileFind } from "./find";
 import { createInstallGuide } from "./install";
@@ -21,7 +21,13 @@ interface Env {
   OPENAI_REASONING_EFFORT?: string;
   MODEL_BUDGET_USD?: string;
   MODEL_RATE_LIMITER?: RateLimit;
+  API_RATE_LIMITER?: RateLimit;
   MODEL_BUDGET?: DurableObjectNamespace;
+  CF_VERSION_METADATA?: {
+    id: string;
+    tag: string;
+    timestamp: string;
+  };
 }
 
 const mapRequestSchema = z.object({
@@ -105,6 +111,35 @@ function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 
   return json({ error: fallbackError, code, message }, fallbackStatus);
 }
 
+async function publicApiGate(request: Request, env: Env, path: string): Promise<Response | null> {
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > 1_500_000) {
+    return json({
+      error: "request_too_large",
+      code: "request-failed",
+      message: "The repository request is too large to process safely.",
+    }, 413);
+  }
+  if (!env.API_RATE_LIMITER) return null;
+
+  const clientKey = request.headers.get("cf-connecting-ip")?.trim() || "unknown-client";
+  try {
+    const { success } = await env.API_RATE_LIMITER.limit({ key: path + ":" + clientKey });
+    if (success) return null;
+    return json({
+      error: "service_rate_limited",
+      code: "service-rate-limited",
+      message: "Wayfinder is receiving too many requests from this connection. Wait a minute, then try again.",
+    }, 429);
+  } catch {
+    return json({
+      error: "request_guard_unavailable",
+      code: "upstream-unavailable",
+      message: "Wayfinder's request guard is temporarily unavailable. Try again shortly.",
+    }, 503);
+  }
+}
+
 async function modelOptions(request: Request, env: Env): Promise<{
   apiKey: string;
   reasoningEffort: ReasoningEffort;
@@ -172,6 +207,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/health") {
       const modelConfigured = Boolean(env.OPENAI_API_KEY?.trim());
       const modelProtected = Boolean(env.MODEL_RATE_LIMITER);
+      const apiProtected = Boolean(env.API_RATE_LIMITER);
       let modelBudgetProtected = false;
       let modelBudget: Record<string, number> | undefined;
       if (env.MODEL_BUDGET) {
@@ -199,6 +235,7 @@ export default {
       return json({
         ok: true,
         service: "wayfinder-api",
+        apiProtected,
         modelConfigured,
         modelProtected,
         modelBudgetProtected,
@@ -207,8 +244,14 @@ export default {
         reasoningEffort: env.OPENAI_REASONING_EFFORT === "medium" || env.OPENAI_REASONING_EFFORT === "high"
           ? env.OPENAI_REASONING_EFFORT
           : "low",
+        ...(env.CF_VERSION_METADATA ? { deployment: env.CF_VERSION_METADATA } : {}),
         ...(modelBudget ? { modelBudget } : {}),
       });
+    }
+
+    if (request.method === "POST" && ["/map", "/tour", "/guide/install", "/find", "/agent"].includes(url.pathname)) {
+      const gated = await publicApiGate(request, env, url.pathname);
+      if (gated) return gated;
     }
 
     if (request.method === "POST" && url.pathname === "/map") {
@@ -250,7 +293,7 @@ export default {
     if (request.method === "POST" && url.pathname === "/agent") {
       try {
         const input = agentRequestSchema.parse(await request.json());
-        const allowedModel = classifyAgentIntent(input.query) === "contribution"
+        const allowedModel = classifyAgentIntent(input.query) === "contribution" && hasSpecificContributionGoal(input.query)
           ? await modelOptions(request, env)
           : undefined;
         return json(await createAgentAnswer(

@@ -1,6 +1,6 @@
 import type { RepoMap } from "@wayfinder/contracts";
 import { describe, expect, it } from "vitest";
-import { extractMarkdownCommands, generateInstallGuide } from "../src/install";
+import { extractMarkdownCommands, generateInstallGuide, isConsumerInstallCommand } from "../src/install";
 
 function makeMap(overrides: Partial<RepoMap> = {}): RepoMap {
   return {
@@ -43,6 +43,31 @@ describe("extractMarkdownCommands", () => {
       expect.objectContaining({ command: "pnpm install", confidence: "documented", evidence: { path: "README.md", lines: [10, 10] } }),
       expect.objectContaining({ command: "pnpm dev", confidence: "documented", evidence: { path: "README.md", lines: [11, 11] } }),
     ]);
+  });
+});
+
+describe("isConsumerInstallCommand", () => {
+  it.each([
+    "npm install trail-sdk",
+    "pip install trail-sdk",
+    "pipx install trail-cli",
+    "cargo install ripgrep",
+    "go install example.com/trail/cmd/trail@latest",
+    "brew install trail",
+  ])("recognizes documented consumer installs across ecosystems: %s", (command) => {
+    expect(isConsumerInstallCommand(command)).toBe(true);
+  });
+
+  it.each([
+    "npm install",
+    "python -m pip install -e .",
+    "pip install -r requirements.txt",
+    "uv sync",
+    "poetry install",
+    "cargo build",
+    "go test ./...",
+  ])("keeps repository setup out of consumer guidance: %s", (command) => {
+    expect(isConsumerInstallCommand(command)).toBe(false);
   });
 });
 
@@ -143,6 +168,42 @@ describe("generateInstallGuide", () => {
     expect(contributor.steps.map((step) => step.command)).toEqual(["npm install", "npm test"]);
   });
 
+  it("keeps non-JavaScript consumer commands and omits them from contributor setup", () => {
+    const readme = [
+      "# Trail",
+      "## Installation",
+      "```bash",
+      "pip install trail-sdk",
+      "pipx install trail-cli",
+      "cargo install trail-cli",
+      "go install example.com/trail/cmd/trail@latest",
+      "brew install trail",
+      "```",
+    ].join("\n");
+    const map = makeMap({ readme, setupFiles: ["README.md"] });
+
+    expect(generateInstallGuide(map, { "README.md": readme }, "use").steps.map((step) => step.command)).toEqual([
+      "pip install trail-sdk",
+      "pipx install trail-cli",
+      "cargo install trail-cli",
+      "go install example.com/trail/cmd/trail@latest",
+      "brew install trail",
+    ]);
+    expect(generateInstallGuide(map, { "README.md": readme }, "develop").steps).toEqual([]);
+  });
+
+  it("moves inferred dependency installation before documented start commands", () => {
+    const readme = ["# Trail", "## Development", "```bash", "pnpm dev", "```"].join("\n");
+    const map = makeMap({ readme, setupFiles: ["README.md", "package.json", "pnpm-lock.yaml"] });
+    const guide = generateInstallGuide(map, {
+      "README.md": readme,
+      "package.json": JSON.stringify({ packageManager: "pnpm@10", scripts: { dev: "vite" } }),
+    });
+
+    expect(guide.steps.map((step) => step.command)).toEqual(["pnpm install", "pnpm dev"]);
+    expect(guide.steps.map((step) => step.order)).toEqual([1, 2]);
+  });
+
   it("does not invent a registry command from a public application manifest", () => {
     const map = makeMap({ setupFiles: ["package.json", "package-lock.json"] });
     const guide = generateInstallGuide(map, {
@@ -150,6 +211,6 @@ describe("generateInstallGuide", () => {
     }, "use");
 
     expect(guide.steps).toEqual([]);
-    expect(guide.warnings).toContain("No documented consumer package command was found. Check GitHub Releases for a packaged application before trying to run the source repository.");
+    expect(guide.warnings).toContain("No documented consumer install command was found. Check GitHub Releases for a packaged download; if none exists, use the repository's source setup instructions.");
   });
 });

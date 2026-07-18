@@ -19,6 +19,7 @@ export interface AgentStarter {
 }
 
 export type PlatformFamily = "macos" | "windows" | "linux" | "unknown";
+export type ArchitectureFamily = "arm64" | "x64" | "universal" | "unknown";
 
 export interface ReleaseAssetCandidate {
   name: string;
@@ -33,33 +34,77 @@ export function detectPlatformFamily(userAgent: string, platform = ""): Platform
   return "unknown";
 }
 
+export function detectArchitectureFamily(userAgent: string, platform = ""): ArchitectureFamily {
+  const value = `${platform} ${userAgent}`.toLowerCase();
+  if (/arm64|aarch64/.test(value)) return "arm64";
+  // Chromium deliberately reports MacIntel on both Intel and Apple-silicon
+  // Macs, so that value is not safe architecture evidence.
+  if (/macintosh|macintel|mac os/.test(value) && /intel/.test(value)) return "unknown";
+  if (/x64|x86_64|amd64|win64|wow64/.test(value)) return "x64";
+  return "unknown";
+}
+
+function assetArchitecture(name: string): ArchitectureFamily {
+  const lower = name.toLowerCase();
+  if (/universal|universal2|noarch|anycpu/.test(lower)) return "universal";
+  if (/arm64|aarch64|apple[-_. ]?silicon/.test(lower)) return "arm64";
+  if (/x64|x86_64|amd64|intel/.test(lower)) return "x64";
+  return "universal";
+}
+
+function matchesPlatform(name: string, platform: PlatformFamily): boolean {
+  const lower = name.toLowerCase();
+  if (platform === "macos") return /mac|macos|darwin|osx|\.dmg$|\.pkg$/.test(lower);
+  if (platform === "windows") return /windows|win32|win64|\.msi$|\.exe$/.test(lower);
+  if (platform === "linux") return /linux|appimage|\.deb$|\.rpm$/.test(lower);
+  return false;
+}
+
+function installableReleaseAssets(
+  assets: ReleaseAssetCandidate[],
+  platform: PlatformFamily,
+): ReleaseAssetCandidate[] {
+  return assets.filter((asset) => {
+    const name = asset.name.toLowerCase();
+    return !/source code|checksums?|sha256|\.sig$|\.asc$/.test(name) && matchesPlatform(name, platform);
+  });
+}
+
+export function releaseArchitectureChoices(
+  assets: ReleaseAssetCandidate[],
+  platform: PlatformFamily,
+): Array<Exclude<ArchitectureFamily, "universal" | "unknown">> {
+  const choices = new Set(installableReleaseAssets(assets, platform)
+    .map((asset) => assetArchitecture(asset.name))
+    .filter((architecture): architecture is "arm64" | "x64" => architecture === "arm64" || architecture === "x64"));
+  return ["arm64", "x64"].filter((architecture): architecture is "arm64" | "x64" => choices.has(architecture as "arm64" | "x64"));
+}
+
 export function preferredReleaseAsset(
   assets: ReleaseAssetCandidate[],
   platform: PlatformFamily,
   userAgent = "",
+  architecture: ArchitectureFamily = detectArchitectureFamily(userAgent),
 ): ReleaseAssetCandidate | null {
   if (platform === "unknown") return null;
-  const environment = userAgent.toLowerCase();
-  const arm = /arm64|aarch64/.test(environment);
-  const x64 = /x64|x86_64|amd64|win64/.test(environment);
-  const platformMatch = (name: string): boolean => {
-    if (platform === "macos") return /mac|macos|darwin|osx|\.dmg$|\.pkg$/.test(name);
-    if (platform === "windows") return /windows|win32|win64|\.msi$|\.exe$/.test(name);
-    return /linux|appimage|\.deb$|\.rpm$/.test(name);
-  };
+  const candidates = installableReleaseAssets(assets, platform);
+  if (candidates.length === 0) return null;
+  const universal = candidates.filter((asset) => assetArchitecture(asset.name) === "universal");
+  const choices = releaseArchitectureChoices(candidates, platform);
+  if (architecture === "unknown" && universal.length === 0 && choices.length > 0) return null;
+  const effectiveArchitecture = architecture;
   const score = (asset: ReleaseAssetCandidate): number => {
     const name = asset.name.toLowerCase();
-    if (/source code|checksums?|sha256|\.sig$|\.asc$/.test(name)) return -100;
-    if (!platformMatch(name)) return -100;
+    const assetArch = assetArchitecture(name);
     let value = 40;
-    if (arm) value += /arm64|aarch64/.test(name) ? 12 : /x64|x86_64|amd64/.test(name) ? -8 : 0;
-    else if (x64) value += /x64|x86_64|amd64/.test(name) ? 12 : /arm64|aarch64/.test(name) ? -8 : 0;
-    else value += /universal/.test(name) ? 12 : 0;
+    if (assetArch === "universal") value += 10;
+    else if (effectiveArchitecture === assetArch) value += 16;
+    else if (effectiveArchitecture !== "unknown") value -= 100;
     if (/\.dmg$|\.pkg$|\.msi$|\.exe$|\.appimage$|\.deb$|\.rpm$/.test(name)) value += 8;
     if (/\.zip$|\.tar\.gz$|\.tgz$/.test(name)) value += 2;
     return value;
   };
-  return assets
+  return candidates
     .map((asset, index) => ({ asset, index, score: score(asset) }))
     .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.asset ?? null;

@@ -32,10 +32,11 @@ describe('Wayfinder extension cache', () => {
     expect(repositoryCacheKey('openai', 'openai-node', 'feature/navigation')).not.toBe(
       repositoryCacheKey('openai', 'openai-node', 'main'),
     );
+    expect(repositoryCacheKey('openai', 'openai-node')).toContain('wayfinder:repository:v2:');
     expect(agentResponseCacheKey('openai/openai-node', 'abc1234', ' Where is Auth? ', 'src/client.ts'))
       .toBe(agentResponseCacheKey('OPENAI/openai-node', 'abc1234', 'where is auth?', 'src/client.ts'));
     expect(agentResponseCacheKey('openai/openai-node', 'abc1234', 'where is auth?', 'src/client.ts'))
-      .toContain('wayfinder:agent:v2:');
+      .toContain('wayfinder:agent:v3:');
   });
 
   it('returns valid entries and rejects expired entries', async () => {

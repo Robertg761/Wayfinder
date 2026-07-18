@@ -16,12 +16,13 @@ const entryFileQuestion = /\b(which|where|find|locate)\b.*\b(entry|entrypoint|en
 const startingQuestion = /\b(where|how)\b.*\b(start|begin)\b/i;
 const contributionQuestion = /\b(first contribution|contribution plan|contribute|pull request|work on|make a change)\b|\b(i want to|help me|plan to|trying to)\b.*\b(add|change|fix|implement|refactor|improve)\b/i;
 const contributionNoise = new Set([
-  "add", "change", "contribution", "core", "file", "first", "fix", "help", "implement", "improve", "lib", "make",
-  "plan", "primary", "pull", "refactor", "related", "request", "source", "spec", "specs", "src", "support", "test", "tests",
+  "add", "behavior", "bug", "change", "contribution", "core", "feature", "file", "first", "fix", "help", "implement", "improve", "issue", "lib", "make",
+  "plan", "primary", "pull", "refactor", "related", "request", "something", "source", "spec", "specs", "src", "support", "test", "tests",
   "type", "types", "want", "work",
 ]);
 const consumerInstallationQuestion = /\b(use|consume|consumer|published package|add to my project|install the library|install the package)\b/i;
-const contributorInstallationQuestion = /\b(develop|development|contribut|from source|repository locally|repo locally|run locally|build locally)\b/i;
+const contributorInstallationQuestion = /\b(develop|development|contribut(?:e|or|ors|ing|ion)?|from source|repository locally|repo locally|run locally|build locally)\b/i;
+const developmentTaskQuestion = /\b(tests?|test suite|build|compile|dependencies|dependency|package manager|prerequisites?|developer setup|development setup|development server|run locally|start locally|serve locally)\b/i;
 const currentFileQuestion = /\b(this file|current file|summari[sz]e|file role|imports?|depends?|dependencies|callers?|used by|paired tests?|tests? paired|tests? for|change impact|public surface|read next|what breaks)\b/i;
 const namedFileAction = /\b(summari[sz]e|role|imports?|depends?|dependencies|callers?|used by|tests?|specs?|verification|impact|read next|what breaks)\b/i;
 
@@ -35,6 +36,7 @@ export function classifyAgentIntent(query: string, currentPath: string | null = 
   if (testLocationQuestion.test(normalized)) return "file-find";
   if (entryFileQuestion.test(normalized)) return "file-find";
   if (startingQuestion.test(normalized)) return "orientation";
+  if (fileQuestion.test(normalized)) return "file-find";
   if (
     commandQuestion.test(normalized)
     || installationQuestion.test(normalized)
@@ -42,12 +44,27 @@ export function classifyAgentIntent(query: string, currentPath: string | null = 
     || contributorInstallationQuestion.test(normalized)
   ) return "installation";
   if (orientationQuestion.test(normalized)) return "orientation";
-  if (fileQuestion.test(normalized)) return "file-find";
   return "file-find";
 }
 
-function contributionConcepts(goal: string): string[] {
+export function contributionConcepts(goal: string): string[] {
   return [...new Set(goal.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 2 && !contributionNoise.has(term)))];
+}
+
+export function hasSpecificContributionGoal(goal: string): boolean {
+  return contributionConcepts(goal).length > 0;
+}
+
+function emptyContributionFind(map: RepoMap, query: string, currentPath: string | null, warning: string): FileFindResponse {
+  return {
+    repo: map.repo,
+    sha: map.sha,
+    query,
+    currentPath,
+    results: [],
+    warnings: [warning],
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 export function keepGoalLinkedVerification(finder: FileFindResponse, goal: string): FileFindResponse {
@@ -75,13 +92,29 @@ async function createContributionTrail(
   currentPath: string | null,
   token?: string,
 ): Promise<ContributionTrail> {
-  const concepts = contributionConcepts(goal).join(" ") || goal;
-  const [guide, implementation] = await Promise.all([
-    createInstallGuide(map, token),
-    createFileFind(map, concepts + " primary implementation source", currentPath, token),
-  ]);
-  const verificationCandidate = await createFileFind(map, concepts + " tests specs", currentPath, token);
-  const verification = keepGoalLinkedVerification(verificationCandidate, goal);
+  const concepts = contributionConcepts(goal).join(" ");
+  const [guide, implementation, verification] = concepts
+    ? await Promise.all([
+        createInstallGuide(map, token),
+        createFileFind(map, concepts + " primary implementation source", currentPath, token),
+        createFileFind(map, concepts + " tests specs", currentPath, token)
+          .then((candidate) => keepGoalLinkedVerification(candidate, goal)),
+      ])
+    : [
+        await createInstallGuide(map, token),
+        emptyContributionFind(
+          map,
+          goal,
+          currentPath,
+          "Name the feature, behavior, or bug you want to change before Wayfinder claims an implementation coordinate.",
+        ),
+        emptyContributionFind(
+          map,
+          goal,
+          currentPath,
+          "No verification coordinate was searched because the contribution goal is still unspecified.",
+        ),
+      ];
 
   return {
     repo: map.repo,
@@ -96,6 +129,9 @@ async function createContributionTrail(
 }
 
 function contributionSummary(trail: ContributionTrail): string {
+  if (!hasSpecificContributionGoal(trail.goal)) {
+    return "I mapped the repository setup, but I need a feature, behavior, or bug name before I can claim implementation or verification coordinates.";
+  }
   const implementation = trail.implementation.results[0]?.path;
   const verification = trail.verification.results[0]?.path;
   if (!implementation) return "I mapped the repository, but I could not verify a credible implementation coordinate for this contribution yet.";
@@ -104,7 +140,7 @@ function contributionSummary(trail: ContributionTrail): string {
 
 function installationSummary(stepCount: number, warningCount: number, audience: "use" | "develop"): string {
   if (audience === "use" && stepCount === 0) {
-    return "No documented package-manager install command was found, so start with the repository's packaged Releases downloads.";
+    return "No documented consumer install command was found. Check GitHub Releases for a packaged download; if none exists, the repository may require source setup.";
   }
   if (stepCount === 0) return "I could not find a trustworthy setup sequence, so I marked the available repository evidence and warnings instead.";
   const warningNote = warningCount > 0 ? " I also found " + warningCount + " setup note" + (warningCount === 1 ? "." : "s.") : "";
@@ -114,6 +150,7 @@ function installationSummary(stepCount: number, warningCount: number, audience: 
 export function installationAudience(query: string): "use" | "develop" {
   if (contributorInstallationQuestion.test(query)) return "develop";
   if (consumerInstallationQuestion.test(query)) return "use";
+  if (developmentTaskQuestion.test(query)) return "develop";
   return "use";
 }
 
@@ -134,6 +171,7 @@ export async function createAgentAnswer(
 
   if (intent === "contribution") {
     const trail = await createContributionTrail(map, query, currentPath, token);
+    const specificGoal = hasSpecificContributionGoal(query);
     const answer: AgentAnswer = {
       repo: map.repo,
       sha: map.sha,
@@ -141,11 +179,15 @@ export async function createAgentAnswer(
       intent,
       mode: "free",
       summary: contributionSummary(trail),
-      suggestions: ["Explain the strongest implementation coordinate", "Where is the project configuration?"],
+      suggestions: specificGoal
+        ? ["Explain the strongest implementation coordinate", "Where is the project configuration?"]
+        : ["I want to change [feature]. Plan my first contribution.", "What does this repository do?"],
       generatedAt,
       trail,
     };
-    return modelOptions ? synthesizeAgentAnswer(answer, modelOptions) : answer;
+    return modelOptions && specificGoal && trail.implementation.results.length > 0
+      ? synthesizeAgentAnswer(answer, modelOptions)
+      : answer;
   }
 
   if (intent === "orientation") {

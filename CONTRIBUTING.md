@@ -40,6 +40,7 @@ Run these before committing:
 ```bash
 pnpm typecheck
 pnpm test
+pnpm test:browser
 pnpm build
 ```
 
@@ -66,7 +67,7 @@ Changes must preserve these product guardrails:
 1. Every displayed command has a repository source.
 2. Inferred setup steps are labeled as inferred.
 3. File answers include reasons, match signals, and confidence.
-4. Model prose cannot introduce a repository path absent from deterministic evidence.
+4. Model prose cannot introduce a repository path or shell command absent from deterministic evidence.
 5. Free mode remains useful when no OpenAI key is configured.
 6. New ranking behavior includes a focused regression test.
 

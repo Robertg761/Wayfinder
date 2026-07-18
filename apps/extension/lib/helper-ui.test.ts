@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentStarters, detectPlatformFamily, landmarkDetail, measuredBubbleHeight, placeBubble, preferredReleaseAsset, resolveAnswerDepth } from "./helper-ui";
+import { agentStarters, detectArchitectureFamily, detectPlatformFamily, landmarkDetail, measuredBubbleHeight, placeBubble, preferredReleaseAsset, releaseArchitectureChoices, resolveAnswerDepth } from "./helper-ui";
 
 describe("placeBubble", () => {
   it("keeps a bottom-right bubble attached above its dock", () => {
@@ -119,6 +119,12 @@ describe("release asset guidance", () => {
     expect(detectPlatformFamily("Mozilla/5.0 (X11; Linux x86_64)")).toBe("linux");
   });
 
+  it("does not treat Chromium's MacIntel compatibility value as architecture evidence", () => {
+    expect(detectArchitectureFamily("Mozilla/5.0 (Macintosh; Intel Mac OS X)", "MacIntel")).toBe("unknown");
+    expect(detectArchitectureFamily("Mozilla/5.0 (Macintosh; arm64 Mac OS X)", "MacIntel")).toBe("arm64");
+    expect(detectArchitectureFamily("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Win32")).toBe("x64");
+  });
+
   it("prefers an OS and architecture matched binary over source archives", () => {
     expect(preferredReleaseAsset(assets, "macos", "Macintosh arm64")?.name).toBe("Wayfinder-macos-arm64.dmg");
     expect(preferredReleaseAsset(assets, "windows", "Windows x64")?.name).toBe("Wayfinder-windows-x64.exe");
@@ -131,5 +137,23 @@ describe("release asset guidance", () => {
 
   it("never falls through to a different operating system's installer", () => {
     expect(preferredReleaseAsset(assets.filter((asset) => !asset.name.includes("macos")), "macos", "Macintosh")).toBeNull();
+  });
+
+  it("asks for architecture instead of guessing between incompatible installers", () => {
+    const macAssets = [
+      { name: "Wayfinder-macos-arm64.dmg", href: "/arm" },
+      { name: "Wayfinder-macos-x64.dmg", href: "/x64" },
+    ];
+    expect(releaseArchitectureChoices(macAssets, "macos")).toEqual(["arm64", "x64"]);
+    expect(preferredReleaseAsset(macAssets, "macos", "Macintosh", "unknown")).toBeNull();
+    expect(preferredReleaseAsset(macAssets, "macos", "Macintosh", "x64")?.href).toBe("/x64");
+  });
+
+  it("prefers a universal installer when architecture is unknown", () => {
+    const macAssets = [
+      { name: "Wayfinder-macos-arm64.dmg", href: "/arm" },
+      { name: "Wayfinder-macos-universal.dmg", href: "/universal" },
+    ];
+    expect(preferredReleaseAsset(macAssets, "macos", "Macintosh", "unknown")?.href).toBe("/universal");
   });
 });

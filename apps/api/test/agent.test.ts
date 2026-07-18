@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FileFindResponse } from "@wayfinder/contracts";
-import { classifyAgentIntent, importedSpecifiers, installationAudience, keepGoalLinkedVerification, keepLikelyCallers } from "../src/agent";
+import type { FileFindResponse, RepoMap } from "@wayfinder/contracts";
+import { classifyAgentIntent, contributionConcepts, createAgentAnswer, importedSpecifiers, installationAudience, keepGoalLinkedVerification, keepLikelyCallers } from "../src/agent";
 
 describe("classifyAgentIntent", () => {
   it.each([
@@ -16,6 +16,7 @@ describe("classifyAgentIntent", () => {
     ["Which file is the main implementation entry point?", "file-find"],
     ["Where are the tests?", "file-find"],
     ["Find the authentication implementation", "file-find"],
+    ["Where is dependency injection implemented?", "file-find"],
     ["What does pagination do?", "file-find"],
     ["configuration", "file-find"],
     ["Help me make my first contribution", "contribution"],
@@ -55,6 +56,44 @@ describe("installationAudience", () => {
 
   it("keeps explicit contributor setup on the development path", () => {
     expect(installationAudience("Help me develop this repository locally")).toBe("develop");
+  });
+
+  it.each([
+    "How do I run the tests?",
+    "How do I build this project?",
+    "What dependencies do I need?",
+    "Which package manager should contributors use?",
+  ])("routes repository work to the development guide: %s", (query) => {
+    expect(installationAudience(query)).toBe("develop");
+  });
+});
+
+describe("generic contribution requests", () => {
+  const map: RepoMap = {
+    repo: "example/trail",
+    sha: "a".repeat(40),
+    requestedRef: null,
+    resolvedRef: "main",
+    defaultBranch: "main",
+    description: null,
+    homepage: null,
+    language: "TypeScript",
+    stars: 1,
+    readme: null,
+    tree: [{ path: "_vendor/tsc/helpers.ts", type: "blob" }],
+    setupFiles: [],
+    truncated: false,
+    generatedAt: "2026-07-18T00:00:00.000Z",
+  };
+
+  it("does not reintroduce noise words as a feature search", async () => {
+    expect(contributionConcepts("Help me make my first contribution")).toEqual([]);
+    const answer = await createAgentAnswer(map, "Help me make my first contribution", null);
+    expect(answer.intent).toBe("contribution");
+    if (answer.intent !== "contribution") return;
+    expect(answer.trail.implementation.results).toEqual([]);
+    expect(answer.trail.verification.results).toEqual([]);
+    expect(answer.summary).toContain("need a feature, behavior, or bug name");
   });
 });
 

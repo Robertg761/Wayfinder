@@ -100,6 +100,7 @@ describe("public API request boundaries", () => {
     });
     const fullyProtected = await worker.fetch(new Request("https://wayfinder.test/health"), {
       OPENAI_API_KEY: "secret",
+      API_RATE_LIMITER: rateLimiter(true),
       MODEL_RATE_LIMITER: rateLimiter(true),
       MODEL_BUDGET: budgetNamespace(),
       MODEL_BUDGET_USD: "100",
@@ -107,6 +108,7 @@ describe("public API request boundaries", () => {
 
     await expect(configuredOnly.json()).resolves.toMatchObject({
       modelConfigured: true,
+      apiProtected: false,
       modelProtected: false,
       modelEnabled: false,
       model: "gpt-5.6-luna",
@@ -114,6 +116,7 @@ describe("public API request boundaries", () => {
     });
     await expect(protectedModel.json()).resolves.toMatchObject({
       modelConfigured: true,
+      apiProtected: false,
       modelProtected: true,
       modelBudgetProtected: false,
       modelEnabled: false,
@@ -122,6 +125,7 @@ describe("public API request boundaries", () => {
     });
     await expect(fullyProtected.json()).resolves.toMatchObject({
       modelConfigured: true,
+      apiProtected: true,
       modelProtected: true,
       modelBudgetProtected: true,
       modelEnabled: true,
@@ -153,8 +157,28 @@ describe("public API request boundaries", () => {
     expect(limiter.limit).not.toHaveBeenCalled();
   });
 
-  it("checks the model allowance for contribution planning", async () => {
+  it("checks the model allowance for specific contribution planning", async () => {
     const limiter = rateLimiter(false);
+    const response = await worker.fetch(new Request("https://wayfinder.test/agent", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "cf-connecting-ip": "203.0.113.10",
+      },
+      body: JSON.stringify({ map: validMap({ tree: [] }), query: "I want to add pagination support", currentPath: null }),
+    }), {
+      OPENAI_API_KEY: "secret",
+      MODEL_RATE_LIMITER: limiter,
+      MODEL_BUDGET: budgetNamespace(),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "contribution" });
+    expect(limiter.limit).toHaveBeenCalledWith({ key: "agent:203.0.113.10" });
+  });
+
+  it("does not spend a model allowance on an underspecified contribution", async () => {
+    const limiter = rateLimiter(true);
     const response = await worker.fetch(new Request("https://wayfinder.test/agent", {
       method: "POST",
       headers: {
@@ -170,7 +194,23 @@ describe("public API request boundaries", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "contribution" });
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "agent:203.0.113.10" });
+    expect(limiter.limit).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits deterministic public routes independently of model usage", async () => {
+    const limiter = rateLimiter(false);
+    const response = await worker.fetch(new Request("https://wayfinder.test/tour", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "cf-connecting-ip": "203.0.113.20",
+      },
+      body: JSON.stringify({ map: validMap() }),
+    }), { API_RATE_LIMITER: limiter });
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({ code: "service-rate-limited" });
+    expect(limiter.limit).toHaveBeenCalledWith({ key: "/tour:203.0.113.20" });
   });
 
   it("uses the configured Luna reasoning level only when it is supported", async () => {

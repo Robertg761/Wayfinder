@@ -12,7 +12,13 @@ export class GitHubApiError extends Error {
   }
 }
 
-export function describeGitHubFailure(status: number, remaining: string | null, reset: string | null): {
+export function describeGitHubFailure(
+  status: number,
+  remaining: string | null,
+  reset: string | null,
+  responseMessage = "",
+  authenticated = false,
+): {
   code: WayfinderErrorCode;
   message: string;
   resetAt?: string;
@@ -20,7 +26,10 @@ export function describeGitHubFailure(status: number, remaining: string | null, 
   const resetSeconds = reset ? Number(reset) : Number.NaN;
   const resetAt = Number.isFinite(resetSeconds) ? new Date(resetSeconds * 1_000).toISOString() : undefined;
 
-  if (status === 429 || status === 403) {
+  const rateLimited = status === 429 || (
+    status === 403 && (remaining === "0" || /(?:rate limit|abuse detection)/i.test(responseMessage))
+  );
+  if (rateLimited) {
     return {
       code: "github-rate-limited",
       message: "GitHub's public API limit has been reached. Cached guides still work while the limit resets.",
@@ -39,6 +48,18 @@ export function describeGitHubFailure(status: number, remaining: string | null, 
       message: "GitHub declined the configured token. Remove it or replace it with a valid token.",
     };
   }
+  if (status === 403 && authenticated) {
+    return {
+      code: "github-auth-failed",
+      message: "GitHub declined the configured token for this repository. Check its validity and repository permissions.",
+    };
+  }
+  if (status === 403) {
+    return {
+      code: "repository-unavailable",
+      message: "GitHub refused access to this repository. It may be private or unavailable to public API requests.",
+    };
+  }
   return {
     code: "upstream-unavailable",
     message: "GitHub could not complete the repository request. Try the survey again shortly.",
@@ -46,7 +67,7 @@ export function describeGitHubFailure(status: number, remaining: string | null, 
 }
 
 export function isBlockingGitHubError(error: unknown): boolean {
-  return error instanceof GitHubApiError && error.code !== "repository-unavailable";
+  return error instanceof GitHubApiError && error.status !== 404;
 }
 
 interface GitHubRepoResponse {
@@ -242,6 +263,7 @@ function decodeBase64(value: string): string {
 
 interface GitHubRequestRuntime {
   fetcher?: typeof fetch;
+  timeoutMs?: number;
 }
 
 const mutableGitHubCacheSeconds = 5 * 60;
@@ -249,7 +271,8 @@ const immutableGitHubCacheSeconds = 24 * 60 * 60;
 
 export function githubCacheTtl(path: string): number {
   const ref = new URL("https://api.github.com" + path).searchParams.get("ref");
-  return ref && /^[a-f0-9]{40}$/i.test(ref)
+  const commitAddressedPath = /\/(?:git\/trees|commits)\/[a-f0-9]{40}(?:\?|$)/i.test(path);
+  return (ref && /^[a-f0-9]{40}$/i.test(ref)) || commitAddressedPath
     ? immutableGitHubCacheSeconds
     : mutableGitHubCacheSeconds;
 }
@@ -260,33 +283,49 @@ export async function githubFetch<T>(
   runtime: GitHubRequestRuntime = {},
 ): Promise<T> {
   const url = "https://api.github.com" + path;
-  const response = await (runtime.fetcher ?? fetch)(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "wayfinder-build-week",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(token ? { Authorization: "Bearer " + token } : {}),
-    },
-    ...(token
-      ? { cache: "no-store" as const }
-      : {
-          cf: {
-            cacheEverything: true,
-            cacheTtlByStatus: {
-              "200-299": githubCacheTtl(path),
-              "300-399": 0,
-              "400-499": 0,
-              "500-599": 0,
+  let response: Response;
+  try {
+    response = await (runtime.fetcher ?? fetch)(url, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "wayfinder-build-week",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(token ? { Authorization: "Bearer " + token } : {}),
+      },
+      signal: AbortSignal.timeout(runtime.timeoutMs ?? 12_000),
+      ...(token
+        ? { cache: "no-store" as const }
+        : {
+            cf: {
+              cacheEverything: true,
+              cacheTtlByStatus: {
+                "200-299": githubCacheTtl(path),
+                "300-399": 0,
+                "400-499": 0,
+                "500-599": 0,
+              },
             },
-          },
-        }),
-  });
+          }),
+    });
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+    throw new GitHubApiError(
+      "upstream-unavailable",
+      timedOut
+        ? "GitHub did not respond before the repository request timed out. Try again shortly."
+        : "GitHub could not be reached for the repository request. Try again shortly.",
+      504,
+    );
+  }
 
   if (!response.ok) {
+    const responseBody = await response.clone().json().catch(() => null) as { message?: unknown } | null;
     const failure = describeGitHubFailure(
       response.status,
       response.headers.get("x-ratelimit-remaining"),
       response.headers.get("x-ratelimit-reset"),
+      typeof responseBody?.message === "string" ? responseBody.message : "",
+      Boolean(token),
     );
     throw new GitHubApiError(failure.code, failure.message, response.status, failure.resetAt);
   }
@@ -319,18 +358,19 @@ export async function createRepoMap(owner: string, repo: string, requestedRef?: 
   const prefix = "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo);
   const metadata = await githubFetch<GitHubRepoResponse>(prefix, token);
   const resolvedRef = requestedRef?.trim() || metadata.default_branch;
+  const commit = await githubFetch<GitHubCommitResponse>(prefix + "/commits/" + encodeURIComponent(resolvedRef), token);
+  const pinnedRef = commit.sha;
 
-  const [tree, readme, commit] = await Promise.all([
-    githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(resolvedRef) + "?recursive=1", token),
-    githubFetch<GitHubReadmeResponse>(prefix + "/readme?ref=" + encodeURIComponent(resolvedRef), token).catch((error) => {
+  const [tree, readme] = await Promise.all([
+    githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef) + "?recursive=1", token),
+    githubFetch<GitHubReadmeResponse>(prefix + "/readme?ref=" + encodeURIComponent(pinnedRef), token).catch((error) => {
       if (error instanceof GitHubApiError && error.code === "repository-unavailable") return null;
       throw error;
     }),
-    githubFetch<GitHubCommitResponse>(prefix + "/commits/" + encodeURIComponent(resolvedRef), token),
   ]);
 
   const rootTree = tree.truncated || tree.tree.length > 4_000
-    ? await githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(resolvedRef), token)
+    ? await githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef), token)
     : null;
   const filteredTree = compactTree(dedupeTree(filterTree([...(rootTree?.tree ?? []), ...tree.tree])));
   const setupFiles = collectSetupFiles([...(rootTree?.tree ?? []), ...tree.tree]);

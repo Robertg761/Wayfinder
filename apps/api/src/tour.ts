@@ -1,6 +1,7 @@
 import type { RepoMap, RepoTour, TourStop } from "@wayfinder/contracts";
 
 interface TourCandidate {
+  kind: "documentation" | "manifest" | "runtime" | "core" | "test" | "configuration" | "source";
   path: string;
   title: string;
   explanation: string;
@@ -126,6 +127,7 @@ function buildCandidates(map: RepoMap): TourCandidate[] {
   };
 
   add(selectPath(paths, [/(^|\/)readme(\.[^/]*)?$/i, /(^|\/)docs\/(getting-started|introduction)/i], selected), {
+    kind: "documentation",
     title: "Read the field notes",
     explanation: "Start with the project narrative before following implementation details. This file should explain the problem, the public surface, and the vocabulary used throughout the repository.",
     lookFor: "Find the shortest description of what the project does and who it serves.",
@@ -141,6 +143,7 @@ function buildCandidates(map: RepoMap): TourCandidate[] {
     /(^|\/)composer\.json$/i,
     /(^|\/)build\.gradle(\.kts)?$/i,
   ], selected), {
+    kind: "manifest",
     title: "Survey the supplies",
     explanation: "The primary manifest reveals the runtime, important dependencies, and the commands maintainers use to build, test, and ship the project.",
     lookFor: "Notice the scripts or dependency groups that define the normal development loop.",
@@ -154,6 +157,7 @@ function buildCandidates(map: RepoMap): TourCandidate[] {
     /(^|\/)(src|app)\/(cli|server|client)\.(tsx?|jsx?|py|go|rs)$/i,
     /(^|\/)cmd\/[^/]+\/main\.go$/i,
   ], selected, preferredExtensions, preferredPathToken), {
+    kind: "runtime",
     title: "Find where execution begins",
     explanation: "This is a likely boundary between consumers and the rest of the codebase. Read it to see what the project exports, starts, registers, or wires together.",
     lookFor: "Trace the first handoff from this file into a deeper module.",
@@ -166,6 +170,7 @@ function buildCandidates(map: RepoMap): TourCandidate[] {
     /(^|\/)(src|app|lib)\/(client|server|core|router|runtime|api|command|cli)\/index\.(tsx?|jsx?|py|go|rs)$/i,
     /(^|\/)(src|app|lib)\/[^/]+\.(tsx?|jsx?|py|go|rs|java|kt)$/i,
   ], selected, preferredExtensions, preferredPathToken), {
+    kind: "core",
     title: "Trace the main route",
     explanation: "This module appears to carry a central runtime responsibility. Follow its imports and exported types to understand how work moves through the project.",
     lookFor: "Identify the main input, the transformation it receives, and the value returned or emitted.",
@@ -180,6 +185,7 @@ function buildCandidates(map: RepoMap): TourCandidate[] {
     /(^|\/)[^/]+_test\.go$/i,
     /(^|\/)(run-)?tests?\.(tsx?|jsx?|py|go|rs)$/i,
   ], selected), {
+    kind: "test",
     title: "Read the proof",
     explanation: "Tests often explain intended behavior more directly than implementation code. They show the supported path, important edge cases, and the names maintainers use for each behavior.",
     lookFor: "Find the smallest test that demonstrates the project's central promise.",
@@ -194,6 +200,7 @@ function buildCandidates(map: RepoMap): TourCandidate[] {
     /(^|\/)tsconfig\.json$/i,
     /(^|\/)dockerfile$/i,
   ], selected), {
+    kind: "configuration",
     title: "Inspect the boundary markers",
     explanation: "Configuration shows which assumptions live outside the application code. It also reveals deployment targets, build constraints, and conventions shared across the repository.",
     lookFor: "Separate local developer settings from settings that affect production behavior.",
@@ -211,6 +218,7 @@ function buildCandidates(map: RepoMap): TourCandidate[] {
   for (const entry of fallbackSources) {
     if (candidates.length >= 6) break;
     add(entry.path, {
+      kind: "source",
       title: "Follow a major landmark",
       explanation: "This is a prominent source file near the top of the repository. Use it to connect the entry point to a concrete implementation area.",
       lookFor: "Notice which local modules this file depends on and which parts of its surface are exported.",
@@ -229,19 +237,25 @@ export function generateTour(map: RepoMap): RepoTour {
     "A repository whose purpose is best understood by following its documentation, manifest, entry point, and tests in sequence.";
 
   const stops: TourStop[] = candidates.map(({ why: _why, ...candidate }, index) => ({
-    ...candidate,
+    path: candidate.path,
+    title: candidate.title,
+    explanation: candidate.explanation,
+    lookFor: candidate.lookFor,
+    lines: candidate.lines,
     order: index + 1,
   }));
+  const entryPoints = candidates
+    .filter((candidate) => candidate.kind === "runtime" || candidate.kind === "core" || candidate.kind === "source")
+    .slice(0, 3)
+    .map((candidate) => ({ path: candidate.path, why: candidate.why }));
 
   return {
     repo: map.repo,
     sha: map.sha,
     summary,
     stack: detectStack(map, paths),
-    entryPoints: candidates.slice(0, 3).map((candidate) => ({
-      path: candidate.path,
-      why: candidate.why,
-    })),
+    runtimeEntryPoint: entryPoints[0] ?? null,
+    entryPoints,
     stops,
   };
 }

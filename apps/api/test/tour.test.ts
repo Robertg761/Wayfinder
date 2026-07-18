@@ -49,6 +49,14 @@ describe("generateTour", () => {
     expect(generateTour(map).stack).toEqual(["TypeScript", "Node.js"]);
   });
 
+  it("separates the runtime entry point from documentation and manifests", () => {
+    const tour = generateTour(map);
+    expect(tour.runtimeEntryPoint).toEqual(expect.objectContaining({ path: "src/index.ts" }));
+    expect(tour.entryPoints.map((entry) => entry.path)).toEqual(["src/index.ts", "src/client.ts"]);
+    expect(tour.entryPoints.map((entry) => entry.path)).not.toContain("README.md");
+    expect(tour.entryPoints.map((entry) => entry.path)).not.toContain("package.json");
+  });
+
   it("is deterministic for the same repository map", () => {
     expect(generateTour(map)).toEqual(generateTour(map));
   });

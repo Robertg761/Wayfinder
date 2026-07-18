@@ -1,6 +1,6 @@
 # Wayfinder Ship Checklist
 
-Updated July 16, 2026.
+Updated July 18, 2026.
 
 ## Complete
 
@@ -13,8 +13,9 @@ Updated July 16, 2026.
 - [x] Public Worker rejects traversal paths and malformed JSON with HTTP 400
 - [x] README rate limits and upstream failures propagate instead of degrading silently
 - [x] Typed rate-limit, private repository, authentication, offline, and retry states
+- [x] Separate 60-per-minute public API guard and bounded GitHub, OpenAI, and extension requests
 - [x] GPT-5.6 Responses API integration with strict structured output
-- [x] Exact model evidence-path validation
+- [x] Exact model evidence-path, path-like prose, and command validation
 - [x] Automatic deterministic fallback
 - [x] Server-side OpenAI credential boundary and `store: false`
 - [x] Paid synthesis protected by a Cloudflare rate-limit binding with deterministic fallback
@@ -25,11 +26,11 @@ Updated July 16, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 132 unit and integration tests pass
-- [x] All 44 browser workflows pass
+- [x] All 162 unit and integration tests pass
+- [x] All 46 browser workflows pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
-- [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification
+- [x] GitHub Actions CI runs typecheck, unit tests, all browser workflows, builds, packaging, archive integrity, and checksum verification
 - [x] Public `openai/openai-node` orientation, installation, and file-find API dry run
 - [x] Public matrix across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
 - [x] Representative evidence URLs return HTTP 200
@@ -61,7 +62,7 @@ Add the secret with:
 pnpm --filter @wayfinder/api exec wrangler secret put OPENAI_API_KEY
 ```
 
-Luna is fixed in source. The verified production Worker version is `05944911-a15f-472c-9bf2-956b939a9686`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
+Luna is fixed in source. The recorded live Luna verification used Worker version `05944911-a15f-472c-9bf2-956b939a9686`. See `docs/LUNA_EVALUATION.md` for the budget gate and recorded results.
 
 ## Needs manual Chrome verification
 
@@ -103,7 +104,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-5c30148feaf03e811dc2929ecbd0e905a462fed6b9140a3b61284bd43edcbb1b
+3661bd55ae389682a16b42764193d83d0a40ae174e14a49f73014d5ac5f09440
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

@@ -114,6 +114,28 @@ describe("synthesizeAgentAnswer", () => {
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
   });
 
+  it("rejects invented paths even when the model omits them from evidencePaths", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Authentication is also implemented in src/invented.ts.",
+      explanation: "The invented path should invalidate the synthesis.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
+  });
+
+  it("rejects commands that are absent from deterministic repository evidence", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Authentication is handled in src/auth/session.ts.",
+      explanation: "Run rm -rf / before opening the file.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [{ title: "Clean up", action: "Execute rm -rf /.", evidencePath: "src/auth/session.ts" }],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
+  });
+
   it("does not let the model promote a possible deterministic match into evidence", async () => {
     const possibleAnswer: AgentAnswer = {
       ...freeAnswer,

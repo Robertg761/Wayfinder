@@ -12,13 +12,16 @@ import { copyText } from '@/lib/copy-text';
 import { parseGitHubUrl } from '@/lib/github-url';
 import {
   agentStarters,
+  detectArchitectureFamily,
   detectPlatformFamily,
   landmarkDetail,
   measuredBubbleHeight,
   placeBubble,
   preferredReleaseAsset,
+  releaseArchitectureChoices,
   resolveAnswerDepth,
   type AnswerDepth,
+  type ArchitectureFamily,
   type ExperienceMode,
   type PlatformFamily,
 } from '@/lib/helper-ui';
@@ -49,6 +52,7 @@ interface PendingGuide {
   kind: 'file' | 'releases';
   path?: string;
   platform?: PlatformFamily;
+  architecture?: ArchitectureFamily;
   href: string;
   createdAt: string;
 }
@@ -70,6 +74,7 @@ class WayfinderRequestError extends Error {
 function requestErrorLabels(error: WayfinderRequestError): [string, string] {
   const labels: Record<WayfinderErrorResponse['code'], [string, string]> = {
     'github-rate-limited': ['GitHub rate limit reached', error.resetAt ? `Try again after ${new Date(error.resetAt).toLocaleString()}.` : 'Wait a few minutes, then try again.'],
+    'service-rate-limited': ['Wayfinder is busy', 'Wait a minute, then try the request again.'],
     'repository-unavailable': ['Repository unavailable', 'The repository may be private, missing, or inaccessible without authentication.'],
     'github-auth-failed': ['GitHub authentication failed', 'The repository service could not authenticate with GitHub.'],
     'upstream-unavailable': ['Connection interrupted', 'Check your connection. A cached answer will be used automatically when one is available.'],
@@ -558,10 +563,18 @@ type ReleaseAssetLink = {
 };
 
 function releaseAssetLinks(): ReleaseAssetLink[] {
-  return Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/releases/download/"]')).map((anchor) => {
+  const latestReleaseCard = document.querySelector(
+    '[data-testid="release-card"], [data-testid*="release-card"], section[aria-labelledby*="release" i], article[data-test-selector*="release" i]',
+  );
+  const releaseRoot: ParentNode = latestReleaseCard ?? document;
+  const links = Array.from(releaseRoot.querySelectorAll<HTMLAnchorElement>('a[href*="/releases/download/"]')).map((anchor) => {
     let fileName = '';
+    let releaseTag = '';
     try {
-      fileName = decodeURIComponent(new URL(anchor.href, window.location.href).pathname.split('/').at(-1) ?? '');
+      const segments = new URL(anchor.href, window.location.href).pathname.split('/').filter(Boolean);
+      fileName = decodeURIComponent(segments.at(-1) ?? '');
+      const downloadIndex = segments.findIndex((segment, index) => segment === 'download' && segments[index - 1] === 'releases');
+      releaseTag = downloadIndex >= 0 ? decodeURIComponent(segments[downloadIndex + 1] ?? '') : '';
     } catch {
       fileName = '';
     }
@@ -569,8 +582,17 @@ function releaseAssetLinks(): ReleaseAssetLink[] {
       name: fileName || anchor.textContent?.replace(/\s+/g, ' ').trim() || 'download',
       href: anchor.href,
       anchor,
+      releaseTag,
     };
   });
+  // When GitHub has an explicit newest-release card, an empty list means that
+  // card is still rendering or has no assets. Never fall through to an older
+  // card merely because its links appeared first.
+  if (latestReleaseCard) return links.map(({ releaseTag: _releaseTag, ...link }) => link);
+  const latestTag = links.find((link) => link.releaseTag)?.releaseTag;
+  return links
+    .filter((link) => !latestTag || link.releaseTag === latestTag)
+    .map(({ releaseTag: _releaseTag, ...link }) => link);
 }
 
 function platformName(platform: PlatformFamily): string {
@@ -580,8 +602,14 @@ function platformName(platform: PlatformFamily): string {
   return 'your operating system';
 }
 
+function runtimeEntryPointPath(tour: RepoTour): string | null {
+  return tour.runtimeEntryPoint?.path
+    ?? tour.entryPoints.find((entry) => !/(^|\/)(readme[^/]*\.md|package\.json|pyproject\.toml|cargo\.toml|go\.mod)$/i.test(entry.path))?.path
+    ?? null;
+}
+
 function visibleBranchRef(): string | null {
-  const element = firstVisible([
+  const element = firstPresent([
     'button[data-hotkey="w"] span[data-component="text"]',
     'button[data-hotkey="w"]',
     'summary[title*="Switch branches"] span',
@@ -691,6 +719,7 @@ export default defineContentScript({
     let activeAnswer: AgentAnswer | null = null;
     let pendingGuide: PendingGuide | null = null;
     let installPlatform: PlatformFamily = 'unknown';
+    let installArchitecture: ArchitectureFamily = 'unknown';
     let beginReleaseInstallGuide = (): boolean => false;
     type OperationKind = 'agent' | 'guided' | 'restore';
     type Operation = {
@@ -699,6 +728,8 @@ export default defineContentScript({
       location: RepoLocation;
     };
     const activeOperations = new Map<OperationKind, Operation>();
+    const requestSignal = (operation: Operation, timeoutMs = 30_000): AbortSignal =>
+      AbortSignal.any([operation.controller.signal, AbortSignal.timeout(timeoutMs)]);
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const storage = browser.storage.local as unknown as CacheStorage;
 
@@ -778,18 +809,32 @@ export default defineContentScript({
 
     const savePendingGuide = async (guide: PendingGuide) => {
       pendingGuide = guide;
-      await storage.set({ [pendingGuideKey]: guide }).catch(() => undefined);
+      try {
+        window.sessionStorage.setItem(pendingGuideKey, JSON.stringify(guide));
+      } catch {
+        // The in-memory copy still supports same-document GitHub navigation.
+      }
     };
 
     const readPendingGuide = async (): Promise<PendingGuide | null> => {
-      const values: Record<string, unknown> = await storage.get(pendingGuideKey).catch(() => ({}));
-      const stored = values[pendingGuideKey] as PendingGuide | undefined;
-      if (!stored) return null;
+      let stored: PendingGuide | null = null;
+      try {
+        const serialized = window.sessionStorage.getItem(pendingGuideKey);
+        stored = serialized ? JSON.parse(serialized) as PendingGuide : null;
+      } catch {
+        stored = null;
+      }
+      if (!stored?.repo || !stored.href || !stored.createdAt || (stored.kind !== 'file' && stored.kind !== 'releases')) return null;
       if (Date.now() - Date.parse(stored.createdAt) > 5 * 60_000) {
-        await storage.remove(pendingGuideKey).catch(() => undefined);
+        try { window.sessionStorage.removeItem(pendingGuideKey); } catch { /* Session storage may be unavailable. */ }
         return null;
       }
       return stored;
+    };
+
+    const clearPendingGuide = async () => {
+      pendingGuide = null;
+      try { window.sessionStorage.removeItem(pendingGuideKey); } catch { /* Session storage may be unavailable. */ }
     };
 
     const host = document.createElement('div');
@@ -1126,7 +1171,7 @@ export default defineContentScript({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ owner: location.owner, repo: location.repo, ref: location.ref }),
-          signal: operation.controller.signal,
+          signal: requestSignal(operation),
         });
         assertOperationCurrent(operation);
         if (!mapResponse.ok) {
@@ -1144,7 +1189,7 @@ export default defineContentScript({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ map }),
-          signal: operation.controller.signal,
+          signal: requestSignal(operation),
         });
         assertOperationCurrent(operation);
         if (!tourResponse.ok) {
@@ -1213,7 +1258,7 @@ export default defineContentScript({
           return priority(left) - priority(right) || left.localeCompare(right);
         })
         .slice(0, 6);
-      const entryPoint = tour.entryPoints[0]?.path ?? 'Not confidently detected';
+      const entryPoint = runtimeEntryPointPath(tour) ?? 'Not confidently detected';
       const commands = guide ? [...guide.steps]
         .sort((left, right) => {
           const priority = (title: string) => /\binstall\b/i.test(title) ? 0 : /start/i.test(title) ? 1 : /test/i.test(title) ? 2 : /build/i.test(title) ? 3 : 4;
@@ -1247,7 +1292,7 @@ export default defineContentScript({
         && answer.guide.audience === 'use'
         && !answer.guide.steps.some((step) => step.confidence === 'documented');
       const displayedSummary = consumerReleaseFlow
-        ? 'The safest beginner path is the project\'s packaged GitHub release, not a guessed package-manager command.'
+        ? 'No documented consumer install command was found. Check the latest GitHub Release for a packaged download before attempting source setup.'
         : answer.summary;
 
       if (answer.brief?.length) {
@@ -1260,12 +1305,15 @@ export default defineContentScript({
       }
 
       if (answer.intent === 'installation') {
-        if (consumerReleaseFlow) installPlatform = detectPlatformFamily(navigator.userAgent, navigator.platform);
+        if (consumerReleaseFlow) {
+          installPlatform = detectPlatformFamily(navigator.userAgent, navigator.platform);
+          installArchitecture = detectArchitectureFamily(navigator.userAgent, navigator.platform);
+        }
         const platformHint = installPlatform === 'unknown'
           ? 'I cannot reliably tell which operating system this browser is using, so I will ask on the Releases page.'
           : `This looks like ${platformName(installPlatform)}, so I will point to the matching download.`;
         const releaseRoute = consumerReleaseFlow
-          ? `<div class="wf-result"><strong>Recommended for most people</strong><p>Start with GitHub Releases instead of cloning source code or running an inferred npm command. ${escapeHtml(platformHint)}</p><button class="primary" type="button" data-action="open-releases">Open Releases</button></div>`
+          ? `<div class="wf-result"><strong>Check the latest release</strong><p>A packaged download may be available in GitHub Releases. If the latest release has no compatible installer, return to the repository's source setup instructions. ${escapeHtml(platformHint)}</p><button class="primary" type="button" data-action="open-releases">Check Releases</button></div>`
           : '';
         const meta = consumerReleaseFlow ? '' : `<div class="wf-answer-mode"><span>${escapeHtml(answer.guide.packageManager ?? 'Package manager not detected')}</span><span>${escapeHtml(answer.guide.runtimes.join(', ') || 'Runtime not specified')}</span></div>`;
         const prerequisites = answer.guide.prerequisites.length
@@ -1329,7 +1377,7 @@ export default defineContentScript({
         ? `<ul class="wf-warning-list"><li>You opened ${escapeHtml(bundle.map.requestedRef)}, but the repository map resolved ${escapeHtml(bundle.map.resolvedRef)}. Verify the branch before acting on this answer.</li></ul>`
         : '';
       const provenance = answer.mode === 'gpt-5.6'
-        ? ['AI-assisted plan', 'Repository evidence verified']
+        ? ['AI synthesis', 'Evidence links verified']
         : ['Pinned repository evidence', `${bundle.map.resolvedRef} · ${bundle.map.sha.slice(0, 8)}`];
 
       bubble.classList.add('agent');
@@ -1400,7 +1448,7 @@ export default defineContentScript({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ map: bundle.map, query: trimmed, currentPath: operation.location.view === 'blob' ? operation.location.path ?? null : null }),
-          signal: operation.controller.signal,
+          signal: requestSignal(operation),
         });
         assertOperationCurrent(operation);
         if (!response.ok) {
@@ -1503,7 +1551,7 @@ export default defineContentScript({
       const { map, tour } = repository;
       if (stop.label === 'Repository name') return map.description || tour.summary;
       if (stop.label === 'Current branch') return `${map.resolvedRef} is the version Wayfinder mapped at commit ${map.sha.slice(0, 12)}. The default branch is ${map.defaultBranch}.`;
-      if (stop.label === 'File tree') return `Detected stack: ${tour.stack.join(', ') || map.language || 'not confidently detected'}. Likely entry point: ${tour.entryPoints[0]?.path ?? 'not confidently detected'}.`;
+      if (stop.label === 'File tree') return `Detected stack: ${tour.stack.join(', ') || map.language || 'not confidently detected'}. Likely entry point: ${runtimeEntryPointPath(tour) ?? 'not confidently detected'}.`;
       if (stop.label === 'README') return tour.summary;
       if (currentLocation?.view === 'blob' && currentLocation.path) return `Current file: ${currentLocation.path}. Wayfinder will use it as the starting context for questions.`;
       return null;
@@ -1625,20 +1673,49 @@ export default defineContentScript({
       `, { focus: '[data-platform="macos"]', announce: 'Choose macOS, Windows, or Linux.' });
     };
 
+    const renderArchitectureChoice = (platform: Exclude<PlatformFamily, 'unknown'>) => {
+      installPlatform = platform;
+      surface = 'context';
+      activeStep = -1;
+      cancelTourMotion(false);
+      helper.classList.add('stationed');
+      bubble.classList.add('agent');
+      const armLabel = platform === 'macos' ? 'Apple silicon — M1, M2, M3, M4, or newer' : 'ARM64 — ARM-based computer';
+      const x64Label = platform === 'macos' ? 'Intel — Intel-based Mac' : 'x64 — Intel or AMD computer';
+      commitBubbleView(`
+        <div class="wf-agent-home">
+          <div class="wf-agent-head">
+            <div class="wf-kicker"><span>Installation</span><span class="wf-step-count">Step 2 of 2</span></div>
+            <h2>Which processor does this computer use?</h2>
+            <p>The latest release has separate ${escapeHtml(platformName(platform))} installers, and the browser does not expose a trustworthy architecture signal.</p>
+          </div>
+          <div class="wf-question-grid" role="group" aria-label="Choose your processor architecture">
+            <button type="button" data-architecture="arm64">${escapeHtml(armLabel)}</button>
+            <button type="button" data-architecture="x64">${escapeHtml(x64Label)}</button>
+          </div>
+          <p class="wf-tip">Wayfinder will only highlight an installer from the latest release and the architecture you choose.</p>
+        </div>
+      `, { focus: '[data-architecture="arm64"]', announce: 'Choose ARM64 or x64 architecture.' });
+    };
+
     const guideToReleaseAsset = (
       platform: Exclude<PlatformFamily, 'unknown'>,
       showFallback = true,
+      architecture?: ArchitectureFamily,
     ): boolean => {
       installPlatform = platform;
+      installArchitecture = architecture ?? detectArchitectureFamily(navigator.userAgent, navigator.platform);
       const assets = releaseAssetLinks();
-      const recommendation = preferredReleaseAsset(assets, platform, navigator.userAgent);
+      const recommendation = preferredReleaseAsset(assets, platform, navigator.userAgent, installArchitecture);
       const target = recommendation
         ? assets.find((asset) => asset.href === recommendation.href)?.anchor ?? null
         : null;
       if (!recommendation || !target) {
         if (showFallback) {
           bubbleOpen = true;
-          renderPlatformChoice(`I could not find a clear ${platformName(platform)} installer in the visible release assets. Choose another operating system, or check whether the project publishes ${platformName(platform)} builds.`);
+          const architectureChoices = releaseArchitectureChoices(assets, platform);
+          if (installArchitecture === 'unknown' && architectureChoices.length > 0) renderArchitectureChoice(platform);
+          else renderPlatformChoice(`I could not find a compatible ${platformName(platform)} installer in the latest visible release. Choose another operating system, or return to the repository's source setup instructions.`);
         }
         return false;
       }
@@ -1665,6 +1742,7 @@ export default defineContentScript({
       const releasePath = new URL(href).pathname.replace(/\/$/, '');
       const currentPath = window.location.pathname.replace(/\/$/, '');
       installPlatform = detectPlatformFamily(navigator.userAgent, navigator.platform);
+      installArchitecture = detectArchitectureFamily(navigator.userAgent, navigator.platform);
 
       if (currentPath === releasePath) {
         if (installPlatform === 'unknown') renderPlatformChoice();
@@ -1678,6 +1756,7 @@ export default defineContentScript({
         repo,
         kind: 'releases',
         platform: installPlatform,
+        architecture: installArchitecture,
         href,
         createdAt: new Date().toISOString(),
       };
@@ -1712,10 +1791,6 @@ export default defineContentScript({
         ? Boolean(guide.path && currentLocation.path === guide.path)
         : currentPath === expectedPath;
       if (!locationMatches) return false;
-      const clearPendingGuide = async () => {
-        pendingGuide = null;
-        await storage.remove(pendingGuideKey).catch(() => undefined);
-      };
       const guideAge = Date.now() - Date.parse(guide.createdAt);
       const retryWhenPageSettles = () => {
         pendingGuide = guide;
@@ -1733,13 +1808,21 @@ export default defineContentScript({
         };
       } else {
         installPlatform = guide.platform ?? detectPlatformFamily(navigator.userAgent, navigator.platform);
+        installArchitecture = guide.architecture ?? detectArchitectureFamily(navigator.userAgent, navigator.platform);
         if (installPlatform === 'unknown') {
           await clearPendingGuide();
           bubbleOpen = true;
           renderPlatformChoice();
           return true;
         }
-        if (guideToReleaseAsset(installPlatform, false)) {
+        const visibleAssets = releaseAssetLinks();
+        if (installArchitecture === 'unknown' && releaseArchitectureChoices(visibleAssets, installPlatform).length > 0) {
+          await clearPendingGuide();
+          bubbleOpen = true;
+          renderArchitectureChoice(installPlatform);
+          return true;
+        }
+        if (guideToReleaseAsset(installPlatform, false, installArchitecture)) {
           await clearPendingGuide();
           return true;
         }
@@ -1748,7 +1831,7 @@ export default defineContentScript({
           return true;
         }
         await clearPendingGuide();
-        guideToReleaseAsset(installPlatform);
+        guideToReleaseAsset(installPlatform, true, installArchitecture);
         return true;
       }
 
@@ -1875,8 +1958,14 @@ export default defineContentScript({
       }
       const button = (event.target as Element).closest<HTMLButtonElement>('button');
       if (!button) return;
+      const selectedArchitecture = button.dataset.architecture as ArchitectureFamily | undefined;
+      if ((selectedArchitecture === 'arm64' || selectedArchitecture === 'x64') && installPlatform !== 'unknown') {
+        guideToReleaseAsset(installPlatform, true, selectedArchitecture);
+        return;
+      }
       const selectedPlatform = button.dataset.platform as PlatformFamily | undefined;
       if (selectedPlatform === 'macos' || selectedPlatform === 'windows' || selectedPlatform === 'linux') {
+        installArchitecture = 'unknown';
         guideToReleaseAsset(selectedPlatform);
         return;
       }
@@ -1939,8 +2028,7 @@ export default defineContentScript({
       }
       const action = button.dataset.action;
       if (action === 'agent-home') {
-        pendingGuide = null;
-        void storage.remove(pendingGuideKey).catch(() => undefined);
+        void clearPendingGuide();
         renderAgentHome();
         return;
       }
@@ -1978,6 +2066,7 @@ export default defineContentScript({
           repo: `${currentLocation.owner}/${currentLocation.repo}`,
           kind: 'releases',
           platform,
+          architecture: installArchitecture,
           href,
           createdAt: new Date().toISOString(),
         };

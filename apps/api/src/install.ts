@@ -45,6 +45,9 @@ const commandPrefixes = [
   "export ",
   "source ",
   "brew ",
+  "winget ",
+  "choco ",
+  "scoop ",
   "apt ",
   "apt-get ",
   "curl ",
@@ -75,12 +78,29 @@ function isLikelyCommand(line: string): boolean {
   return commandPrefixes.some((prefix) => lower === prefix.trim() || lower.startsWith(prefix));
 }
 
+function pythonPackageInstall(command: string): boolean {
+  const lower = command.toLowerCase().trim();
+  if (!/^(?:(?:python|python3)\s+-m\s+)?pip(?:3)?\s+install\b/.test(lower) && !/^uv\s+pip\s+install\b/.test(lower)) return false;
+  return !/(?:^|\s)(?:-e|--editable|-r|--requirement|\.\.?\/|\.|requirements[^\s]*\.txt)(?:\s|$)/.test(lower);
+}
+
+export function isConsumerInstallCommand(command: string): boolean {
+  const lower = command.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!lower || /<[^>]+>/.test(lower)) return false;
+  if (/^(?:npm|pnpm|yarn|bun) (?:install|add) (?:-g |--global )?[^-\s][^\s]*/.test(lower)) return true;
+  if (/^(?:npx|deno) .*\badd\b/.test(lower)) return true;
+  if (pythonPackageInstall(lower) || /^(?:pipx install|uv tool install) [^-\s][^\s]*/.test(lower)) return true;
+  if (/^cargo install (?!.*(?:--path|\s\.\.?\/))[^-\s][^\s]*/.test(lower)) return true;
+  if (/^go install [^\s]+@[^\s]+/.test(lower)) return true;
+  if (/^(?:brew|winget|choco|scoop) install [^-\s][^\s]*/.test(lower)) return true;
+  if (/^(?:apt|apt-get) install (?:-y )?[^-\s][^\s]*/.test(lower)) return true;
+  return false;
+}
+
 function titleForCommand(command: string): string {
   const lower = command.toLowerCase();
   if (lower.includes("git clone")) return "Clone the repository";
-  if (/^(npm|pnpm|yarn|bun)\s+(install|add)\s+[^-\s]/.test(lower) || /^(deno|npx)\s+.*\badd\b/.test(lower)) {
-    return "Install the published package";
-  }
+  if (isConsumerInstallCommand(command)) return "Install the published package";
   if (/\b(install|sync)\b/.test(lower)) return "Install dependencies";
   if (/\b(test|check)\b/.test(lower)) return "Run the tests";
   if (/\b(build|compile)\b/.test(lower)) return "Build the project";
@@ -170,6 +190,16 @@ function addUniqueStep(
   steps.push({ order: steps.length + 1, title, command, evidence: source, confidence });
 }
 
+function orderDevelopmentSteps(steps: InstallStep[]): InstallStep[] {
+  const prerequisite = (step: InstallStep): boolean =>
+    /^(Clone the repository|Enter the project directory|Prepare environment settings|Install dependencies|Install the project for development)$/.test(step.title);
+  const ordered = [
+    ...steps.filter(prerequisite),
+    ...steps.filter((step) => !prerequisite(step)),
+  ];
+  return ordered.map((step, index) => ({ ...step, order: index + 1 }));
+}
+
 function shallowestPath(paths: string[], fileName: string): string | null {
   return paths
     .filter((path) => path.toLowerCase().split("/").at(-1) === fileName)
@@ -198,11 +228,11 @@ export function generateInstallGuide(
     .flatMap((path) => extractMarkdownCommands(files[path] ?? (path === readmePath ? readme ?? "" : ""), path))
     .filter((step, index, all) => all.findIndex((candidate) => candidate.command === step.command) === index)
     .map((step, index) => ({ ...step, order: index + 1 }));
-  const consumerSteps = documentedSteps.filter((step) =>
-    step.title === "Install the published package" || /<[^>]+>/.test(step.command));
+  const consumerSteps = documentedSteps.filter((step) => isConsumerInstallCommand(step.command));
+  const placeholderSteps = documentedSteps.filter((step) => /<[^>]+>/.test(step.command));
   const steps = audience === "use"
-    ? consumerSteps.filter((step) => !/<[^>]+>/.test(step.command))
-    : documentedSteps.filter((step) => !consumerSteps.includes(step));
+    ? [...consumerSteps]
+    : documentedSteps.filter((step) => !consumerSteps.includes(step) && !placeholderSteps.includes(step));
   const seenCommands = new Set(steps.map((step) => step.command.toLowerCase().replace(/\s+/g, " ").trim()));
   const prerequisites: InstallPrerequisite[] = [];
   const runtimes = new Set<string>();
@@ -234,7 +264,7 @@ export function generateInstallGuide(
 
   if (audience === "use") {
     if (packageJson?.private) warnings.push("The root package is marked private and may not be available as a published package.");
-    if (steps.length === 0) warnings.push("No documented consumer package command was found. Check GitHub Releases for a packaged application before trying to run the source repository.");
+    if (steps.length === 0) warnings.push("No documented consumer install command was found. Check GitHub Releases for a packaged download; if none exists, use the repository's source setup instructions.");
     steps.forEach((step, index) => { step.order = index + 1; });
     return {
       repo: map.repo,
@@ -358,10 +388,10 @@ export function generateInstallGuide(
     }
   }
 
-  steps.forEach((step, index) => { step.order = index + 1; });
+  const orderedSteps = orderDevelopmentSteps(steps);
 
-  if (steps.length === 0) warnings.push("No trustworthy installation or development commands were found.");
-  if (steps.length > 0 && steps.every((step) => step.confidence !== "documented")) {
+  if (orderedSteps.length === 0) warnings.push("No trustworthy installation or development commands were found.");
+  if (orderedSteps.length > 0 && orderedSteps.every((step) => step.confidence !== "documented")) {
     warnings.push("The repository does not provide explicit setup commands in the inspected documentation. The steps below are structural inferences.");
   }
 
@@ -372,7 +402,7 @@ export function generateInstallGuide(
     packageManager,
     runtimes: [...runtimes],
     prerequisites,
-    steps: steps.slice(0, 12),
+    steps: orderedSteps.slice(0, 12),
     warnings,
     generatedAt: new Date().toISOString(),
   };

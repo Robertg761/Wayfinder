@@ -51,6 +51,7 @@ export interface RepoTour {
   sha: string;
   summary: string;
   stack: string[];
+  runtimeEntryPoint: TourEntryPoint | null;
   entryPoints: TourEntryPoint[];
   stops: TourStop[];
 }
@@ -195,6 +196,7 @@ export type AgentAnswer =
 
 export type WayfinderErrorCode =
   | "github-rate-limited"
+  | "service-rate-limited"
   | "repository-unavailable"
   | "github-auth-failed"
   | "upstream-unavailable"

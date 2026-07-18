@@ -40,7 +40,7 @@ It can:
 - keep recent evidence available through temporary network or GitHub failures
 - use GPT-5.6 to synthesize an ordered field brief from several typed tool results
 
-The free deterministic route remains fully functional. If the OpenAI key is missing, the model API is unavailable, structured output is invalid, or GPT-5.6 names a path outside the evidence set, Wayfinder returns the deterministic answer automatically.
+The free deterministic route remains fully functional. If the OpenAI key is missing, the model API is unavailable, structured output is invalid, or GPT-5.6 introduces a path or command outside the evidence set, Wayfinder returns the deterministic answer automatically.
 
 Paid synthesis is protected by a Cloudflare rate-limit binding and a persistent global budget matching the `$100` event credit balance. A SQLite-backed Durable Object serializes spend reservations across all users, reconciles successful calls to actual Luna token usage, and fails closed to the deterministic answer. Cost protection therefore does not turn into a user-facing outage.
 
@@ -78,7 +78,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The automated suite covers 132 unit and integration cases plus 44 complete browser workflows across URL context, late-rendered and off-screen landmarks, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, beginner-first Releases and OS selection, delayed release assets, setup intent, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, and model fallback.
+- The automated suite covers 162 unit and integration cases plus 46 complete browser workflows across URL context, late-rendered and off-screen landmarks, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -124,9 +124,9 @@ Verified screenshot candidates:
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `60bc20e8-71a3-41b3-a870-71ae8a63ad04`
+- Current Worker version: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `5c30148feaf03e811dc2929ecbd0e905a462fed6b9140a3b61284bd43edcbb1b`
-- Automated checks: 132 unit and integration tests, 44 browser workflows, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `3661bd55ae389682a16b42764193d83d0a40ae174e14a49f73014d5ac5f09440`
+- Automated checks: 162 unit and integration tests, 46 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning
