@@ -12,12 +12,15 @@ import { copyText } from '@/lib/copy-text';
 import { parseGitHubUrl } from '@/lib/github-url';
 import {
   agentStarters,
+  detectPlatformFamily,
   landmarkDetail,
   measuredBubbleHeight,
   placeBubble,
+  preferredReleaseAsset,
   resolveAnswerDepth,
   type AnswerDepth,
   type ExperienceMode,
+  type PlatformFamily,
 } from '@/lib/helper-ui';
 
 interface RepositoryBundle {
@@ -39,6 +42,16 @@ interface SavedTrail {
 
 const preferencesKey = 'wayfinder:preferences:v1';
 const answerDepthKey = 'wayfinder:answer-depth:v1';
+const pendingGuideKey = 'wayfinder:pending-guide:v1';
+
+interface PendingGuide {
+  repo: string;
+  kind: 'file' | 'releases';
+  path?: string;
+  platform?: PlatformFamily;
+  href: string;
+  createdAt: string;
+}
 
 function trailKey(repo: string): string {
   return `wayfinder:trail:${repo.toLowerCase()}`;
@@ -80,11 +93,18 @@ function fileUrl(map: RepoMap, path: string, lines?: [number, number]): string {
   return `https://github.com/${map.repo}/blob/${map.sha}/${encodedPath}${fragment}`;
 }
 
+function releasesUrl(repo: string): string {
+  return `https://github.com/${repo}/releases`;
+}
+
 type GuideStop = {
   label: string;
   title: string;
   explanation: string;
   target: Element;
+  progressLabel?: string;
+  primaryAction?: { action: string; label: string };
+  secondaryAction?: { action: string; label: string };
 };
 
 const helperStyles = `
@@ -491,6 +511,75 @@ function firstVisible(selectors: string[]): Element | null {
   return null;
 }
 
+function firstPresent(selectors: string[]): Element | null {
+  for (const selector of selectors) {
+    const match = Array.from(document.querySelectorAll(selector)).find((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return rect.width > 8 && rect.height > 8
+        && style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number.parseFloat(style.opacity) > 0;
+    });
+    if (match) return match;
+  }
+  return null;
+}
+
+function findReleasesLink(repo: string): HTMLAnchorElement | null {
+  const expectedPath = `/${repo}/releases`.toLowerCase();
+  const candidates = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).filter((anchor) => {
+    try {
+      const path = new URL(anchor.href, window.location.href).pathname.replace(/\/$/, '').toLowerCase();
+      if (path !== expectedPath) return false;
+      const rect = anchor.getBoundingClientRect();
+      const style = window.getComputedStyle(anchor);
+      return rect.width > 8 && rect.height > 8 && style.display !== 'none' && style.visibility !== 'hidden';
+    } catch {
+      return false;
+    }
+  });
+
+  const score = (anchor: HTMLAnchorElement): number => {
+    const text = (anchor.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    let value = text === 'releases' ? 50 : text.includes('release') ? 25 : 0;
+    if (anchor.closest('aside, .Layout-sidebar, [data-testid*="sidebar"]')) value += 20;
+    if (anchor.closest('#readme, .markdown-body')) value -= 30;
+    return value;
+  };
+
+  return candidates.sort((left, right) => score(right) - score(left))[0] ?? null;
+}
+
+type ReleaseAssetLink = {
+  name: string;
+  href: string;
+  anchor: HTMLAnchorElement;
+};
+
+function releaseAssetLinks(): ReleaseAssetLink[] {
+  return Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/releases/download/"]')).map((anchor) => {
+    let fileName = '';
+    try {
+      fileName = decodeURIComponent(new URL(anchor.href, window.location.href).pathname.split('/').at(-1) ?? '');
+    } catch {
+      fileName = '';
+    }
+    return {
+      name: fileName || anchor.textContent?.replace(/\s+/g, ' ').trim() || 'download',
+      href: anchor.href,
+      anchor,
+    };
+  });
+}
+
+function platformName(platform: PlatformFamily): string {
+  if (platform === 'macos') return 'macOS';
+  if (platform === 'windows') return 'Windows';
+  if (platform === 'linux') return 'Linux';
+  return 'your operating system';
+}
+
 function visibleBranchRef(): string | null {
   const element = firstVisible([
     'button[data-hotkey="w"] span[data-component="text"]',
@@ -557,7 +646,10 @@ function guideStops(): GuideStop[] {
     : candidates;
 
   return scopedCandidates.flatMap(({ selectors, ...stop }) => {
-    const target = firstVisible(selectors);
+    // A tour target does not need to start inside the viewport. The guide moves
+    // to each target with scrollIntoView, so excluding off-screen landmarks can
+    // incorrectly make a fully rendered repository look empty.
+    const target = firstPresent(selectors);
     return target ? [{ ...stop, target }] : [];
   });
 }
@@ -577,6 +669,8 @@ export default defineContentScript({
     let movementTimer = 0;
     let arrivalTimer = 0;
     let dockSettleTimer = 0;
+    let landmarkRefreshTimer = 0;
+    let landmarkRefreshAttempts = 0;
     let viewportFrame = 0;
     let renderGeneration = 0;
     let announcementGeneration = 0;
@@ -595,6 +689,9 @@ export default defineContentScript({
     let preferenceWrite = Promise.resolve();
     let seenRepos: string[] = [];
     let activeAnswer: AgentAnswer | null = null;
+    let pendingGuide: PendingGuide | null = null;
+    let installPlatform: PlatformFamily = 'unknown';
+    let beginReleaseInstallGuide = (): boolean => false;
     type OperationKind = 'agent' | 'guided' | 'restore';
     type Operation = {
       kind: OperationKind;
@@ -676,6 +773,22 @@ export default defineContentScript({
       const values: Record<string, unknown> = await storage.get(key).catch(() => ({}));
       const stored = values[key] as SavedTrail | undefined;
       if (!stored?.answer || stored.answer.repo.toLowerCase() !== repo.toLowerCase()) return null;
+      return stored;
+    };
+
+    const savePendingGuide = async (guide: PendingGuide) => {
+      pendingGuide = guide;
+      await storage.set({ [pendingGuideKey]: guide }).catch(() => undefined);
+    };
+
+    const readPendingGuide = async (): Promise<PendingGuide | null> => {
+      const values: Record<string, unknown> = await storage.get(pendingGuideKey).catch(() => ({}));
+      const stored = values[pendingGuideKey] as PendingGuide | undefined;
+      if (!stored) return null;
+      if (Date.now() - Date.parse(stored.createdAt) > 5 * 60_000) {
+        await storage.remove(pendingGuideKey).catch(() => undefined);
+        return null;
+      }
       return stored;
     };
 
@@ -808,6 +921,13 @@ export default defineContentScript({
           : shadow.querySelector<HTMLElement>(options.focus);
         const focusAndReveal = () => {
           if (!focusTarget?.isConnected || generation !== renderGeneration || host.hidden || !bubbleOpen) return;
+          const active = shadow.activeElement;
+          if (active && active !== focusTarget && active !== bubble && bubble.contains(active)) {
+            // The user reached another control before this deferred focus ran.
+            // Respect that newer intent instead of stealing focus back to the
+            // control selected by an older render.
+            return;
+          }
           focusTarget.focus({ preventScroll: true });
           if (focusTarget === bubble) return;
           const targetRect = focusTarget.getBoundingClientRect();
@@ -881,42 +1001,42 @@ export default defineContentScript({
       </div>
     `;
 
-    const contextActions = (currentPath: string | null) => {
+    const contextActions = (currentPath: string | null): Array<[string, string | null]> => {
       if (currentPath) {
         return [
-          ['Summarize this file', `Summarize the role of ${currentPath} and its important public surface`],
-          ['Find likely callers', `Which files likely import or call ${currentPath}?`],
-          ['Find its tests', `Find the tests paired with ${currentPath}`],
-          ['Trace dependencies', `What does ${currentPath} depend on and where should I read next?`],
-          ['Map change impact', `If I change ${currentPath}, what implementation and verification files should I inspect?`],
+          ['What does this file do?', `Summarize the role of ${currentPath} and its important public surface`],
+          ['What uses this file?', `Which files likely import or call ${currentPath}?`],
+          ["Where are this file's tests?", `Find the tests paired with ${currentPath}`],
+          ['What does this file use?', `What does ${currentPath} depend on and where should I read next?`],
+          ['What could this change affect?', `If I change ${currentPath}, what implementation and verification files should I inspect?`],
         ];
       }
       return experienceMode === 'quick'
         ? [
-            ['Repository snapshot', 'Give me a 60-second overview of this repository'],
-            ['Understand architecture', 'Give me an architecture tour of this repository'],
-            ['Find implementation', 'Find the primary implementation for [feature]'],
-            ['Find tests', 'Where are the tests for [feature]?'],
-            ['Set up locally', 'Help me develop this repository locally'],
-            ['Map a change', 'I want to change [feature]. Plan my contribution.'],
+            ['What does this project do?', 'Give me a 60-second overview of this repository'],
+            ['How is this project organized?', 'Give me an architecture tour of this repository'],
+            ['Where is a feature built?', 'Find the primary implementation for [feature]'],
+            ['Where are the tests?', 'Where are the tests for [feature]?'],
+            ['How do I install or run it?', null],
+            ['What will my change affect?', 'I want to change [feature]. Plan my contribution.'],
           ]
         : agentStarters.map((starter) => [starter.label, starter.question] as [string, string]);
     };
 
     const renderAgentHome = (prefill = '', focus: string | null = '#wf-question') => {
+      const currentPath = currentLocation?.view === 'blob' ? currentLocation.path : null;
       surface = 'agent';
       activeStep = -1;
       activeOperations.get('guided')?.controller.abort();
       cancelTourMotion();
       helper.classList.add('stationed');
       bubble.classList.add('agent');
-      const currentPath = currentLocation?.view === 'blob' ? currentLocation.path : null;
       const actions = contextActions(currentPath ?? null);
       const boundary = currentLocation?.view === 'other'
         ? '<div class="wf-boundary">This GitHub page is not a source path. I will use repository-level evidence and will not treat the issue or pull request number as a folder.</div>'
         : '';
       const trailAction = activeAnswer
-        ? '<button type="button" data-action="back-to-trail">Back to saved trail</button>'
+        ? '<div class="wf-actions"><button type="button" data-action="back-to-trail">Continue my last task</button></div>'
         : '';
       commitBubbleView(`
         <div class="wf-agent-home">
@@ -927,10 +1047,11 @@ export default defineContentScript({
           </div>
           ${boundary}
           <div class="wf-question-grid">
-            ${actions.map(([label, question]) => `<button type="button" ${question.includes('[feature]') ? 'data-prefill' : 'data-question'}="${escapeHtml(question)}">${escapeHtml(label)}</button>`).join('')}
-            ${trailAction}
+            ${actions.map(([label, question]) => question === null
+              ? `<button type="button" data-action="setup-choice">${escapeHtml(label)}</button>`
+              : `<button type="button" ${question.includes('[feature]') ? 'data-prefill' : 'data-question'}="${escapeHtml(question)}">${escapeHtml(label)}</button>`).join('')}
           </div>
-          ${!currentPath ? '<div class="wf-actions"><button type="button" data-action="setup-choice">Use or develop this project</button></div>' : ''}
+          ${trailAction}
           <form class="wf-composer">
             <label class="wf-sr-only" for="wf-question">Question for Wayfinder</label>
             <textarea id="wf-question" name="question" minlength="2" required placeholder="${currentPath ? `Ask about ${escapeHtml(currentPath)}` : 'Ask about this repository'}">${escapeHtml(prefill)}</textarea>
@@ -963,16 +1084,16 @@ export default defineContentScript({
         <div class="wf-agent-home">
           <div class="wf-agent-head">
             <div class="wf-kicker"><span>Setup intent</span>${modeSwitch()}</div>
-            <h2>What are you setting up?</h2>
-            <p>These are different paths, so I will not mix published-package commands with contributor setup.</p>
+            <h2>How do you want to get started?</h2>
+            <p>Using or installing the project needs different steps from working on its code.</p>
           </div>
           <div class="wf-question-grid">
-            <button type="button" data-question="Help me use this project as a consumer or published package">Use this project</button>
-            <button type="button" data-question="Help me develop this repository locally">Develop this repository</button>
+            <button type="button" data-question="Help me install or use this project as a consumer or published application">I want to use or install it</button>
+            <button type="button" data-question="Help me develop this repository locally">I want to work on the code</button>
           </div>
           <div class="wf-actions"><button type="button" data-action="agent-home">Back</button></div>
         </div>
-      `, { focus: '[data-question="Help me use this project as a consumer or published package"]' });
+      `, { focus: '[data-question="Help me install or use this project as a consumer or published application"]' });
     };
 
     const ensureRepository = async (operation: Operation, forceRefresh = false): Promise<RepositoryBundle> => {
@@ -1071,7 +1192,7 @@ export default defineContentScript({
       if (!repository) return '';
       const range = lines ? `, lines ${lines[0]} through ${lines[1]}` : '';
       const accessibleName = `Open ${path}${range}`;
-      return `<a class="wf-open" href="${escapeHtml(fileUrl(repository.map, path, lines))}" aria-label="${escapeHtml(accessibleName)}">${escapeHtml(label)} ↗</a>`;
+      return `<a class="wf-open" data-guide-kind="file" data-guide-path="${escapeHtml(path)}" href="${escapeHtml(fileUrl(repository.map, path, lines))}" aria-label="${escapeHtml(accessibleName)}">${escapeHtml(label)} ↗</a>`;
     };
 
     const repositorySnapshot = (bundle: RepositoryBundle, guide?: Extract<AgentAnswer, { intent: 'orientation' }>['guide']) => {
@@ -1122,6 +1243,12 @@ export default defineContentScript({
       activeQuestion = answer.query;
       if (shouldSaveTrail) void saveTrail();
       const sections: string[] = [];
+      const consumerReleaseFlow = answer.intent === 'installation'
+        && answer.guide.audience === 'use'
+        && !answer.guide.steps.some((step) => step.confidence === 'documented');
+      const displayedSummary = consumerReleaseFlow
+        ? 'The safest beginner path is the project\'s packaged GitHub release, not a guessed package-manager command.'
+        : answer.summary;
 
       if (answer.brief?.length) {
         sections.push(`<ol class="wf-brief">${answer.brief.map((step, index) => `<li><strong>${String(index + 1).padStart(2, '0')} ${escapeHtml(step.title)}</strong><p>${escapeHtml(step.action)}</p>${step.evidencePath ? pathLink(step.evidencePath) : ''}</li>`).join('')}</ol>`);
@@ -1133,13 +1260,21 @@ export default defineContentScript({
       }
 
       if (answer.intent === 'installation') {
-        const meta = `<div class="wf-answer-mode"><span>${escapeHtml(answer.guide.packageManager ?? 'Package manager not detected')}</span><span>${escapeHtml(answer.guide.runtimes.join(', ') || 'Runtime not specified')}</span></div>`;
+        if (consumerReleaseFlow) installPlatform = detectPlatformFamily(navigator.userAgent, navigator.platform);
+        const platformHint = installPlatform === 'unknown'
+          ? 'I cannot reliably tell which operating system this browser is using, so I will ask on the Releases page.'
+          : `This looks like ${platformName(installPlatform)}, so I will point to the matching download.`;
+        const releaseRoute = consumerReleaseFlow
+          ? `<div class="wf-result"><strong>Recommended for most people</strong><p>Start with GitHub Releases instead of cloning source code or running an inferred npm command. ${escapeHtml(platformHint)}</p><button class="primary" type="button" data-action="open-releases">Open Releases</button></div>`
+          : '';
+        const meta = consumerReleaseFlow ? '' : `<div class="wf-answer-mode"><span>${escapeHtml(answer.guide.packageManager ?? 'Package manager not detected')}</span><span>${escapeHtml(answer.guide.runtimes.join(', ') || 'Runtime not specified')}</span></div>`;
         const prerequisites = answer.guide.prerequisites.length
           ? `<ol class="wf-route-list">${answer.guide.prerequisites.map((item) => `<li><strong>Prerequisite</strong><p>${escapeHtml(item.text)}</p><span class="wf-confidence">${escapeHtml(item.confidence)}</span>${pathLink(item.evidence.path, item.evidence.path, item.evidence.lines)}</li>`).join('')}</ol>`
           : '';
-        const steps = answer.guide.steps.map((step) => `<li><strong>${String(step.order).padStart(2, '0')} ${escapeHtml(step.title)}</strong><span class="wf-confidence">${escapeHtml(step.confidence)}</span><button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}" aria-label="Copy command: ${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>${pathLink(step.evidence.path, step.evidence.path, step.evidence.lines)}</li>`).join('');
-        const warnings = answer.guide.warnings.length ? `<ul class="wf-warning-list">${answer.guide.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : '';
-        sections.push(`${meta}${warnings}${prerequisites}<ol class="wf-route-list">${steps || '<li><p>No trustworthy contributor setup command was found.</p></li>'}</ol>`);
+        const steps = (consumerReleaseFlow ? [] : answer.guide.steps).map((step) => `<li><strong>${String(step.order).padStart(2, '0')} ${escapeHtml(step.title)}</strong><span class="wf-confidence">${escapeHtml(step.confidence)}</span><button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}" aria-label="Copy command: ${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>${pathLink(step.evidence.path, step.evidence.path, step.evidence.lines)}</li>`).join('');
+        const warnings = !consumerReleaseFlow && answer.guide.warnings.length ? `<ul class="wf-warning-list">${answer.guide.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : '';
+        const commandRoute = consumerReleaseFlow ? '' : `<ol class="wf-route-list">${steps || '<li><p>No trustworthy package command was found.</p></li>'}</ol>`;
+        sections.push(`${releaseRoute}${meta}${warnings}${consumerReleaseFlow ? '' : prerequisites}${commandRoute}`);
       }
 
       if (answer.intent === 'file-find') {
@@ -1147,15 +1282,34 @@ export default defineContentScript({
       }
 
       if (answer.intent === 'file-context') {
+        const identity = `<div class="wf-snapshot"><div class="wf-fact wide"><span>Current file</span><strong>${escapeHtml(answer.currentPath)}</strong></div><div class="wf-fact"><span>File type</span><strong>${escapeHtml(answer.fileKind)}</strong></div><div class="wf-fact"><span>Role</span><strong>${escapeHtml(answer.fileRole)}</strong></div></div>`;
+        const highlights = answer.highlights.length
+          ? `<div><div class="wf-kicker"><span>${answer.fileKind === 'documentation' ? 'Visible outline' : answer.fileKind === 'test' ? 'Visible test surface' : 'Visible declarations'}</span></div><ol class="wf-route-list">${answer.highlights.map((highlight) => `<li><strong>${escapeHtml(highlight)}</strong></li>`).join('')}</ol></div>`
+          : '<div class="wf-boundary">No headings or declarations were confidently extracted from the inspected file.</div>';
         const imports = answer.imports.length
           ? `<div class="wf-fact wide"><span>Direct imports</span><strong>${answer.imports.map(escapeHtml).join(' · ')}</strong></div>`
-          : '<div class="wf-fact wide"><span>Direct imports</span><strong>No imports were confidently extracted</strong></div>';
+          : '<div class="wf-fact wide"><span>Direct imports</span><strong>No supported imports were extracted</strong></div>';
         const related = answer.relatedPaths.length
           ? `<ol class="wf-route-list">${answer.relatedPaths.map((path) => `<li><strong>${escapeHtml(path)}</strong>${pathLink(path, 'Open dependency')}</li>`).join('')}</ol>`
-          : '<div class="wf-boundary">No local dependency path could be resolved from this file. Package imports may point outside the repository.</div>';
+          : '<div class="wf-boundary">No exact local dependency path was resolved. External package imports may point outside the repository.</div>';
         const tests = answer.tests.results.slice(0, 4).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><span class="wf-confidence">${escapeHtml(result.confidence)} match</span><p>${escapeHtml(result.reason)}</p>${pathLink(result.path, 'Open test', result.lines)}</article>`).join('');
         const callers = answer.callers.results.slice(0, 4).map((result) => `<article class="wf-result"><strong>${escapeHtml(result.path)}</strong><span class="wf-confidence">${escapeHtml(result.confidence)} match</span><p>${escapeHtml(result.reason)}</p>${pathLink(result.path, 'Open likely caller', result.lines)}</article>`).join('');
-        sections.push(`<div class="wf-snapshot"><div class="wf-fact wide"><span>Current file</span><strong>${escapeHtml(answer.currentPath)}</strong></div>${imports}</div><div class="wf-detail"><div class="wf-kicker"><span>Local dependencies</span></div>${related}</div><div><div class="wf-kicker"><span>Likely callers</span></div><div class="wf-result-list">${callers || '<div class="wf-boundary">No credible caller was found in the bounded evidence search.</div>'}</div></div><div><div class="wf-kicker"><span>Likely paired tests</span></div><div class="wf-result-list">${tests || '<div class="wf-boundary">No credible paired test was found.</div>'}</div></div>`);
+        const dependencySection = `<div class="wf-snapshot">${imports}</div><div><div class="wf-kicker"><span>Resolved local dependencies</span></div>${related}</div>`;
+        const callerSection = `<div><div class="wf-kicker"><span>Evidence-backed caller candidates</span></div><div class="wf-result-list">${callers || '<div class="wf-boundary">No caller had enough target-specific evidence to claim a relationship.</div>'}</div></div>`;
+        const testSection = `<div><div class="wf-kicker"><span>Evidence-backed paired tests</span></div><div class="wf-result-list">${tests || '<div class="wf-boundary">No test had enough target-specific evidence to claim a pairing.</div>'}</div></div>`;
+        const warnings = answer.warnings.length
+          ? `<ul class="wf-warning-list">${answer.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>`
+          : '';
+        const focused = answer.focus === 'summary'
+          ? `${identity}${highlights}`
+          : answer.focus === 'dependencies'
+            ? `${identity}${dependencySection}`
+            : answer.focus === 'callers'
+              ? `${identity}${callerSection}`
+              : answer.focus === 'tests'
+                ? `${identity}${testSection}`
+                : `${identity}${dependencySection}${callerSection}${testSection}`;
+        sections.push(`${warnings}${focused}`);
       }
 
       if (answer.intent === 'contribution' && !answer.brief?.length) {
@@ -1165,7 +1319,7 @@ export default defineContentScript({
         sections.push(`<ol class="wf-route-list"><li><strong>01 Establish a baseline</strong>${setup || '<p>Review the field notes before changing the repository.</p>'}</li><li><strong>02 Open the likely implementation</strong><p>${escapeHtml(implementation?.reason ?? 'No strong implementation coordinate was found.')}</p>${implementation ? pathLink(implementation.path, implementation.path, implementation.lines) : ''}</li><li><strong>03 Follow the verification path</strong><p>${escapeHtml(verification?.reason ?? 'No related verification coordinate was found.')}</p>${verification ? pathLink(verification.path, verification.path, verification.lines) : ''}</li></ol>`);
       }
 
-      const evidence = answer.evidencePaths?.length
+      const evidence = !consumerReleaseFlow && answer.evidencePaths?.length
         ? `<div class="wf-evidence">${answer.evidencePaths.map((path) => pathLink(path)).join('')}</div>`
         : '';
       const followups = answer.suggestions.length
@@ -1176,7 +1330,7 @@ export default defineContentScript({
         : '';
       const provenance = answer.mode === 'gpt-5.6'
         ? ['AI-assisted plan', 'Repository evidence verified']
-        : ['Verified repository map', `${bundle.map.resolvedRef} · ${bundle.map.sha.slice(0, 8)}`];
+        : ['Pinned repository evidence', `${bundle.map.resolvedRef} · ${bundle.map.sha.slice(0, 8)}`];
 
       bubble.classList.add('agent');
       commitBubbleView(`
@@ -1187,7 +1341,7 @@ export default defineContentScript({
           ${refWarning}
           ${cacheNote()}
           <h2 class="wf-sr-only">Wayfinder trail report</h2>
-          <p class="wf-answer-summary">${escapeHtml(answer.summary)}</p>
+          <p class="wf-answer-summary">${escapeHtml(displayedSummary)}</p>
           ${answer.explanation ? `<p class="wf-answer-explanation">${escapeHtml(answer.explanation)}</p>` : ''}
           ${sections.join('')}
           ${evidence}
@@ -1195,6 +1349,11 @@ export default defineContentScript({
           <div class="wf-answer-nav">${depthSwitch()}<button type="button" data-action="refresh-answer">Refresh ↻</button></div>
         </div>
       `, { focus, resetScroll: true, announce: 'Answer ready.', open: bubbleOpen });
+      if (consumerReleaseFlow) {
+        queueMicrotask(() => {
+          if (activeAnswer === answer && currentLocation && bubbleOpen) beginReleaseInstallGuide();
+        });
+      }
     };
 
     const renderAgentError = (error: WayfinderRequestError) => {
@@ -1297,11 +1456,14 @@ export default defineContentScript({
       }
       if (stops.length === 0) {
         commitBubbleView(`
-          <div class="wf-kicker"><span>Wayfinder on the page</span><span class="wf-step-count">Repository context</span></div>
-          <h2>No visible landmarks yet.</h2>
-          <p>This may be an empty, unavailable, or still-loading repository page. I can still try to map its public files.</p>
-          <div class="wf-actions"><button class="primary" type="button" data-action="agent-home">Ask Wayfinder</button></div>
-        `, { focus: focus === undefined ? '[data-action="agent-home"]' : focus });
+          <div class="wf-kicker"><span>Wayfinder on the page</span><span class="wf-step-count">Finding landmarks</span></div>
+          <h2>Getting this page into focus.</h2>
+          <p>GitHub has not exposed a tour stop yet. I will keep watching as the page finishes rendering, and you can still ask about the repository now.</p>
+          <div class="wf-actions">
+            <button class="primary" type="button" data-action="refresh-landmarks">Look again</button>
+            <button type="button" data-action="agent-home">Ask about this repository</button>
+          </div>
+        `, { focus: focus === undefined ? '[data-action="refresh-landmarks"]' : focus });
         return;
       }
       commitBubbleView(`
@@ -1314,6 +1476,26 @@ export default defineContentScript({
         </div>
         <p class="wf-tip">Click me anytime or press Alt + Shift + W.</p>
       `, { focus: focus === undefined ? '[data-action="start"]' : focus });
+    };
+
+    const scheduleLandmarkRefresh = () => {
+      window.clearTimeout(landmarkRefreshTimer);
+      if (!currentLocation || stops.length > 0 || landmarkRefreshAttempts >= 20) return;
+      const expectedGeneration = navigationGeneration;
+      const expectedUrl = window.location.href;
+      landmarkRefreshTimer = window.setTimeout(() => {
+        landmarkRefreshTimer = 0;
+        if (expectedGeneration !== navigationGeneration || expectedUrl !== window.location.href || !currentLocation) return;
+        landmarkRefreshAttempts += 1;
+        const refreshedStops = guideStops();
+        if (refreshedStops.length > 0) {
+          stops = refreshedStops;
+          landmarkRefreshAttempts = 0;
+          if (bubbleOpen && surface === 'welcome') renderWelcome(null);
+          return;
+        }
+        scheduleLandmarkRefresh();
+      }, 400);
     };
 
     const projectFact = (stop: GuideStop): string | null => {
@@ -1333,17 +1515,23 @@ export default defineContentScript({
       surface = 'tour';
       bubble.classList.remove('agent');
       const fact = projectFact(stop);
+      const primaryAction = stop.primaryAction
+        ? `<button class="primary" type="button" data-action="${escapeHtml(stop.primaryAction.action)}">${escapeHtml(stop.primaryAction.label)}</button>`
+        : `<button class="primary" type="button" data-action="next">${activeStep === stops.length - 1 ? 'Finish tour' : 'Next landmark'}</button>`;
+      const secondaryAction = stop.secondaryAction
+        ? `<button type="button" data-action="${escapeHtml(stop.secondaryAction.action)}">${escapeHtml(stop.secondaryAction.label)}</button>`
+        : '<button type="button" data-action="ask-highlight">Explain this</button>';
       commitBubbleView(`
-        <div class="wf-kicker"><span>${stop.label}</span><span class="wf-step-count">${activeStep + 1} / ${stops.length}</span></div>
-        <h2>${stop.title}</h2>
-        <p>${stop.explanation}</p>
+        <div class="wf-kicker"><span>${stop.label}</span><span class="wf-step-count">${escapeHtml(stop.progressLabel ?? `${activeStep + 1} / ${stops.length}`)}</span></div>
+        <h2>${escapeHtml(stop.title)}</h2>
+        <p>${escapeHtml(stop.explanation)}</p>
         ${fact ? `<div class="wf-project-fact"><strong>In this project</strong><p>${escapeHtml(fact)}</p></div>` : ''}
         <div class="wf-actions">
-          ${activeStep > 0 ? '<button type="button" data-action="previous">Back</button>' : ''}
-          <button class="primary" type="button" data-action="next">${activeStep === stops.length - 1 ? 'Finish tour' : 'Next landmark'}</button>
-          <button type="button" data-action="ask-highlight">Explain this</button>
+          ${!stop.primaryAction && activeStep > 0 ? '<button type="button" data-action="previous">Back</button>' : ''}
+          ${primaryAction}
+          ${secondaryAction}
         </div>
-      `, { focus: '[data-action="next"]', announce: `${stop.label}. Landmark ${activeStep + 1} of ${stops.length}.` });
+      `, { focus: `[data-action="${stop.primaryAction?.action ?? 'next'}"]`, announce: `${stop.label}. ${stop.progressLabel ?? `Landmark ${activeStep + 1} of ${stops.length}`}.` });
     };
 
     const renderHighlightedAnswer = (stop: GuideStop) => {
@@ -1414,6 +1602,172 @@ export default defineContentScript({
       }, 850);
     };
 
+    const renderPlatformChoice = (message = 'I cannot reliably identify this computer from the browser. Choose the operating system you use, and I will point to the right file.') => {
+      surface = 'context';
+      activeStep = -1;
+      cancelTourMotion(false);
+      helper.classList.add('stationed');
+      bubble.classList.add('agent');
+      commitBubbleView(`
+        <div class="wf-agent-home">
+          <div class="wf-agent-head">
+            <div class="wf-kicker"><span>Installation</span><span class="wf-step-count">Step 2 of 2</span></div>
+            <h2>Which computer are you using?</h2>
+            <p>${escapeHtml(message)}</p>
+          </div>
+          <div class="wf-question-grid" role="group" aria-label="Choose your operating system">
+            <button type="button" data-platform="macos">macOS — MacBook, iMac, or Mac mini</button>
+            <button type="button" data-platform="windows">Windows — Windows laptop or desktop</button>
+            <button type="button" data-platform="linux">Linux — Ubuntu, Fedora, and others</button>
+          </div>
+          <p class="wf-tip">Wayfinder will never choose a source-code archive as the beginner download.</p>
+        </div>
+      `, { focus: '[data-platform="macos"]', announce: 'Choose macOS, Windows, or Linux.' });
+    };
+
+    const guideToReleaseAsset = (
+      platform: Exclude<PlatformFamily, 'unknown'>,
+      showFallback = true,
+    ): boolean => {
+      installPlatform = platform;
+      const assets = releaseAssetLinks();
+      const recommendation = preferredReleaseAsset(assets, platform, navigator.userAgent);
+      const target = recommendation
+        ? assets.find((asset) => asset.href === recommendation.href)?.anchor ?? null
+        : null;
+      if (!recommendation || !target) {
+        if (showFallback) {
+          bubbleOpen = true;
+          renderPlatformChoice(`I could not find a clear ${platformName(platform)} installer in the visible release assets. Choose another operating system, or check whether the project publishes ${platformName(platform)} builds.`);
+        }
+        return false;
+      }
+
+      stops = [{
+        label: 'Installation',
+        progressLabel: 'Step 2 of 2',
+        title: recommendation.name,
+        explanation: `Download this highlighted file for ${platformName(platform)}. It is a packaged app, not the source-code archive.`,
+        target,
+        primaryAction: { action: 'download-release', label: 'Download this file' },
+        secondaryAction: { action: 'choose-platform', label: 'Different OS' },
+      }];
+      activeStep = 0;
+      bubbleOpen = true;
+      moveToActiveStop();
+      return true;
+    };
+
+    beginReleaseInstallGuide = (): boolean => {
+      if (!currentLocation) return false;
+      const repo = `${currentLocation.owner}/${currentLocation.repo}`;
+      const href = releasesUrl(repo);
+      const releasePath = new URL(href).pathname.replace(/\/$/, '');
+      const currentPath = window.location.pathname.replace(/\/$/, '');
+      installPlatform = detectPlatformFamily(navigator.userAgent, navigator.platform);
+
+      if (currentPath === releasePath) {
+        if (installPlatform === 'unknown') renderPlatformChoice();
+        else guideToReleaseAsset(installPlatform);
+        return true;
+      }
+
+      const target = findReleasesLink(repo);
+      if (!target) return false;
+      const guide: PendingGuide = {
+        repo,
+        kind: 'releases',
+        platform: installPlatform,
+        href,
+        createdAt: new Date().toISOString(),
+      };
+      // Save before the user clicks either the highlighted GitHub link or the
+      // bubble action so the guide can resume after cross-page navigation.
+      void savePendingGuide(guide);
+      const platformHint = installPlatform === 'unknown'
+        ? 'I cannot tell which operating system you use yet. Open Releases, and I will ask before choosing a file.'
+        : `I detected ${platformName(installPlatform)}. Open Releases, and I will point to the matching download.`;
+      stops = [{
+        label: 'Installation',
+        progressLabel: 'Step 1 of 2',
+        title: 'Start with GitHub Releases',
+        explanation: `${platformHint} This highlighted link is where finished, downloadable versions live.`,
+        target,
+        primaryAction: { action: 'open-releases', label: 'Open Releases' },
+        secondaryAction: { action: 'agent-home', label: 'Ask something else' },
+      }];
+      activeStep = 0;
+      bubbleOpen = true;
+      moveToActiveStop();
+      return true;
+    };
+
+    const resumePendingGuide = async () => {
+      const inMemoryGuide = pendingGuide;
+      const guide = inMemoryGuide ?? await readPendingGuide();
+      if (!guide || !currentLocation || guide.repo.toLowerCase() !== `${currentLocation.owner}/${currentLocation.repo}`.toLowerCase()) return false;
+      const expectedPath = new URL(guide.href).pathname.replace(/\/$/, '');
+      const currentPath = window.location.pathname.replace(/\/$/, '');
+      const locationMatches = guide.kind === 'file'
+        ? Boolean(guide.path && currentLocation.path === guide.path)
+        : currentPath === expectedPath;
+      if (!locationMatches) return false;
+      const clearPendingGuide = async () => {
+        pendingGuide = null;
+        await storage.remove(pendingGuideKey).catch(() => undefined);
+      };
+      const guideAge = Date.now() - Date.parse(guide.createdAt);
+      const retryWhenPageSettles = () => {
+        pendingGuide = guide;
+        window.setTimeout(() => schedulePublish(true), 700);
+      };
+
+      let stop: GuideStop | null = null;
+      if (guide.kind === 'file') {
+        const target = firstPresent(['[data-testid="code-viewer"]', '.react-code-file-contents', 'table.highlight', 'nav[aria-label="Breadcrumbs"]']);
+        if (target) stop = {
+          label: 'Source file',
+          title: guide.path ?? 'Requested file',
+          explanation: 'This is the file from the answer. Wayfinder kept the repository revision pinned, navigated here, and marked the evidence on the page.',
+          target,
+        };
+      } else {
+        installPlatform = guide.platform ?? detectPlatformFamily(navigator.userAgent, navigator.platform);
+        if (installPlatform === 'unknown') {
+          await clearPendingGuide();
+          bubbleOpen = true;
+          renderPlatformChoice();
+          return true;
+        }
+        if (guideToReleaseAsset(installPlatform, false)) {
+          await clearPendingGuide();
+          return true;
+        }
+        if (guideAge < 12_000) {
+          retryWhenPageSettles();
+          return true;
+        }
+        await clearPendingGuide();
+        guideToReleaseAsset(installPlatform);
+        return true;
+      }
+
+      if (!stop) {
+        if (guideAge < 12_000) {
+          retryWhenPageSettles();
+          return true;
+        }
+        await clearPendingGuide();
+        return false;
+      }
+      await clearPendingGuide();
+      stops = [stop];
+      activeStep = 0;
+      bubbleOpen = true;
+      moveToActiveStop();
+      return true;
+    };
+
     const syncViewport = () => {
       window.cancelAnimationFrame(viewportFrame);
       viewportFrame = window.requestAnimationFrame(() => {
@@ -1446,6 +1800,7 @@ export default defineContentScript({
     const showWelcome = (focus?: string | null) => {
       stops = guideStops();
       renderWelcome(focus);
+      if (experienceMode === 'guided' && stops.length === 0) scheduleLandmarkRefresh();
     };
 
     const beginGuidedTour = () => {
@@ -1473,7 +1828,10 @@ export default defineContentScript({
 
     const startGuidedTour = async (forceRefresh = false) => {
       stops = guideStops();
-      if (stops.length === 0) return;
+      if (stops.length === 0) {
+        showWelcome();
+        return;
+      }
       let operation: Operation;
       try {
         operation = startOperation('guided');
@@ -1502,8 +1860,26 @@ export default defineContentScript({
     };
 
     copy.addEventListener('click', (event) => {
+      const link = (event.target as Element).closest<HTMLAnchorElement>('a[data-guide-kind="file"]');
+      if (link && currentLocation) {
+        event.preventDefault();
+        const guide: PendingGuide = {
+          repo: `${currentLocation.owner}/${currentLocation.repo}`,
+          kind: 'file',
+          path: link.dataset.guidePath,
+          href: link.href,
+          createdAt: new Date().toISOString(),
+        };
+        void savePendingGuide(guide).then(() => window.location.assign(link.href));
+        return;
+      }
       const button = (event.target as Element).closest<HTMLButtonElement>('button');
       if (!button) return;
+      const selectedPlatform = button.dataset.platform as PlatformFamily | undefined;
+      if (selectedPlatform === 'macos' || selectedPlatform === 'windows' || selectedPlatform === 'linux') {
+        guideToReleaseAsset(selectedPlatform);
+        return;
+      }
       const selectedMode = button.dataset.mode as ExperienceMode | undefined;
       if (selectedMode === 'guided' || selectedMode === 'quick') {
         if (selectedMode === experienceMode) {
@@ -1563,6 +1939,8 @@ export default defineContentScript({
       }
       const action = button.dataset.action;
       if (action === 'agent-home') {
+        pendingGuide = null;
+        void storage.remove(pendingGuideKey).catch(() => undefined);
         renderAgentHome();
         return;
       }
@@ -1584,6 +1962,35 @@ export default defineContentScript({
       }
       if (action === 'setup-choice') {
         renderSetupChoice();
+        return;
+      }
+      if (action === 'refresh-landmarks') {
+        landmarkRefreshAttempts = 0;
+        showWelcome();
+        return;
+      }
+      if (action === 'open-releases' && currentLocation) {
+        const href = releasesUrl(`${currentLocation.owner}/${currentLocation.repo}`);
+        const platform = installPlatform === 'unknown'
+          ? detectPlatformFamily(navigator.userAgent, navigator.platform)
+          : installPlatform;
+        const guide: PendingGuide = {
+          repo: `${currentLocation.owner}/${currentLocation.repo}`,
+          kind: 'releases',
+          platform,
+          href,
+          createdAt: new Date().toISOString(),
+        };
+        void savePendingGuide(guide).then(() => window.location.assign(href));
+        return;
+      }
+      if (action === 'choose-platform') {
+        renderPlatformChoice();
+        return;
+      }
+      if (action === 'download-release') {
+        const target = stops[activeStep]?.target;
+        if (target instanceof HTMLAnchorElement && target.href) window.location.assign(target.href);
         return;
       }
       if (action === 'choose-guided') {
@@ -1669,13 +2076,18 @@ export default defineContentScript({
         void loadPreferences().then(() => {
           if (!bubbleOpen || host.hidden) return;
           welcomeShown = true;
-          renderWelcome();
+          showWelcome();
         });
         return;
       }
       if (!copy.hasChildNodes()) {
         welcomeShown = true;
-        renderWelcome();
+        showWelcome();
+        return;
+      }
+      if (surface === 'welcome' && copy.querySelector('[data-action="refresh-landmarks"]')) {
+        landmarkRefreshAttempts = 0;
+        showWelcome();
         return;
       }
       bubbleOpen = true;
@@ -1736,6 +2148,9 @@ export default defineContentScript({
 
       if (locationChanged) {
         abortOperations();
+        window.clearTimeout(landmarkRefreshTimer);
+        landmarkRefreshTimer = 0;
+        landmarkRefreshAttempts = 0;
         renderGeneration += 1;
         announcementGeneration += 1;
         answerCachedAt = null;
@@ -1752,7 +2167,7 @@ export default defineContentScript({
         activeStep = -1;
         cancelTourMotion();
         stops = [];
-        if (bubbleOpen) renderWelcome(null);
+        if (bubbleOpen) showWelcome(null);
       }
 
       if (!nextLocation) {
@@ -1761,7 +2176,7 @@ export default defineContentScript({
         copy.replaceChildren();
       } else if (bubbleOpen && locationChanged) {
         if (surface === 'agent') renderAgentHome('', null);
-        else renderWelcome(null);
+        else showWelcome(null);
       } else if (!bubbleOpen && locationChanged) {
         copy.replaceChildren();
       }
@@ -1779,6 +2194,7 @@ export default defineContentScript({
             return;
           }
           stops = guideStops();
+          if (experienceMode === 'guided' && stops.length === 0) scheduleLandmarkRefresh();
           const normalizedRepo = nextRepo?.toLowerCase() ?? null;
           const seen = normalizedRepo ? seenRepos.includes(normalizedRepo) : false;
           host.dataset.seen = String(seen);
@@ -1792,10 +2208,16 @@ export default defineContentScript({
             }
           }
           if (renderGeneration !== publishedRenderGeneration) return;
+          if (await resumePendingGuide()) return;
           if (!welcomeShown && stops.length > 0 && (!experienceMode || (experienceMode === 'guided' && !seen))) {
             welcomeShown = true;
             showWelcome(null);
           } else if (bubbleOpen && nextLocation) {
+            // Delayed initial/Turbo renders can settle after the user has
+            // already opened the composer. The synchronous navigation branch
+            // above handles real path changes, so never replace a live editor
+            // here: doing so erases its draft and steals focus mid-keystroke.
+            if (surface === 'agent' && shadow.querySelector('#wf-question')) return;
             if (surface === 'agent' && activeAnswer && repository && !pathChanged) renderAnswer(activeAnswer, null);
             else if (surface === 'agent') renderAgentHome('', null);
             else renderWelcome(null);
@@ -1846,6 +2268,7 @@ export default defineContentScript({
       window.clearTimeout(arrivalTimer);
       window.clearTimeout(dockSettleTimer);
       window.clearTimeout(publishTimer);
+      window.clearTimeout(landmarkRefreshTimer);
       window.clearInterval(locationTimer);
       abortOperations();
       renderGeneration += 1;

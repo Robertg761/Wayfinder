@@ -23,7 +23,9 @@ Open `openai/openai-node` and let the floating helper appear. Choose "Guide me,"
 
 ### 0:20 to 0:45, orientation becomes navigation
 
-Switch the helper header to Quick mode and open the repository snapshot. Point out the purpose, TypeScript stack, package manager, viewed ref, pinned commit, key directories, entry point, and local commands. Open `src/index.ts`, then use the file actions to show its direct imports, resolved local dependencies, likely callers, and paired tests.
+Switch the helper header to Quick mode and open the repository snapshot. Point out the purpose, TypeScript stack, package manager, viewed ref, pinned commit, key directories, entry point, and local commands. Open `src/index.ts`, then use the separate file actions to show its summary, explicit imports, resolved local dependencies, evidence-backed caller candidates, and paired tests. Briefly open `README.md` and show that Wayfinder presents its role and outline without inventing source callers or tests.
+
+Ask "How do I install it?" Wayfinder should first scroll to and highlight the repository's Releases link with "Step 1 of 2." Select "Open Releases." It should use the detected OS—or ask macOS, Windows, or Linux when detection is unavailable—then physically move beside the matching packaged asset, label it "Step 2 of 2," and highlight the exact download. Then return to an answer and open a cited file to show the same cross-page trail ending on pinned source evidence.
 
 Say: "Guided mode helps someone learn the terrain. Quick mode gives an experienced developer the important facts immediately. These are not generated file names. Every answer is mapped from the exact branch and pinned commit, and my trail stays available as I inspect the evidence."
 

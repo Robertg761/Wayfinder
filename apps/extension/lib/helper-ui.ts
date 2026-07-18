@@ -18,6 +18,53 @@ export interface AgentStarter {
   requiresInput?: boolean;
 }
 
+export type PlatformFamily = "macos" | "windows" | "linux" | "unknown";
+
+export interface ReleaseAssetCandidate {
+  name: string;
+  href: string;
+}
+
+export function detectPlatformFamily(userAgent: string, platform = ""): PlatformFamily {
+  const value = `${platform} ${userAgent}`.toLowerCase();
+  if (/mac|darwin/.test(value)) return "macos";
+  if (/win/.test(value)) return "windows";
+  if (/linux|x11/.test(value)) return "linux";
+  return "unknown";
+}
+
+export function preferredReleaseAsset(
+  assets: ReleaseAssetCandidate[],
+  platform: PlatformFamily,
+  userAgent = "",
+): ReleaseAssetCandidate | null {
+  if (platform === "unknown") return null;
+  const environment = userAgent.toLowerCase();
+  const arm = /arm64|aarch64/.test(environment);
+  const x64 = /x64|x86_64|amd64|win64/.test(environment);
+  const platformMatch = (name: string): boolean => {
+    if (platform === "macos") return /mac|macos|darwin|osx|\.dmg$|\.pkg$/.test(name);
+    if (platform === "windows") return /windows|win32|win64|\.msi$|\.exe$/.test(name);
+    return /linux|appimage|\.deb$|\.rpm$/.test(name);
+  };
+  const score = (asset: ReleaseAssetCandidate): number => {
+    const name = asset.name.toLowerCase();
+    if (/source code|checksums?|sha256|\.sig$|\.asc$/.test(name)) return -100;
+    if (!platformMatch(name)) return -100;
+    let value = 40;
+    if (arm) value += /arm64|aarch64/.test(name) ? 12 : /x64|x86_64|amd64/.test(name) ? -8 : 0;
+    else if (x64) value += /x64|x86_64|amd64/.test(name) ? 12 : /arm64|aarch64/.test(name) ? -8 : 0;
+    else value += /universal/.test(name) ? 12 : 0;
+    if (/\.dmg$|\.pkg$|\.msi$|\.exe$|\.appimage$|\.deb$|\.rpm$/.test(name)) value += 8;
+    if (/\.zip$|\.tar\.gz$|\.tgz$/.test(name)) value += 2;
+    return value;
+  };
+  return assets
+    .map((asset, index) => ({ asset, index, score: score(asset) }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.asset ?? null;
+}
+
 export const agentStarters: AgentStarter[] = [
   { label: "Map it in 60 seconds", question: "Give me a 60-second overview of this repository" },
   { label: "Find the entry file", question: "Which file is the main implementation entry point?" },

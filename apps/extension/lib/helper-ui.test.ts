@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentStarters, landmarkDetail, measuredBubbleHeight, placeBubble, resolveAnswerDepth } from "./helper-ui";
+import { agentStarters, detectPlatformFamily, landmarkDetail, measuredBubbleHeight, placeBubble, preferredReleaseAsset, resolveAnswerDepth } from "./helper-ui";
 
 describe("placeBubble", () => {
   it("keeps a bottom-right bubble attached above its dock", () => {
@@ -102,5 +102,34 @@ describe("landmarkDetail", () => {
     expect(landmarkDetail("Repository name")).toContain("clone URLs");
     expect(landmarkDetail("Current branch")).toContain("commit");
     expect(landmarkDetail("Line numbers")).toContain("reproducible citation");
+  });
+});
+
+describe("release asset guidance", () => {
+  const assets = [
+    { name: "Wayfinder-macos-arm64.dmg", href: "/mac" },
+    { name: "Wayfinder-windows-x64.exe", href: "/windows" },
+    { name: "Wayfinder-linux-x86_64.AppImage", href: "/linux" },
+    { name: "Source code (zip)", href: "/source" },
+  ];
+
+  it("detects common desktop platforms", () => {
+    expect(detectPlatformFamily("Mozilla/5.0 (Macintosh; Intel Mac OS X)")).toBe("macos");
+    expect(detectPlatformFamily("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("windows");
+    expect(detectPlatformFamily("Mozilla/5.0 (X11; Linux x86_64)")).toBe("linux");
+  });
+
+  it("prefers an OS and architecture matched binary over source archives", () => {
+    expect(preferredReleaseAsset(assets, "macos", "Macintosh arm64")?.name).toBe("Wayfinder-macos-arm64.dmg");
+    expect(preferredReleaseAsset(assets, "windows", "Windows x64")?.name).toBe("Wayfinder-windows-x64.exe");
+    expect(preferredReleaseAsset(assets, "linux", "Linux x86_64")?.name).toBe("Wayfinder-linux-x86_64.AppImage");
+  });
+
+  it("waits for an OS choice instead of guessing for an unknown platform", () => {
+    expect(preferredReleaseAsset(assets, "unknown", "Unknown browser")).toBeNull();
+  });
+
+  it("never falls through to a different operating system's installer", () => {
+    expect(preferredReleaseAsset(assets.filter((asset) => !asset.name.includes("macos")), "macos", "Macintosh")).toBeNull();
   });
 });

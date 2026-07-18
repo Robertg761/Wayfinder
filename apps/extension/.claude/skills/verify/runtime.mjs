@@ -70,16 +70,16 @@ const report=[];
   await page.goto('https://github.com/example/wayfinder-fixture'); await open(page); const onboarding=await uiState(page);
   await page.getByRole('button',{name:'Guide me'}).click(); await page.getByRole('button',{name:'Quick',exact:true}).click();
   await page.getByRole('heading',{name:'Get the answer, then the evidence.'}).waitFor(); const quick=await uiState(page);
-  await page.getByRole('button',{name:'Repository snapshot'}).click(); await page.getByText('example/wayfinder-fixture orientation').waitFor();
+  await page.getByRole('button',{name:'What does this project do?'}).click(); await page.getByText('example/wayfinder-fixture orientation').waitFor();
   const concise=await page.getByRole('button',{name:'Concise',exact:true}).getAttribute('aria-pressed'); await page.getByRole('button',{name:'Expanded',exact:true}).click();
   const expandedPressed=await page.getByRole('button',{name:'Expanded',exact:true}).getAttribute('aria-pressed'); await page.getByText('Recommended reading route').click();
   const link=page.getByRole('link',{name:'Open src/index.ts, lines 1 through 40'}); const href=await link.getAttribute('href');
   await page.screenshot({path:`${outputDir}/core-light.png`});
-  await page.getByRole('button',{name:'← New question'}).click(); await page.getByRole('button',{name:'Use or develop this project'}).click(); await page.getByRole('button',{name:'Use this project'}).click();
+  await page.getByRole('button',{name:'← New question'}).click(); await page.getByRole('button',{name:'How do I install or run it?'}).click(); await page.getByRole('button',{name:'I want to use or install it'}).click();
   const copy=page.getByRole('button',{name:'Copy command: pnpm add wayfinder-fixture'}); const label=await copy.textContent(); const cdp=await context.newCDPSession(page);
   await cdp.send('Browser.setPermission',{permission:{name:'clipboard-write'},setting:'denied',origin:'https://github.com'}); await copy.click(); await page.waitForTimeout(150); const failStatus=(await uiState(page)).status;
   await cdp.send('Browser.setPermission',{permission:{name:'clipboard-write'},setting:'granted',origin:'https://github.com'}); await page.waitForTimeout(800); await copy.click(); await page.waitForTimeout(150); const okStatus=(await uiState(page)).status; const copyLabelStable=(await copy.textContent())===label;
-  await page.getByRole('button',{name:'Close helper'}).click(); await page.reload(); await open(page); await page.getByRole('button',{name:'Repository snapshot'}).click(); await page.getByText('example/wayfinder-fixture orientation').waitFor(); const persisted=await page.getByRole('button',{name:'Expanded',exact:true}).getAttribute('aria-pressed');
+  await page.getByRole('button',{name:'Close helper'}).click(); await page.reload(); await open(page); await page.getByRole('button',{name:'What does this project do?'}).click(); await page.getByText('example/wayfinder-fixture orientation').waitFor(); const persisted=await page.getByRole('button',{name:'Expanded',exact:true}).getAttribute('aria-pressed');
   await page.setViewportSize({width:360,height:500}); await page.waitForTimeout(200); const narrow=await uiState(page); await page.screenshot({path:`${outputDir}/core-narrow.png`});
   await page.emulateMedia({colorScheme:'dark',reducedMotion:'reduce'}); await page.waitForTimeout(200); const dark=await uiState(page); await page.screenshot({path:`${outputDir}/core-dark.png`});
   report.push({scenario:'core',onboarding,quick,concise,expandedPressed,href,copyLabelStable,failStatus,okStatus,persisted,narrow,dark}); await h.close();
@@ -96,8 +96,8 @@ const report=[];
 
 // Stale SPA response suppression.
 {
-  const h=await createHarness('stale',{mapDelayByRepo:{'alpha/one':2000}}); const {page,api}=h; await page.goto('https://github.com/alpha/one'); await choose(page,'Quick'); await page.getByRole('button',{name:'Repository snapshot'}).click();
-  await page.evaluate(()=>{history.pushState({},'','/beta/two');document.dispatchEvent(new Event('turbo:load'));}); await page.waitForTimeout(1300); await open(page); await page.getByRole('button',{name:'Repository snapshot'}).click(); await page.getByText('beta/two orientation').waitFor(); await page.waitForTimeout(1200);
+  const h=await createHarness('stale',{mapDelayByRepo:{'alpha/one':2000}}); const {page,api}=h; await page.goto('https://github.com/alpha/one'); await choose(page,'Quick'); await page.getByRole('button',{name:'What does this project do?'}).click();
+  await page.evaluate(()=>{history.pushState({},'','/beta/two');document.dispatchEvent(new Event('turbo:load'));}); await page.waitForTimeout(1300); await open(page); await page.getByRole('button',{name:'What does this project do?'}).click(); await page.getByText('beta/two orientation').waitFor(); await page.waitForTimeout(1200);
   report.push({scenario:'stale-navigation',betaVisible:await page.getByText('beta/two orientation').isVisible(),alphaVisible:await page.getByText('alpha/one orientation').isVisible().catch(()=>false),requests:api.requests}); await h.close();
 }
 

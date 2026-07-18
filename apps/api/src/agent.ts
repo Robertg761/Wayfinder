@@ -1,9 +1,11 @@
 import type { AgentAnswer, AgentIntent, ContributionTrail, FileFindResponse, RepoMap } from "@wayfinder/contracts";
 import { createFileFind } from "./find";
+import { createFileContextAnswer } from "./file-context";
 import { createInstallGuide } from "./install";
 import { generateTour } from "./tour";
 import { synthesizeAgentAnswer, type ModelOptions } from "./model";
-import { fetchRepoFile, isBlockingGitHubError } from "./github";
+
+export { importedSpecifiers, keepCredibleCallers as keepLikelyCallers } from "./file-context";
 
 const fileQuestion = /\b(where|which|locate|find|file|directory|folder|implementation|implemented|defined|definition|source)\b/i;
 const testLocationQuestion = /\bwhere\b.*\b(tests?|specs?|fixtures?)\b|\b(tests?|specs?|fixtures?)\b.*\b(where|located|live)\b/i;
@@ -19,53 +21,29 @@ const contributionNoise = new Set([
   "type", "types", "want", "work",
 ]);
 const consumerInstallationQuestion = /\b(use|consume|consumer|published package|add to my project|install the library|install the package)\b/i;
-const currentFileQuestion = /\b(this file|current file|imports?|depends?|dependencies|paired tests?|change impact|public surface)\b/i;
+const contributorInstallationQuestion = /\b(develop|development|contribut|from source|repository locally|repo locally|run locally|build locally)\b/i;
+const currentFileQuestion = /\b(this file|current file|summari[sz]e|file role|imports?|depends?|dependencies|callers?|used by|paired tests?|tests? paired|tests? for|change impact|public surface|read next|what breaks)\b/i;
+const namedFileAction = /\b(summari[sz]e|role|imports?|depends?|dependencies|callers?|used by|tests?|specs?|verification|impact|read next|what breaks)\b/i;
 
 export function classifyAgentIntent(query: string, currentPath: string | null = null): AgentIntent {
   const normalized = query.trim();
   if (contributionQuestion.test(normalized)) return "contribution";
-  if (currentPath && currentFileQuestion.test(normalized)) return "file-context";
+  if (currentPath && (
+    currentFileQuestion.test(normalized) ||
+    (normalized.toLowerCase().includes(currentPath.toLowerCase()) && namedFileAction.test(normalized))
+  )) return "file-context";
   if (testLocationQuestion.test(normalized)) return "file-find";
   if (entryFileQuestion.test(normalized)) return "file-find";
   if (startingQuestion.test(normalized)) return "orientation";
-  if (commandQuestion.test(normalized) || installationQuestion.test(normalized)) return "installation";
+  if (
+    commandQuestion.test(normalized)
+    || installationQuestion.test(normalized)
+    || consumerInstallationQuestion.test(normalized)
+    || contributorInstallationQuestion.test(normalized)
+  ) return "installation";
   if (orientationQuestion.test(normalized)) return "orientation";
   if (fileQuestion.test(normalized)) return "file-find";
   return "file-find";
-}
-
-export function importedSpecifiers(content: string): string[] {
-  const matches = content.matchAll(/(?:from\s+|import\s*\(\s*|require\s*\(\s*|^\s*import\s+)["']([^"']+)["']/gm);
-  return [...new Set([...matches].map((match) => match[1]).filter(Boolean))].slice(0, 20);
-}
-
-function resolveLocalImports(map: RepoMap, currentPath: string, imports: string[]): string[] {
-  const directory = currentPath.split("/").slice(0, -1).join("/");
-  const files = new Set(map.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path));
-  const extensions = ["", ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", "/index.ts", "/index.tsx", "/index.js"];
-  const resolved: string[] = [];
-  for (const specifier of imports.filter((item) => item.startsWith("."))) {
-    const segments = (directory + "/" + specifier).split("/");
-    const normalized: string[] = [];
-    for (const segment of segments) {
-      if (!segment || segment === ".") continue;
-      if (segment === "..") normalized.pop();
-      else normalized.push(segment);
-    }
-    const base = normalized.join("/");
-    const match = extensions.map((suffix) => base + suffix).find((candidate) => files.has(candidate));
-    if (match && !resolved.includes(match)) resolved.push(match);
-  }
-  return resolved.slice(0, 10);
-}
-
-export function keepLikelyCallers(finder: FileFindResponse, currentPath: string): FileFindResponse {
-  return {
-    ...finder,
-    results: finder.results.filter((result) =>
-      result.path !== currentPath && !/(^|\/)(test|tests|__tests__|fixtures?|examples?|evals?|bench|benchmarks?|ecosystem-tests?)(\/|$)|\.(test|spec)\./i.test(result.path),
-    ),
-  };
 }
 
 function contributionConcepts(goal: string): string[] {
@@ -76,6 +54,7 @@ export function keepGoalLinkedVerification(finder: FileFindResponse, goal: strin
   const concepts = contributionConcepts(goal);
   if (concepts.length === 0) return finder;
   const results = finder.results.filter((result) => {
+    if (result.confidence === "possible") return false;
     const evidence = (result.path + " " + (result.snippet ?? "")).toLowerCase();
     return concepts.some((concept) => evidence.includes(concept) || evidence.includes(concept.slice(0, 4)));
   });
@@ -123,10 +102,19 @@ function contributionSummary(trail: ContributionTrail): string {
   return "Your trail starts at " + implementation + (verification ? " and leads to verification in " + verification + "." : ". I marked setup evidence and the best implementation coordinate.");
 }
 
-function installationSummary(stepCount: number, warningCount: number): string {
+function installationSummary(stepCount: number, warningCount: number, audience: "use" | "develop"): string {
+  if (audience === "use" && stepCount === 0) {
+    return "No documented package-manager install command was found, so start with the repository's packaged Releases downloads.";
+  }
   if (stepCount === 0) return "I could not find a trustworthy setup sequence, so I marked the available repository evidence and warnings instead.";
   const warningNote = warningCount > 0 ? " I also found " + warningCount + " setup note" + (warningCount === 1 ? "." : "s.") : "";
   return "I found " + stepCount + " sourced setup step" + (stepCount === 1 ? "." : "s.") + warningNote;
+}
+
+export function installationAudience(query: string): "use" | "develop" {
+  if (contributorInstallationQuestion.test(query)) return "develop";
+  if (consumerInstallationQuestion.test(query)) return "use";
+  return "use";
 }
 
 function finderSummary(resultCount: number, topPath?: string): string {
@@ -179,7 +167,7 @@ export async function createAgentAnswer(
   }
 
   if (intent === "installation") {
-    const audience = consumerInstallationQuestion.test(query) ? "use" : "develop";
+    const audience = installationAudience(query);
     const guide = await createInstallGuide(map, token, audience);
     const answer: AgentAnswer = {
       repo: map.repo,
@@ -187,7 +175,7 @@ export async function createAgentAnswer(
       query,
       intent,
       mode: "free",
-      summary: installationSummary(guide.steps.length, guide.warnings.length),
+      summary: installationSummary(guide.steps.length, guide.warnings.length, audience),
       suggestions: ["Where is the configuration?", "Where are the tests?"],
       generatedAt,
       guide,
@@ -197,39 +185,7 @@ export async function createAgentAnswer(
 
   if (intent === "file-context") {
     if (!currentPath) throw new Error("Current-file context requires a repository path.");
-    const content = await fetchRepoFile(map.repo, currentPath, map.sha, token).catch((error) => {
-      if (isBlockingGitHubError(error)) throw error;
-      return "";
-    });
-    const imports = importedSpecifiers(content);
-    const relatedPaths = resolveLocalImports(map, currentPath, imports);
-    const fileName = currentPath.split("/").at(-1)!;
-    const stem = fileName.replace(/\.[^.]+$/, "");
-    const [tests, callerCandidates] = await Promise.all([
-      createFileFind(map, fileName + " paired tests specs", currentPath, token),
-      createFileFind(map, stem + " import usage caller", currentPath, token),
-    ]);
-    const callers = keepLikelyCallers(callerCandidates, currentPath);
-    const testPaths = tests.results.slice(0, 3).map((result) => result.path);
-    const callerPath = callers.results[0]?.path;
-    return {
-      repo: map.repo,
-      sha: map.sha,
-      query,
-      intent,
-      mode: "free",
-      summary: `${currentPath} directly references ${imports.length} import${imports.length === 1 ? "" : "s"}${callerPath ? `, is likely used by ${callerPath}` : ""}${testPaths.length ? `, and has likely verification in ${testPaths[0]}.` : "."}`,
-      explanation: relatedPaths.length
-        ? "The local dependency paths below were resolved from imports in the current file. Test matches are ranked separately."
-        : "No local imports were resolved from the current file. Test matches are still ranked from repository evidence.",
-      suggestions: ["Map a change starting from this file", "Show me the repository architecture"],
-      generatedAt,
-      currentPath,
-      imports,
-      relatedPaths,
-      callers,
-      tests,
-    };
+    return createFileContextAnswer(map, query, currentPath, token);
   }
 
   const finder = await createFileFind(map, query, currentPath, token);

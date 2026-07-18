@@ -15,6 +15,12 @@ interface RankedCandidate {
   matchedTerms: string[];
 }
 
+export interface FileFindOptions {
+  requiredEvidenceTerms?: string[];
+  requireInspectedContentEvidence?: boolean;
+  minimumConfidence?: FileMatchConfidence;
+}
+
 const stopWords = new Set([
   "a",
   "an",
@@ -36,9 +42,11 @@ const stopWords = new Set([
   "is",
   "it",
   "located",
+  "likely",
   "me",
   "of",
   "project",
+  "paired",
   "repository",
   "show",
   "the",
@@ -46,7 +54,10 @@ const stopWords = new Set([
   "to",
   "where",
   "which",
+  "with",
 ]);
+
+const fileExtensionPattern = /\b([a-zA-Z0-9_-]+)\.(?:c|cc|cjs|cpp|cs|css|cts|cxx|go|h|hpp|html|java|js|json|jsx|kt|md|mdx|mjs|mts|php|py|rb|rs|sh|swift|toml|ts|tsx|vue|yaml|yml)\b/gi;
 
 const aliasGroups = [
   ["auth", "authentication", "authorize", "authorization", "login", "oauth", "permission", "session", "token"],
@@ -85,7 +96,7 @@ const inspectableExtensions = new Set([
 ]);
 
 const sourceExtensions = new Set([
-  "c", "cc", "cpp", "cs", "go", "h", "hpp", "java", "js", "jsx", "kt", "mjs", "php", "py",
+  "c", "cc", "cjs", "cpp", "cs", "go", "h", "hpp", "java", "js", "jsx", "kt", "mjs", "php", "py",
   "rb", "rs", "sh", "swift", "ts", "tsx", "vue",
 ]);
 
@@ -113,7 +124,7 @@ function words(value: string): string[] {
 }
 
 function directTerms(query: string): string[] {
-  return [...new Set(words(query)
+  return [...new Set(words(query.replace(fileExtensionPattern, "$1"))
     .map((word) => word.length > 4 && word.endsWith("s") ? word.slice(0, -1) : word)
     .filter((word) => word.length > 1 && !stopWords.has(word)))];
 }
@@ -255,7 +266,6 @@ function contentEvidence(content: string, direct: string[], expanded: string[]):
   snippet?: string;
   matched: string[];
 } {
-  const lower = content.toLowerCase();
   const signals: FileMatchSignal[] = [];
   const matched = new Set<string>();
   let score = 0;
@@ -274,23 +284,15 @@ function contentEvidence(content: string, direct: string[], expanded: string[]):
   }
 
   for (const term of expanded) {
-    const index = lower.indexOf(term.toLowerCase());
-    if (index === -1) continue;
+    const lineIndex = lines.findIndex((line) => words(line).includes(term.toLowerCase()));
+    if (lineIndex === -1) continue;
     matched.add(term);
     score += direct.includes(term) ? 11 : 5;
     addSignal(signals, "content");
 
     if (firstLine === null) {
-      let offset = 0;
-      for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-        const nextOffset = offset + lines[lineIndex].length + 1;
-        if (index < nextOffset) {
-          firstLine = lineIndex + 1;
-          snippet = lines[lineIndex].trim().replace(/\s+/g, " ").slice(0, 180);
-          break;
-        }
-        offset = nextOffset;
-      }
+      firstLine = lineIndex + 1;
+      snippet = lines[lineIndex].trim().replace(/\s+/g, " ").slice(0, 180);
     }
 
     const symbolPattern = new RegExp("\\b(class|def|function|interface|type|const|let|var|fn|struct|enum)\\s+" + term + "\\b", "i");
@@ -315,6 +317,12 @@ function confidence(score: number): FileMatchConfidence {
   return "possible";
 }
 
+const confidenceRank: Record<FileMatchConfidence, number> = {
+  possible: 0,
+  likely: 1,
+  strong: 2,
+};
+
 function reasonFor(signals: FileMatchSignal[], terms: string[]): string {
   const topic = terms.slice(0, 3).join(", ") || "the query";
   if (signals.includes("deprecated") && signals.includes("re-export")) return "This path matches, but it is a deprecated forwarding file rather than the primary implementation.";
@@ -336,24 +344,28 @@ export function findFiles(
   query: string,
   files: Record<string, string> = {},
   currentPath: string | null = null,
+  options: FileFindOptions = {},
 ): FileFindResponse {
   const direct = directTerms(query);
   const expanded = expandedTerms(direct);
   const askingForTests = expanded.some((term) => testVocabulary.has(term));
   const evidenceDirect = askingForTests ? direct.filter((term) => !testVocabulary.has(term)) : direct;
   const evidenceExpanded = askingForTests ? expanded.filter((term) => !testVocabulary.has(term)) : expanded;
+  const requiredEvidence = new Set((options.requiredEvidenceTerms ?? []).flatMap(words));
   const candidates = rankFileCandidates(map, query, currentPath);
 
-  const results: FileMatch[] = candidates.map((candidate) => {
+  const scoredResults = candidates.map((candidate) => {
     const inspected = files[candidate.entry.path]
       ? contentEvidence(files[candidate.entry.path], evidenceDirect, evidenceExpanded)
       : { score: 0, signals: [] as FileMatchSignal[], matched: [] as string[] };
-    const rawScore = candidate.rawScore + inspected.score;
+    const inspectedRequiredEvidence = inspected.matched.some((term) => requiredEvidence.has(term));
+    const requiredContentBoost = options.requireInspectedContentEvidence && inspectedRequiredEvidence ? 25 : 0;
+    const rawScore = candidate.rawScore + inspected.score + requiredContentBoost;
     const signals = [...candidate.signals];
     inspected.signals.forEach((signal) => addSignal(signals, signal));
     const matched = [...new Set([...candidate.matchedTerms, ...inspected.matched])];
 
-    return {
+    const result: FileMatch = {
       path: candidate.entry.path,
       score: Number(Math.min(0.99, Math.max(0.05, 0.18 + rawScore / 120)).toFixed(2)),
       confidence: signals.includes("symbol") && signals.includes("content") ? "strong" : confidence(rawScore),
@@ -362,23 +374,41 @@ export function findFiles(
       ...(inspected.lines ? { lines: inspected.lines } : {}),
       ...(inspected.snippet ? { snippet: inspected.snippet } : {}),
     };
+    return { result, matched, inspectedRequiredEvidence };
   });
 
-  results.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
-  const scopedResults = askingForTests ? results.filter((result) => isTestPath(result.path)) : results;
+  scoredResults.sort((left, right) => right.result.score - left.result.score || left.result.path.localeCompare(right.result.path));
+  const evidenceScopedResults = requiredEvidence.size > 0
+    ? scoredResults.filter(({ matched, inspectedRequiredEvidence }) => options.requireInspectedContentEvidence
+      ? inspectedRequiredEvidence
+      : matched.some((term) => requiredEvidence.has(term)))
+    : scoredResults;
+  const scopedResults = askingForTests
+    ? evidenceScopedResults.filter(({ result }) => isTestPath(result.path))
+    : evidenceScopedResults;
   const productionResults = implementationQuestion.test(query) && !/\b(tests?|specs?|fixtures?)\b/i.test(query)
-    ? scopedResults.filter((result) =>
+    ? scopedResults.filter(({ result }) =>
       !isTestPath(result.path) &&
       !isAuxiliaryPath(result.path) &&
       sourceExtensions.has(extension(result.path)),
     )
     : scopedResults;
   const eligibleResults = productionResults.length > 0 ? productionResults : scopedResults;
-  const usefulResults = eligibleResults.filter((result, index) => result.confidence !== "possible" || index < 3).slice(0, 5);
+  const minimumRank = options.minimumConfidence ? confidenceRank[options.minimumConfidence] : 0;
+  const usefulResults = eligibleResults
+    .filter(({ result }, index) =>
+      confidenceRank[result.confidence] >= minimumRank &&
+      (result.confidence !== "possible" || index < 3),
+    )
+    .slice(0, 5)
+    .map(({ result }) => result);
   const warnings: string[] = [];
   if (direct.length === 0) warnings.push("The query did not contain a specific repository concept, so results rely on architectural landmarks.");
+  if (requiredEvidence.size > 0 && evidenceScopedResults.length === 0) {
+    warnings.push("No candidate contained target-specific filename, path, or inspected-content evidence.");
+  }
   if (askingForTests && usefulResults.length === 0) warnings.push("No test-shaped repository path matched this query.");
-  if (usefulResults.every((result) => result.confidence === "possible")) {
+  if (usefulResults.length > 0 && usefulResults.every((result) => result.confidence === "possible")) {
     warnings.push("No direct filename, path, or content match was found. These are structural suggestions, not confirmed implementations.");
   }
 
@@ -398,6 +428,7 @@ export async function createFileFind(
   query: string,
   currentPath: string | null,
   token?: string,
+  options: FileFindOptions = {},
 ): Promise<FileFindResponse> {
   const candidates = rankFileCandidates(map, query, currentPath)
     .filter((candidate) =>
@@ -414,5 +445,5 @@ export async function createFileFind(
     return content === null ? null : [entry.path, content] as const;
   }));
   const files = Object.fromEntries(loaded.filter((item): item is readonly [string, string] => item !== null));
-  return findFiles(map, query, files, currentPath);
+  return findFiles(map, query, files, currentPath, options);
 }

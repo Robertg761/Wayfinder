@@ -233,24 +233,8 @@ export function generateInstallGuide(
   }
 
   if (audience === "use") {
-    if (steps.length === 0 && packageJson?.name && !packageJson.private && packageManager) {
-      const command = packageManager === "yarn"
-        ? "yarn add " + packageJson.name
-        : packageManager === "bun"
-          ? "bun add " + packageJson.name
-          : packageManager + " install " + packageJson.name;
-      addUniqueStep(
-        steps,
-        seenCommands,
-        "Install the published package",
-        command,
-        evidence(packagePath!, lineFor(files[packagePath!], '"name"')),
-        "inferred",
-      );
-      warnings.push("The package command is inferred from the root package name. Confirm it against the repository usage documentation.");
-    }
     if (packageJson?.private) warnings.push("The root package is marked private and may not be available as a published package.");
-    if (steps.length === 0) warnings.push("No trustworthy consumer installation command was found. This project may only be intended to run from source.");
+    if (steps.length === 0) warnings.push("No documented consumer package command was found. Check GitHub Releases for a packaged application before trying to run the source repository.");
     steps.forEach((step, index) => { step.order = index + 1; });
     return {
       repo: map.repo,

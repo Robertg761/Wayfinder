@@ -1,10 +1,12 @@
 # Public Verification Matrix
 
-Updated July 15, 2026.
+Updated July 16, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Worker version: `fe43d4c2-c27c-476e-a982-dcb2a7ddb041`
+Current Worker version: `60bc20e8-71a3-41b3-a870-71ae8a63ad04`
+
+Full cross-repository matrix baseline: `fe43d4c2-c27c-476e-a982-dcb2a7ddb041`
 
 The matrix runs through the public Worker without an OpenAI key or GitHub token. Each case maps the current default-branch commit, requests orientation, requests installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
 
@@ -21,6 +23,8 @@ The matrix runs through the public Worker without an OpenAI key or GitHub token.
 Flask and GitHub CLI correctly warn that their inspected setup instructions are structural inferences rather than explicit contributor commands. The warning is part of the expected result.
 
 The full matrix passed again after deploying unauthenticated GitHub subrequest caching.
+
+Worker version `7ab427e1-0d26-4068-92d5-3cdbf1e8eb9b` passed a targeted regression on `Robertg761/HA-Desktop-Widget@0eb45a8645144ab935dd8b2fac177e7158ce93ee`. All five literal README actions routed to file context with separate summary, caller, test, dependency, and impact focuses. The Worker classified `README.md` as documentation, extracted its real headings, and returned no invented imports, callers, or paired tests. The checks stayed in deterministic free mode; the production model ledger remained at `$0.039158` spent with `$99.960842` available before and after the replay.
 
 Worker version `fe43d4c2-c27c-476e-a982-dcb2a7ddb041` passed the full matrix after adding requested-ref mapping, consumer and contributor setup separation, orientation setup evidence, and current-file dependency context. A targeted production check remapped `openai/openai-node` from its exact commit SHA and returned the same requested ref, resolved ref, and commit SHA. Consumer setup returned the documented `npm install openai`, `deno add jsr:@openai/openai`, and `npx jsr add @openai/openai` commands. Current-file context for `src/index.ts` extracted local imports, resolved them to files including `src/client.ts` and `src/core/pagination.ts`, and ranked likely paired tests. A caller check for `src/core/pagination.ts` returned `src/resources/admin/organization/usage.ts` as a strong production candidate while excluding test, fixture, example, evaluation, benchmark, and ecosystem-test surfaces.
 

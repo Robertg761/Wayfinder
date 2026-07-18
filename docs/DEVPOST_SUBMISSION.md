@@ -34,7 +34,7 @@ It can:
 - find likely source files from a natural-language question
 - turn a goal such as "I want to change speech generation" into a setup, implementation, and verification route
 - use the active GitHub directory as ranking context
-- extract imports from the active file, resolve local dependencies, rank likely callers, and find paired tests
+- classify the active file, route five distinct file actions, resolve explicit local dependencies, and show only target-specific caller and paired-test evidence
 - open every recommended file at the mapped commit and known line range
 - preserve the current trail while the user follows evidence through GitHub
 - keep recent evidence available through temporary network or GitHub failures
@@ -57,7 +57,7 @@ A TypeScript Cloudflare Worker provides explicit repository tools:
 - deterministic intent router
 - multi-tool contribution orchestrator
 
-The mapper reads GitHub metadata, the exact viewed branch, tag, or commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. Current-file questions inspect direct imports, resolve local repository paths, and rank bounded evidence for likely callers and paired tests. The install tool extracts documented commands with line references and uses manifests only for clearly labeled inference.
+The mapper reads GitHub metadata, the exact viewed branch, tag, or commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. Current-file questions first distinguish source, test, documentation, configuration, data, and other files, then route summary, dependency, caller, test, and impact actions separately. Relationship results require target-specific evidence; documentation is summarized from its own headings instead of being treated as executable source. The install tool extracts documented commands with line references and uses manifests only for clearly labeled inference.
 
 GPT-5.6 Luna is connected through the OpenAI Responses API for contribution Trail Plans. The model receives the user's question and the completed typed evidence, uses the lowest reasoning level that passes our evaluation, and must return strict structured output containing a direct answer, explanation, citations, and up to four ordered actions. Responses are not stored. Before the answer reaches the extension, the Worker verifies that every model evidence path and action coordinate occurs in the deterministic result. Focused questions stay on the deterministic route, and successful model calls report token usage, latency, and estimated cost.
 
@@ -78,7 +78,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The automated suite covers 95 unit and integration cases plus 10 complete browser workflows across URL context, mode persistence, public request validation, ref correctness, setup intent, current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, and model fallback.
+- The automated suite covers 132 unit and integration cases plus 44 complete browser workflows across URL context, late-rendered and off-screen landmarks, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, beginner-first Releases and OS selection, delayed release assets, setup intent, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, and model fallback.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -124,9 +124,9 @@ Verified screenshot candidates:
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `fe43d4c2-c27c-476e-a982-dcb2a7ddb041`
+- Current Worker version: `60bc20e8-71a3-41b3-a870-71ae8a63ad04`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `ad0483f5136929ffd4192638a717a2e726d2c6e2d1f4dc3b2ed377d844554e61`
-- Automated checks: 95 unit and integration tests, 10 browser workflows, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `5c30148feaf03e811dc2929ecbd0e905a462fed6b9140a3b61284bd43edcbb1b`
+- Automated checks: 132 unit and integration tests, 44 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

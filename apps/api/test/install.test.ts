@@ -142,4 +142,14 @@ describe("generateInstallGuide", () => {
     expect(contributor.audience).toBe("develop");
     expect(contributor.steps.map((step) => step.command)).toEqual(["npm install", "npm test"]);
   });
+
+  it("does not invent a registry command from a public application manifest", () => {
+    const map = makeMap({ setupFiles: ["package.json", "package-lock.json"] });
+    const guide = generateInstallGuide(map, {
+      "package.json": JSON.stringify({ name: "desktop-widget", scripts: { start: "electron ." } }),
+    }, "use");
+
+    expect(guide.steps).toEqual([]);
+    expect(guide.warnings).toContain("No documented consumer package command was found. Check GitHub Releases for a packaged application before trying to run the source repository.");
+  });
 });

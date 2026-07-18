@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { FileFindResponse } from "@wayfinder/contracts";
-import { classifyAgentIntent, importedSpecifiers, keepGoalLinkedVerification, keepLikelyCallers } from "../src/agent";
+import { classifyAgentIntent, importedSpecifiers, installationAudience, keepGoalLinkedVerification, keepLikelyCallers } from "../src/agent";
 
 describe("classifyAgentIntent", () => {
   it.each([
     ["How do I install and run this?", "installation"],
+    ["Help me install or use this project as a consumer or published application", "installation"],
+    ["Help me use this project as a consumer or published package", "installation"],
     ["How do I run the tests?", "installation"],
     ["What dependencies do I need?", "installation"],
     ["What does this repository do?", "orientation"],
@@ -26,6 +28,10 @@ describe("classifyAgentIntent", () => {
   it("uses current-file context for dependency and paired-test questions", () => {
     expect(classifyAgentIntent("What does this file depend on?", "src/client.ts")).toBe("file-context");
     expect(classifyAgentIntent("Find the paired tests for this file", "src/client.ts")).toBe("file-context");
+    expect(classifyAgentIntent("Summarize the role of src/client.ts", "src/client.ts")).toBe("file-context");
+    expect(classifyAgentIntent("Which files are callers of src/client.ts?", "src/client.ts")).toBe("file-context");
+    expect(classifyAgentIntent("Find the tests paired with src/client.ts", "src/client.ts")).toBe("file-context");
+    expect(classifyAgentIntent("If I change src/client.ts, what breaks?", "src/client.ts")).toBe("file-context");
   });
 });
 
@@ -39,6 +45,16 @@ describe("importedSpecifiers", () => {
     ].join("\n");
 
     expect(importedSpecifiers(content)).toEqual(['./client', './register', '../lazy', './config']);
+  });
+});
+
+describe("installationAudience", () => {
+  it("treats a plain install question as an end-user request", () => {
+    expect(installationAudience("How do I install it?")).toBe("use");
+  });
+
+  it("keeps explicit contributor setup on the development path", () => {
+    expect(installationAudience("Help me develop this repository locally")).toBe("develop");
   });
 });
 
@@ -84,6 +100,22 @@ describe("keepGoalLinkedVerification", () => {
 
   it("claims no verification coordinate when none matches the goal", () => {
     const filtered = keepGoalLinkedVerification({ ...finder, results: finder.results.slice(0, 1) }, "Fix pagination");
+    expect(filtered.results).toEqual([]);
+    expect(filtered.warnings.at(-1)).toContain("no verification coordinate was claimed");
+  });
+
+  it("does not claim a goal-linked verification path when it is only possible", () => {
+    const filtered = keepGoalLinkedVerification({
+      ...finder,
+      results: [{
+        path: "tests/pagination-guess.test.ts",
+        score: 0.3,
+        confidence: "possible",
+        reason: "Structural guess.",
+        signals: ["test-pair"],
+      }],
+    }, "Fix pagination");
+
     expect(filtered.results).toEqual([]);
     expect(filtered.warnings.at(-1)).toContain("no verification coordinate was claimed");
   });

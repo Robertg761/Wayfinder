@@ -37,11 +37,13 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 - Animated page landmarks that move the helper to repository controls, file trees, READMEs, and code regions
 - Installation checklist with documented and inferred confidence labels
 - One-click copying for sourced installation commands
+- End-user installation guidance that first points to GitHub Releases, detects the desktop OS or asks the user when it cannot, then scrolls to and highlights the matching non-source download
+- Cross-page evidence trails that navigate to cited files and resume with the helper highlighting the requested source on arrival
 - Ranked file matches with reasons, confidence, content evidence, and direct navigation
-- Current-file import extraction, local dependency resolution, likely-caller search, and paired-test ranking
+- Action-specific current-file summaries, language-aware import extraction, exact local dependency resolution, target-specific caller candidates, and evidence-backed paired tests
 - Compact repository snapshot with purpose, stack, package manager, ref, key directories, entry point, and local commands
 - Unified question composer with saved per-repository trails and suggested follow-ups
-- Saved answer continuity across evidence navigation with a Back to saved trail action
+- Saved answer continuity across evidence navigation with a Continue my last task action
 - Quick or expanded answer depth controls and `Alt + Shift + W` keyboard access
 - Commit-aware repository and answer caching in `chrome.storage.local`
 - Edge-cached public GitHub responses with longer retention for immutable commit evidence
@@ -53,7 +55,7 @@ Wayfinder is a context-aware repository guide that lives directly on GitHub. A s
 - Unit tests for URL parsing, caching, clipboard behavior, repository filtering, installation guidance, and file finding
 - Browser regression tests for reload safety, GitHub context changes, keyboard dismissal, reduced motion, and non-repository routes
 
-The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, language signals, and direct imports. The agent router classifies each question as orientation, installation, file discovery, current-file context, or contribution planning. Setup starts by distinguishing use of a published project from local repository development. Development answers omit consumer-only and placeholder commands, while consumer answers avoid workspace setup. Both expose confidence, evidence, and warnings. A contribution request runs several tools and combines the repository route, sourced setup commands, likely implementation, and related verification path. Recent maps, answers, preferences, and saved trails remain available during temporary GitHub or network failures.
+The deterministic engine uses repository conventions, file roles, aliases, test relationships, content symbols, current-directory context, language signals, and explicit imports. Current-file actions are routed separately as summary, dependency, caller, test, or impact questions. Documentation, configuration, tests, data, and source files keep distinct evidence boundaries, so a README is summarized from its headings instead of being forced through a source import graph. Caller and test relationships require target-specific evidence, and possible matches never become headline claims. A plain installation question defaults to the end-user path; explicit development or contribution wording selects local repository setup. Development answers omit consumer-only and placeholder commands, while consumer answers prefer a documented package command and otherwise lead with packaged GitHub releases instead of workspace setup. Both expose confidence, evidence, and warnings. A contribution request runs several tools and combines the repository route, sourced setup commands, likely implementation, and related verification path. Recent maps, answers, preferences, saved trails, and in-progress page guidance remain available during GitHub navigation or temporary network failures.
 
 Guided mode is patient and project-specific. It moves only during an explicit landmark tour, teaches the real GitHub term, and adds a fact about the repository at each stop. Quick mode stays quiet until opened, keeps the helper stationary, and leads with a compact repository snapshot and focused developer actions. Users can switch modes at any time without changing the underlying evidence or model policy.
 
@@ -106,7 +108,7 @@ curl -X POST http://localhost:8787/map \
   -d '{"owner":"openai","repo":"openai-node","ref":"master"}'
 ```
 
-`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes a focused question through the tour, installation guide, or file finder. Contribution goals invoke all three capabilities to build a Trail Plan. When an OpenAI key is configured, Luna receives that typed contribution evidence and produces a structured synthesis plus an ordered field brief. Focused questions stay deterministic and free. Any unverified path, invalid response, API failure, exhausted allowance, or missing key returns the deterministic answer instead.
+`POST /agent` accepts a repository map, a natural-language question, and an optional current path. It routes a focused question through the tour, installation guide, file finder, or file-type-aware current-file analyzer. Contribution goals invoke several capabilities to build a Trail Plan. When an OpenAI key is configured, Luna receives that typed contribution evidence and produces a structured synthesis plus an ordered field brief. Focused questions stay deterministic and free. Possible matches are excluded from the model evidence allow-list; any unverified path, invalid response, API failure, exhausted allowance, or missing key returns the deterministic answer instead.
 
 GitHub access errors use typed response codes so the extension can distinguish a public API rate limit from a private or missing repository. A GitHub token remains optional for public repositories and can be added to `apps/api/.dev.vars` for a higher rate limit.
 

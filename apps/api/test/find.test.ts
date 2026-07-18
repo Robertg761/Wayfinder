@@ -168,4 +168,50 @@ describe("findFiles", () => {
     expect(response.results[0].path).toBe("tests/api-resources/audio/speech.test.ts");
     expect(response.results.every((result) => /test|spec|fixture/i.test(result.path))).toBe(true);
   });
+
+  it("does not treat a file extension as a substring match inside unrelated source", () => {
+    const response = findFiles(map, "readme md paired tests specs", {
+      "tests/auth.test.ts": "const cmd = 'electron';\ndescribe('unrelated behavior', () => {})",
+    }, "README.md", {
+      requiredEvidenceTerms: ["readme"],
+      minimumConfidence: "likely",
+    });
+
+    expect(response.results).toEqual([]);
+    expect(response.warnings).toContain("No test-shaped repository path matched this query.");
+  });
+
+  it("drops relationship filler and file extensions from generic ranking terms", () => {
+    const response = findFiles(map, "Find the tests paired with README.md", {
+      "tests/auth.test.ts": "const cmd = 'electron';\ndescribe('unrelated behavior', () => {})",
+    }, "README.md");
+
+    expect(response.results.every((result) => !result.reason.includes("with"))).toBe(true);
+    expect(response.results.every((result) => !result.reason.includes("md"))).toBe(true);
+  });
+
+  it("keeps a candidate seed only when inspected content also matches the required target", () => {
+    const relationMap: RepoMap = {
+      ...map,
+      tree: [
+        ...map.tree,
+        { path: "src/usage.ts", type: "blob", size: 1_000 },
+        { path: "src/usage-config.ts", type: "blob", size: 1_000 },
+        { path: "src/pagination-helper.ts", type: "blob", size: 1_000 },
+      ],
+    };
+    const response = findFiles(relationMap, "pagination import usage caller", {
+      "src/usage.ts": "import { Page } from './core/pagination';",
+      "src/usage-config.ts": "export const usage = true;",
+      "src/pagination-helper.ts": "export const usage = true;",
+    }, "src/core/pagination.ts", {
+      requiredEvidenceTerms: ["pagination"],
+      requireInspectedContentEvidence: true,
+      minimumConfidence: "likely",
+    });
+
+    expect(response.results[0].path).toBe("src/usage.ts");
+    expect(response.results.some((result) => result.path === "src/usage-config.ts")).toBe(false);
+    expect(response.results.some((result) => result.path === "src/pagination-helper.ts")).toBe(false);
+  });
 });

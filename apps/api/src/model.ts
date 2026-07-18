@@ -83,6 +83,9 @@ const outputJsonSchema = {
 } as const;
 
 function answerEvidencePaths(answer: AgentAnswer): Set<string> {
+  const crediblePaths = (results: Array<{ path: string; confidence: string }>) =>
+    results.filter((result) => result.confidence !== "possible").map((result) => result.path);
+
   if (answer.intent === "orientation") {
     return new Set([
       ...answer.tour.entryPoints.map((entry) => entry.path),
@@ -103,8 +106,8 @@ function answerEvidencePaths(answer: AgentAnswer): Set<string> {
       ...answer.trail.tour.stops.map((stop) => stop.path),
       ...answer.trail.guide.prerequisites.map((item) => item.evidence.path),
       ...answer.trail.guide.steps.map((step) => step.evidence.path),
-      ...answer.trail.implementation.results.map((result) => result.path),
-      ...answer.trail.verification.results.map((result) => result.path),
+      ...crediblePaths(answer.trail.implementation.results),
+      ...crediblePaths(answer.trail.verification.results),
     ]);
   }
 
@@ -112,12 +115,12 @@ function answerEvidencePaths(answer: AgentAnswer): Set<string> {
     return new Set([
       answer.currentPath,
       ...answer.relatedPaths,
-      ...answer.callers.results.map((result) => result.path),
-      ...answer.tests.results.map((result) => result.path),
+      ...crediblePaths(answer.callers.results),
+      ...crediblePaths(answer.tests.results),
     ]);
   }
 
-  return new Set(answer.finder.results.map((result) => result.path));
+  return new Set(crediblePaths(answer.finder.results));
 }
 
 function outputText(body: unknown): string | null {
@@ -189,6 +192,8 @@ export async function synthesizeAgentAnswer(
           "You are Wayfinder, an evidence-first guide for unfamiliar GitHub repositories.",
           "Answer the user's question using only the deterministic repository evidence supplied in the input.",
           "Never invent a path, command, dependency, symbol, capability, or fact.",
+          "A pinned repository map proves that a path exists at the commit; it does not prove that two files are related.",
+          "Treat possible matches and warnings as uncertainty, never as confirmed implementation, caller, or test evidence.",
           "Use only exact paths present in the evidence when filling evidencePaths.",
           "If the evidence is incomplete, say what is missing and suggest a supported next question.",
           "For a contribution request, use brief to turn the evidence into an ordered first-contribution plan that separates setup, implementation, and verification.",

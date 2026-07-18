@@ -1,6 +1,6 @@
 # Wayfinder Ship Checklist
 
-Updated July 14, 2026.
+Updated July 16, 2026.
 
 ## Complete
 
@@ -25,7 +25,8 @@ Updated July 14, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 78 automated tests pass
+- [x] All 132 unit and integration tests pass
+- [x] All 44 browser workflows pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, tests, builds, packaging, archive integrity, and checksum verification
@@ -36,6 +37,9 @@ Updated July 14, 2026.
 - [x] Public installation answer and command-copy interaction verified in the narrow preview
 - [x] Deprecated pagination wrapper regression fixed and tested
 - [x] Contribution verification remains goal-linked and demotes test-support fixtures
+- [x] README and other non-source files stay outside the source caller/test graph
+- [x] Current-file actions render only the requested summary, dependency, caller, test, or impact evidence
+- [x] Possible relationship matches cannot become headline or model claims
 - [x] Architecture document
 - [x] Timed demo script
 - [x] Devpost story draft
@@ -99,7 +103,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-fd100fd8a9b8f0f6958cdfc7a2a64684ec98a11a8a93b7f089f48ed0bdf94464
+5c30148feaf03e811dc2929ecbd0e905a462fed6b9140a3b61284bd43edcbb1b
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

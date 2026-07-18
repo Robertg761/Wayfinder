@@ -25,6 +25,7 @@ interface CacheIndexEntry {
 
 const indexKey = "wayfinder:cache:index:v1";
 const maxEntries = 18;
+const agentAnswerCacheVersion = "v2";
 
 export const repositoryCacheTtl = 15 * 60 * 1_000;
 export const agentCacheTtl = 30 * 60 * 1_000;
@@ -47,8 +48,8 @@ export function repositoryCacheKey(owner: string, repo: string, ref?: string | n
 }
 
 export function agentResponseCacheKey(repo: string, sha: string, query: string, currentPath: string | null): string {
-  const identity = [normalize(repo), sha, normalize(query), normalize(currentPath ?? "root")].join("|");
-  return "wayfinder:agent:" + normalize(repo) + ":" + hashText(identity);
+  const identity = [agentAnswerCacheVersion, normalize(repo), sha, normalize(query), normalize(currentPath ?? "root")].join("|");
+  return "wayfinder:agent:" + agentAnswerCacheVersion + ":" + normalize(repo) + ":" + hashText(identity);
 }
 
 function isEnvelope(value: unknown): value is CacheEnvelope<unknown> {

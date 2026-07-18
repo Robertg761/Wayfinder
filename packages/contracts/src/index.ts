@@ -150,6 +150,9 @@ export interface AgentModelUsage {
   estimatedCostUsd: number;
 }
 
+export type FileContextFocus = "summary" | "dependencies" | "callers" | "tests" | "impact";
+export type RepositoryFileKind = "source" | "test" | "documentation" | "configuration" | "data" | "other";
+
 export type AgentIntent = "orientation" | "installation" | "file-find" | "file-context" | "contribution";
 export type AgentMode = "free" | "gpt-5.6";
 
@@ -174,7 +177,20 @@ export type AgentAnswer =
   | (AgentAnswerBase & { intent: "orientation"; tour: RepoTour; guide: InstallGuide })
   | (AgentAnswerBase & { intent: "installation"; guide: InstallGuide })
   | (AgentAnswerBase & { intent: "file-find"; finder: FileFindResponse })
-  | (AgentAnswerBase & { intent: "file-context"; currentPath: string; imports: string[]; relatedPaths: string[]; callers: FileFindResponse; tests: FileFindResponse })
+  | (AgentAnswerBase & {
+      intent: "file-context";
+      currentPath: string;
+      focus: FileContextFocus;
+      fileKind: RepositoryFileKind;
+      fileRole: string;
+      highlights: string[];
+      contentAvailable: boolean;
+      imports: string[];
+      relatedPaths: string[];
+      callers: FileFindResponse;
+      tests: FileFindResponse;
+      warnings: string[];
+    })
   | (AgentAnswerBase & { intent: "contribution"; trail: ContributionTrail });
 
 export type WayfinderErrorCode =

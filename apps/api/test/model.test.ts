@@ -114,6 +114,29 @@ describe("synthesizeAgentAnswer", () => {
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
   });
 
+  it("does not let the model promote a possible deterministic match into evidence", async () => {
+    const possibleAnswer: AgentAnswer = {
+      ...freeAnswer,
+      finder: {
+        ...freeAnswer.finder,
+        results: [{
+          ...freeAnswer.finder.results[0],
+          path: "src/guess.ts",
+          confidence: "possible",
+          reason: "A structural guess only.",
+        }],
+      },
+    };
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Use src/guess.ts.",
+      explanation: "This possible match should not become a claim.",
+      evidencePaths: ["src/guess.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(possibleAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(possibleAnswer);
+  });
+
   it("falls back to the free answer when OpenAI is unavailable", async () => {
     const fetcher = vi.fn(async () => new Response("unavailable", { status: 503 })) as unknown as typeof fetch;
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);

@@ -52,7 +52,11 @@ The Cloudflare Worker exposes six routes:
 - `POST /tour` builds a deterministic reading route.
 - `POST /guide/install` extracts either consumer or contributor setup commands with confidence labels.
 - `POST /find` ranks paths, then inspects only the strongest small text candidates for content and symbols.
-- `POST /agent` classifies the question, runs one typed tool for focused questions, resolves current-file imports, likely callers, and paired tests when appropriate, or orchestrates tour, install, implementation, and verification evidence for a contribution goal. It then optionally requests GPT-5.6 synthesis.
+- `POST /agent` classifies the question, runs one typed tool for focused questions, separates current-file summary, dependency, caller, test, and impact actions, or orchestrates tour, install, implementation, and verification evidence for a contribution goal. Current-file analysis classifies source, test, documentation, configuration, data, and other files before extracting evidence. It then optionally requests GPT-5.6 synthesis for contribution plans only.
+
+Current-file relationship searches fail closed. Caller candidates must contain the distinctive target term in inspected content, paired tests must carry target-specific path or content evidence, and `possible` matches are discarded. Non-source files never enter the source caller/test graph. Content fetch failures and truncated repository maps remain visible as warnings, and the extension cache key is versioned when the answer contract changes so stale claims do not survive a deployment.
+
+Plain installation questions are treated as end-user requests unless they explicitly mention development, contribution, building locally, or running from source. In the extension, end-user answers first move to and highlight the repository's Releases link, then persist that page trail across navigation. On the Releases page, the content script uses the detected desktop OS when reliable, asks the user to choose macOS, Windows, or Linux when it is not, rejects source archives and cross-platform mismatches, scrolls to the strongest packaged asset, and reuses the landmark movement/highlight system to point at it. Evidence links use the same persisted navigation mechanism for repository files.
 
 This edge layer reduces repeated GitHub quota use without caching user questions, generated answers, or authenticated repository data.
 
@@ -79,7 +83,7 @@ The OpenAI key exists only in the Worker environment. The model request uses the
 - a Cloudflare rate-limit allowance before any paid request
 - a serialized global budget reservation before any paid request
 
-The Worker parses the structured result and rejects the entire synthesis if any model citation or field-brief path is absent from the tool output. It also falls back when the key is missing, the API is unavailable, the response is refused or malformed, or local validation fails.
+The Worker parses the structured result and rejects the entire synthesis if any model citation or field-brief path is absent from the credible tool output. Paths backed only by a `possible` match are excluded from the allow-list. The prompt also distinguishes a pinned repository path from a verified relationship. Wayfinder falls back when the key is missing, the API is unavailable, the response is refused or malformed, or local validation fails.
 
 Successful model answers include token counts, latency, reasoning tokens, and an estimated Luna API cost. Focused orientation, installation, and file-location questions never request a model allowance. Their deterministic tools already answer the job directly.
 
