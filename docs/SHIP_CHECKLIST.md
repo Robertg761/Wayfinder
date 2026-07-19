@@ -26,7 +26,7 @@ Updated July 19, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 169 unit and integration tests pass
+- [x] All 178 unit and integration tests pass
 - [x] All 49 browser workflows pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
@@ -60,7 +60,7 @@ Updated July 19, 2026.
 - [x] Confirm `/health` reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`
 - [x] Run one live GPT-5.6 question through the deployed `/agent` endpoint
 - [x] Confirm the response has `mode: gpt-5.6`, model `gpt-5.6-luna`, low reasoning, and only valid evidence paths
-- [ ] Capture the GPT-5.6 synthesis screenshot
+- [x] Capture the GPT-5.6 synthesis screenshot
 
 Add the secret with:
 
@@ -92,7 +92,7 @@ Luna is fixed in source. The recorded live Luna verification used Worker version
 ## Needs submission assets
 
 - [ ] Ask another person to choose a public repository and complete the four core jobs
-- [ ] Record the primary demo
+- [x] Record the primary demo
 - [ ] Record or retain a free-mode backup demo
 - [x] Publish the source repository and add its URL to Devpost
 - [ ] Add the demo video URL

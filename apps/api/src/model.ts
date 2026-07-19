@@ -146,28 +146,47 @@ function answerEvidenceCommands(answer: AgentAnswer): Set<string> {
   return new Set();
 }
 
-function containsUnsupportedEvidence(
+function unsupportedEvidenceReason(
   synthesis: z.infer<typeof synthesisSchema>,
   allowedPaths: Set<string>,
   allowedCommands: Set<string>,
-): boolean {
+  deterministicText: string,
+): string | null {
   const text = [
     synthesis.summary,
     synthesis.explanation,
     ...synthesis.brief.flatMap((step) => [step.title, step.action]),
   ].join("\n");
-  const pathLike = text.match(/\b(?:[a-zA-Z0-9_.@-]+\/)+[a-zA-Z0-9_.@-]+(?:\.[a-zA-Z0-9]+)?\b/g) ?? [];
-  if (pathLike.some((path) => !allowedPaths.has(path))) return true;
-
-  const codeSpans = [...text.matchAll(/`([^`]+)`/g)].map((match) => match[1].trim());
-  if (codeSpans.some((value) => !allowedPaths.has(value) && !allowedCommands.has(value))) return true;
-
   let proseWithoutSupportedCommands = text;
   for (const command of [...allowedCommands].sort((left, right) => right.length - left.length)) {
     proseWithoutSupportedCommands = proseWithoutSupportedCommands.replaceAll(command, "");
   }
+
+  const pathLike = proseWithoutSupportedCommands.match(/\b(?:[a-zA-Z0-9_.@-]+\/)+[a-zA-Z0-9_.@-]+(?:\.[a-zA-Z0-9]+)?\b/g) ?? [];
+  const unsupportedPath = pathLike.find((path) => !allowedPaths.has(path));
+  if (unsupportedPath) return "unsupported-prose-path:" + unsupportedPath;
+
+  const codeSpans = [...text.matchAll(/`([^`]+)`/g)].map((match) => match[1].trim());
+  const normalizedEvidence = deterministicText.toLowerCase();
+  const unsupportedCodeSpan = codeSpans.find((value) => !allowedPaths.has(value)
+    && !allowedCommands.has(value)
+    && !normalizedEvidence.includes(value.toLowerCase()));
+  if (unsupportedCodeSpan) return "unsupported-code-span";
+
   const unsupportedCommand = /(?:^|[\n.!?]\s+)(?:run|execute|type|use)?\s*(?:sudo\s+)?(?:rm|rmdir|del|format|mkfs|dd|git\s+(?:reset|clean)|curl|wget|npm|npx|pnpm|yarn|bun|deno|pip|pip3|pipx|poetry|uv|cargo|go|brew|apt|apt-get|docker|make|just|python|python3|node)\b/i;
-  return unsupportedCommand.test(proseWithoutSupportedCommands) || /(?:&&|\|\||\$\(|\s\|\s|\s>[>]?)\s*\S/.test(proseWithoutSupportedCommands);
+  if (unsupportedCommand.test(proseWithoutSupportedCommands)) return "unsupported-command";
+  if (/(?:&&|\|\||\$\(|\s\|\s|\s>[>]?)\s*\S/.test(proseWithoutSupportedCommands)) return "unsupported-shell-operator";
+  return null;
+}
+
+function deterministicFallback(answer: AgentAnswer, reason: string): AgentAnswer {
+  console.warn(JSON.stringify({ event: "model-synthesis-fallback", reason }));
+  return {
+    ...answer,
+    modelFallbackReason: reason.startsWith("unsupported-prose-path:")
+      ? reason
+      : reason.split(":", 1)[0],
+  };
 }
 
 function outputText(body: unknown): string | null {
@@ -225,6 +244,7 @@ export async function synthesizeAgentAnswer(
   const allowedCommands = answerEvidenceCommands(answer);
   const sortedAllowedPaths = [...allowedPaths].sort();
   const sortedAllowedCommands = [...allowedCommands].sort();
+  let stage = "model-request";
 
   try {
     const startedAt = Date.now();
@@ -249,6 +269,8 @@ export async function synthesizeAgentAnswer(
           "The allowedEvidencePaths list is authoritative for every evidencePaths and brief evidencePath value.",
           "Do not introduce or suggest a shell command unless that exact command appears in the supplied deterministic evidence.",
           "The allowedCommands list is authoritative for shell commands.",
+          "Never combine supplied commands with shell operators; mention each exact command separately.",
+          "Only use Markdown backticks around an exact supplied path, exact supplied command, or term that already appears in deterministic evidence.",
           "If the evidence is incomplete, say what is missing and suggest a supported next question.",
           "For a contribution request, use brief to turn the evidence into an ordered first-contribution plan that separates setup, implementation, and verification.",
           "Be concise, practical, and welcoming to a developer who is new to the repository.",
@@ -273,18 +295,43 @@ export async function synthesizeAgentAnswer(
       signal: AbortSignal.timeout(30_000),
     });
 
-    if (!response.ok) return answer;
+    if (!response.ok) return deterministicFallback(answer, "model-http-" + response.status);
+    stage = "response-body";
     const body: unknown = await response.json();
+    stage = "output-extraction";
     const text = outputText(body);
-    if (!text) return answer;
+    if (!text) return deterministicFallback(answer, "missing-output-text");
 
-    const synthesis = synthesisSchema.safeParse(JSON.parse(text));
-    if (!synthesis.success) return answer;
+    stage = "synthesis-parse";
+    let parsedText: unknown;
+    try {
+      parsedText = JSON.parse(text);
+    } catch {
+      return deterministicFallback(answer, "invalid-output-json");
+    }
+    stage = "synthesis-schema";
+    const synthesis = synthesisSchema.safeParse(parsedText);
+    if (!synthesis.success) {
+      const issues = synthesis.error.issues.map((issue) => issue.path.join(".") + ":" + issue.code).join(",");
+      return deterministicFallback(answer, "invalid-output-schema:" + issues);
+    }
 
-    if (synthesis.data.evidencePaths.some((path) => !allowedPaths.has(path))) return answer;
-    if (synthesis.data.brief.some((step) => step.evidencePath !== null && !allowedPaths.has(step.evidencePath))) return answer;
-    if (containsUnsupportedEvidence(synthesis.data, new Set([...allowedPaths, answer.repo]), allowedCommands)) return answer;
+    stage = "evidence-validation";
+    if (synthesis.data.evidencePaths.some((path) => !allowedPaths.has(path))) {
+      return deterministicFallback(answer, "unsupported-evidence-path");
+    }
+    if (synthesis.data.brief.some((step) => step.evidencePath !== null && !allowedPaths.has(step.evidencePath))) {
+      return deterministicFallback(answer, "unsupported-brief-path");
+    }
+    const unsupportedReason = unsupportedEvidenceReason(
+      synthesis.data,
+      new Set([...allowedPaths, answer.repo]),
+      allowedCommands,
+      JSON.stringify(answer),
+    );
+    if (unsupportedReason) return deterministicFallback(answer, unsupportedReason);
 
+    stage = "result-cleanup";
     return {
       ...answer,
       mode: "gpt-5.6",
@@ -300,7 +347,8 @@ export async function synthesizeAgentAnswer(
         evidencePath: step.evidencePath,
       })),
     };
-  } catch {
-    return answer;
+  } catch (error) {
+    const errorName = error instanceof Error ? error.name : "UnknownError";
+    return deterministicFallback(answer, `exception-${stage}-${errorName}`);
   }
 }

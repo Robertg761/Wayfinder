@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import worker from "../src/index";
+import worker, { createBudgetedModelFetcher } from "../src/index";
+import { reserveCostMicroUsd } from "../src/budget";
 
 function validMap(overrides: Record<string, unknown> = {}) {
   return {
@@ -223,5 +224,63 @@ describe("public API request boundaries", () => {
 
     await expect(medium.json()).resolves.toMatchObject({ reasoningEffort: "medium" });
     await expect(unsupported.json()).resolves.toMatchObject({ reasoningEffort: "low" });
+  });
+});
+
+describe("budgeted model fetcher", () => {
+  function recordingBudget() {
+    return {
+      fetch: vi.fn(async (_input: string, _init?: RequestInit) => Response.json({ success: true })),
+    };
+  }
+
+  function requestBody(call: [string, RequestInit?]): Record<string, unknown> {
+    return JSON.parse(String(call[1]?.body)) as Record<string, unknown>;
+  }
+
+  it("reconciles a successful model response to reported usage", async () => {
+    const budget = recordingBudget();
+    const upstream = vi.fn(async () => Response.json({
+      usage: {
+        input_tokens: 2_000,
+        output_tokens: 300,
+        input_tokens_details: { cached_tokens: 1_000 },
+      },
+    })) as unknown as typeof fetch;
+    const fetcher = createBudgetedModelFetcher(budget, 100_000_000, upstream, () => "request-1");
+
+    const response = await fetcher("https://api.openai.com/v1/responses", { method: "POST", body: "{}" });
+
+    expect(response.ok).toBe(true);
+    expect(budget.fetch).toHaveBeenCalledTimes(2);
+    expect(requestBody(budget.fetch.mock.calls[1])).toEqual({ reservationId: "request-1", actualMicroUsd: 2_900 });
+  });
+
+  it("releases a reservation after a non-success model response", async () => {
+    const budget = recordingBudget();
+    const upstream = vi.fn(async () => new Response("invalid", { status: 400 })) as unknown as typeof fetch;
+    const fetcher = createBudgetedModelFetcher(budget, 100_000_000, upstream, () => "request-2");
+
+    const response = await fetcher("https://api.openai.com/v1/responses", { method: "POST", body: "{}" });
+
+    expect(response.status).toBe(400);
+    expect(requestBody(budget.fetch.mock.calls[1])).toEqual({ reservationId: "request-2", actualMicroUsd: 0 });
+  });
+
+  it("charges the conservative reservation after an ambiguous upstream failure", async () => {
+    const budget = recordingBudget();
+    const upstream = vi.fn(async () => {
+      throw new Error("network interrupted");
+    }) as unknown as typeof fetch;
+    const body = JSON.stringify({ model: "gpt-5.6-luna" });
+    const fetcher = createBudgetedModelFetcher(budget, 100_000_000, upstream, () => "request-3");
+
+    const response = await fetcher("https://api.openai.com/v1/responses", { method: "POST", body });
+
+    expect(response.status).toBe(503);
+    expect(requestBody(budget.fetch.mock.calls[1])).toEqual({
+      reservationId: "request-3",
+      actualMicroUsd: reserveCostMicroUsd(body),
+    });
   });
 });

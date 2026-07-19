@@ -4,7 +4,7 @@ Updated July 19, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Current Worker version: `d9e3cf89-57a8-4bad-8a18-75f35e4623cf`
+Current Worker version: `aefe4f70-4fd4-4aa0-9cb2-7e29e3b2530a`
 
 Full cross-repository matrix baseline: `d9e3cf89-57a8-4bad-8a18-75f35e4623cf`
 
@@ -23,6 +23,8 @@ The July 19 release strengthens the matrix further: every consumer command must 
 | Truncated monorepo | `vercel/next.js@0491db047b8f9c4a5f9d0285ad9ed514bb134873` | 6 stops | 4 dev / release fallback | Where is routing implemented? | `packages/next/src/shared/lib/router/routes/app.ts` | Pass, likely |
 
 Flask, GitHub CLI, and Next.js correctly keep repository-development setup separate from end-user guidance. When no documented consumer command exists, they return a conditional latest-release fallback instead of presenting contributor setup as installation.
+
+Worker version `8b0b933e-e3bc-4376-97db-9e8df92652e2` passed the final live GPT-5.6 Trail Plan used for the demo. It returned `mode: gpt-5.6`, preserved `src/resources/audio/speech.ts` and `tests/api-resources/audio/speech.test.ts`, and used only commands present in deterministic repository evidence. The fresh v3 budget ledger carried the full prior `$0.100299` forward, reconciled the live proof and recorded demo calls, and finished at `$0.109359` spent with zero reserved and `$99.890641` remaining.
 
 Worker version `d9e3cf89-57a8-4bad-8a18-75f35e4623cf` passed the strengthened complete matrix after the July 19 release. Product-specific consumer-command validation and root-level setup-evidence validation passed across all five repository shapes, every representative evidence URL returned HTTP 200, and the model budget remained at `$0.043734` with no reservation, confirming that the matrix stayed deterministic.
 

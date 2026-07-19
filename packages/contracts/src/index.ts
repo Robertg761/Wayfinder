@@ -165,6 +165,7 @@ interface AgentAnswerBase {
   mode: AgentMode;
   model?: string;
   reasoningEffort?: "low" | "medium" | "high";
+  modelFallbackReason?: string;
   usage?: AgentModelUsage;
   summary: string;
   explanation?: string;

@@ -77,6 +77,7 @@ const findRequestSchema = z.object({
   currentPath: repositoryPathSchema.nullable().optional(),
 });
 const agentRequestSchema = findRequestSchema;
+const MODEL_BUDGET_LEDGER_NAME = "luna-lifetime-v3";
 
 const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
@@ -140,6 +141,68 @@ async function publicApiGate(request: Request, env: Env, path: string): Promise<
   }
 }
 
+interface ModelBudgetStub {
+  fetch(input: string, init?: RequestInit): Promise<Response>;
+}
+
+export function createBudgetedModelFetcher(
+  budget: ModelBudgetStub,
+  limitMicroUsd: number,
+  upstreamFetcher: typeof fetch = fetch,
+  reservationIdFactory: () => string = () => crypto.randomUUID(),
+): typeof fetch {
+  return async (input, init) => {
+    const requestBody = typeof init?.body === "string" ? init.body : "";
+    const reservationId = reservationIdFactory();
+    const amountMicroUsd = reserveCostMicroUsd(requestBody);
+    const settleReservation = async (actualMicroUsd: number) => {
+      try {
+        await budget.fetch("https://budget.internal/settle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reservationId, actualMicroUsd }),
+        });
+      } catch {
+        // A failed settlement intentionally remains conservatively reserved.
+      }
+    };
+
+    let reservation: Response;
+    try {
+      reservation = await budget.fetch("https://budget.internal/reserve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reservationId, amountMicroUsd, limitMicroUsd }),
+      });
+    } catch {
+      return new Response("Model budget unavailable", { status: 503 });
+    }
+    const reservationResult = await reservation.json().catch(() => null) as { success?: boolean } | null;
+    if (!reservation.ok || !reservationResult?.success) {
+      return new Response("Model budget unavailable", { status: 429 });
+    }
+
+    let response: Response;
+    try {
+      response = await upstreamFetcher(input, init);
+    } catch {
+      // The upstream may have accepted the request before the connection failed,
+      // so charge the full conservative reservation rather than leaking it.
+      await settleReservation(amountMicroUsd);
+      return new Response("Model upstream unavailable", { status: 503 });
+    }
+    if (response.ok) {
+      const responseBody: unknown = await response.clone().json().catch(() => null);
+      const actualMicroUsd = actualCostMicroUsd(responseBody);
+      await settleReservation(actualMicroUsd ?? amountMicroUsd);
+    } else {
+      // Non-success API responses contain no model usage.
+      await settleReservation(0);
+    }
+    return response;
+  };
+}
+
 async function modelOptions(request: Request, env: Env): Promise<{
   apiKey: string;
   reasoningEffort: ReasoningEffort;
@@ -157,41 +220,9 @@ async function modelOptions(request: Request, env: Env): Promise<{
       : "low";
     if (!success) return undefined;
 
-    const budgetId = env.MODEL_BUDGET.idFromName("luna-lifetime-v2");
+    const budgetId = env.MODEL_BUDGET.idFromName(MODEL_BUDGET_LEDGER_NAME);
     const budget = env.MODEL_BUDGET.get(budgetId);
-    const fetcher: typeof fetch = async (input, init) => {
-      const requestBody = typeof init?.body === "string" ? init.body : "";
-      const reservationId = crypto.randomUUID();
-      const amountMicroUsd = reserveCostMicroUsd(requestBody);
-      const limitMicroUsd = budgetLimitMicroUsd(env.MODEL_BUDGET_USD);
-      const reservation = await budget.fetch("https://budget.internal/reserve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reservationId, amountMicroUsd, limitMicroUsd }),
-      });
-      const reservationResult = await reservation.json() as { success?: boolean };
-      if (!reservation.ok || !reservationResult.success) {
-        return new Response("Model budget unavailable", { status: 429 });
-      }
-
-      const response = await fetch(input, init);
-      if (response.ok) {
-        const responseBody: unknown = await response.clone().json().catch(() => null);
-        const actualMicroUsd = actualCostMicroUsd(responseBody);
-        if (actualMicroUsd !== null) {
-          try {
-            await budget.fetch("https://budget.internal/settle", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reservationId, actualMicroUsd }),
-            });
-          } catch {
-            // Keep the conservative reservation when reconciliation is unavailable.
-          }
-        }
-      }
-      return response;
-    };
+    const fetcher = createBudgetedModelFetcher(budget, budgetLimitMicroUsd(env.MODEL_BUDGET_USD));
 
     return { apiKey, reasoningEffort, fetcher };
   } catch {
@@ -212,7 +243,7 @@ export default {
       let modelBudget: Record<string, number> | undefined;
       if (env.MODEL_BUDGET) {
         try {
-          const budget = env.MODEL_BUDGET.get(env.MODEL_BUDGET.idFromName("luna-lifetime-v2"));
+          const budget = env.MODEL_BUDGET.get(env.MODEL_BUDGET.idFromName(MODEL_BUDGET_LEDGER_NAME));
           const limitUsd = budgetLimitMicroUsd(env.MODEL_BUDGET_USD) / 1_000_000;
           const status = await budget.fetch("https://budget.internal/status?limitUsd=" + limitUsd);
           const body = await status.json() as {

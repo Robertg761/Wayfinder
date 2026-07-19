@@ -29,6 +29,34 @@ const freeAnswer: AgentAnswer = {
   },
 };
 
+const installationAnswer: AgentAnswer = {
+  repo: "example/trail",
+  sha: "abc1234567890",
+  query: "How do I develop this repository?",
+  intent: "installation",
+  mode: "free",
+  summary: "Follow the documented local setup.",
+  suggestions: [],
+  generatedAt: "2026-07-13T00:00:00.000Z",
+  guide: {
+    repo: "example/trail",
+    sha: "abc1234567890",
+    audience: "develop",
+    packageManager: "npm",
+    runtimes: [],
+    prerequisites: [],
+    steps: [{
+      order: 1,
+      title: "Start the mock server",
+      command: "node scripts/mock",
+      evidence: { path: "package.json", lines: [1, 20] },
+      confidence: "documented",
+    }],
+    warnings: [],
+    generatedAt: "2026-07-13T00:00:00.000Z",
+  },
+};
+
 function modelResponse(value: unknown, usage = {
   input_tokens: 3_000,
   output_tokens: 500,
@@ -131,7 +159,10 @@ describe("synthesizeAgentAnswer", () => {
       brief: [],
     })) as unknown as typeof fetch;
 
-    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "unsupported-evidence-path",
+    });
   });
 
   it("rejects invented paths even when the model omits them from evidencePaths", async () => {
@@ -142,7 +173,10 @@ describe("synthesizeAgentAnswer", () => {
       brief: [],
     })) as unknown as typeof fetch;
 
-    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "unsupported-prose-path:src/invented.ts",
+    });
   });
 
   it("allows the deterministic repository identity in model prose", async () => {
@@ -159,6 +193,33 @@ describe("synthesizeAgentAnswer", () => {
     });
   });
 
+  it("allows a code-formatted term that appears in deterministic evidence", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Start with the `session` implementation in src/auth/session.ts.",
+      explanation: "The supplied finder reason identifies the exported session logic.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "gpt-5.6",
+    });
+  });
+
+  it("rejects a code-formatted term absent from deterministic evidence", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Start with `inventedSessionFactory` in src/auth/session.ts.",
+      explanation: "The symbol does not occur in deterministic evidence.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "unsupported-code-span",
+    });
+  });
+
   it("rejects commands that are absent from deterministic repository evidence", async () => {
     const fetcher = vi.fn(async () => modelResponse({
       summary: "Authentication is handled in src/auth/session.ts.",
@@ -167,7 +228,23 @@ describe("synthesizeAgentAnswer", () => {
       brief: [{ title: "Clean up", action: "Execute rm -rf /.", evidencePath: "src/auth/session.ts" }],
     })) as unknown as typeof fetch;
 
-    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "unsupported-command",
+    });
+  });
+
+  it("does not mistake a path argument inside an approved command for invented evidence", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Use the documented `node scripts/mock` command.",
+      explanation: "The command is copied exactly from repository setup evidence.",
+      evidencePaths: ["package.json"],
+      brief: [{ title: "Start the mock", action: "Run `node scripts/mock`.", evidencePath: "package.json" }],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(installationAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "gpt-5.6",
+    });
   });
 
   it("does not let the model promote a possible deterministic match into evidence", async () => {
@@ -190,12 +267,32 @@ describe("synthesizeAgentAnswer", () => {
       brief: [],
     })) as unknown as typeof fetch;
 
-    await expect(synthesizeAgentAnswer(possibleAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(possibleAnswer);
+    await expect(synthesizeAgentAnswer(possibleAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "unsupported-evidence-path",
+    });
   });
 
   it("falls back to the free answer when OpenAI is unavailable", async () => {
     const fetcher = vi.fn(async () => new Response("unavailable", { status: 503 })) as unknown as typeof fetch;
-    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "model-http-503",
+    });
+  });
+
+  it("reports a safe processing stage when the model response cannot be read", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => {
+        throw new TypeError("sensitive upstream detail");
+      },
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "exception-response-body-TypeError",
+    });
   });
 
   it("skips the model request when no API key is configured", async () => {

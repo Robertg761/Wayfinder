@@ -43,6 +43,11 @@ describe("model budget", () => {
     });
   });
 
+  it("releases a reservation when the model API rejects a request before usage", () => {
+    const reserved = reserveBudget(emptyLedger, "request-1", 50_000, 5_000_000);
+    expect(settleBudget(reserved.ledger, "request-1", 0)).toEqual(emptyLedger);
+  });
+
   it("calculates actual Luna cost with cached input", () => {
     expect(actualCostMicroUsd({
       usage: {

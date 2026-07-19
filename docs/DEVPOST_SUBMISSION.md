@@ -1,8 +1,7 @@
 # Devpost Submission Draft
 
-This document is ready to paste. The remaining placeholders are the demo video
-URL and the final GPT-5.6 synthesis screenshot; keep those claims aligned with
-the ship checklist.
+This document is ready to paste. The remaining placeholder is the public demo
+video URL; keep that link aligned with the ship checklist.
 
 ## Project name
 
@@ -80,7 +79,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The automated suite covers 169 unit and integration cases plus 49 complete browser workflows across URL context, late-rendered and off-screen landmarks, leave-and-return recovery on modern GitHub subpages, compact control clearance, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent and evidence scoping, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, model fallback, responsive layout, and keyboard focus visibility.
+- The automated suite covers 178 unit and integration cases plus 49 complete browser workflows across URL context, late-rendered and off-screen landmarks, leave-and-return recovery on modern GitHub subpages, compact control clearance, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent and evidence scoping, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, model fallback, responsive layout, and keyboard focus visibility.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -123,13 +122,16 @@ Verified screenshot candidates:
 
 - `docs/assets/wayfinder-page-helper-welcome.jpg`
 - `docs/assets/wayfinder-page-helper-landmark.jpg`
+- `docs/assets/wayfinder-gpt-5-6-synthesis.png`
 
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `d9e3cf89-57a8-4bad-8a18-75f35e4623cf`
+- Current Worker version: `aefe4f70-4fd4-4aa0-9cb2-7e29e3b2530a`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `8061b57a49b420f7afaa9cecabaca93a7bbca4af2b556e3e1c3f98caeee67499`
-- Automated checks: 169 unit and integration tests, 49 browser workflows, typecheck, extension production build, Worker dry run
+- Local demo master: `playwright-report/wayfinder-demo/wayfinder-build-week-demo.mp4` (2:05.53, 1280x720 H.264/AAC)
+- Demo SHA-256: `1a4065529f86d87a44a9e58a7b08dd33880970cd8f54247f40911ff30b29917c`
+- Automated checks: 178 unit and integration tests, 49 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

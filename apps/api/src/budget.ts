@@ -6,7 +6,9 @@ const LUNA_OUTPUT_MICRO_USD_PER_TOKEN = 6;
 const MODEL_OUTPUT_TOKEN_LIMIT = 800;
 const REQUEST_OVERHEAD_TOKEN_ALLOWANCE = 10_000;
 const RESERVATION_SAFETY_MULTIPLIER = 1.25;
-const VERIFIED_PRE_GUARD_SPEND_MICRO_USD = 21_542;
+// Carry the complete v2 ledger forward: $0.069517 spent plus its stranded
+// $0.030782 reservation. Treating both as spent keeps the lifetime cap conservative.
+const VERIFIED_PRE_V3_SPEND_MICRO_USD = 100_299;
 
 export interface ModelBudgetLedger {
   spentMicroUsd: number;
@@ -23,7 +25,7 @@ interface UsageBody {
 }
 
 function emptyLedger(): ModelBudgetLedger {
-  return { spentMicroUsd: VERIFIED_PRE_GUARD_SPEND_MICRO_USD, reservedMicroUsd: 0, reservations: {} };
+  return { spentMicroUsd: VERIFIED_PRE_V3_SPEND_MICRO_USD, reservedMicroUsd: 0, reservations: {} };
 }
 
 export function budgetLimitMicroUsd(value?: string): number {
