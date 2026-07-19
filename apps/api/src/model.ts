@@ -43,44 +43,57 @@ const responseSchema = z.object({
   }).passthrough().optional(),
 }).passthrough();
 
-const outputJsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    summary: {
-      type: "string",
-      description: "A direct one or two sentence answer to the repository question.",
-    },
-    explanation: {
-      type: "string",
-      description: "A concise explanation of what the evidence means and what the user should do next.",
-    },
-    evidencePaths: {
-      type: "array",
-      description: "Zero to five exact repository paths copied from the supplied evidence.",
-      items: { type: "string" },
-    },
-    brief: {
-      type: "array",
-      description: "Zero to four ordered, evidence-grounded actions. Use this to create a practical contribution plan when requested.",
-      maxItems: 4,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          title: { type: "string" },
-          action: { type: "string" },
-          evidencePath: {
-            anyOf: [{ type: "string" }, { type: "null" }],
-            description: "An exact supplied evidence path, or null when the action has no file coordinate.",
+function outputJsonSchema(allowedPaths: string[]) {
+  const evidencePath = allowedPaths.length > 0
+    ? { anyOf: [{ type: "string", enum: allowedPaths }, { type: "null" }] }
+    : { type: "null" };
+
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      summary: {
+        type: "string",
+        minLength: 1,
+        maxLength: 420,
+        description: "A direct one or two sentence answer to the repository question.",
+      },
+      explanation: {
+        type: "string",
+        minLength: 1,
+        maxLength: 1_200,
+        description: "A concise explanation of what the evidence means and what the user should do next.",
+      },
+      evidencePaths: {
+        type: "array",
+        description: "Zero to five exact repository paths copied from the supplied evidence.",
+        maxItems: 5,
+        items: allowedPaths.length > 0
+          ? { type: "string", enum: allowedPaths }
+          : { type: "string", enum: [] },
+      },
+      brief: {
+        type: "array",
+        description: "Zero to four ordered, evidence-grounded actions. Use this to create a practical contribution plan when requested.",
+        maxItems: 4,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            title: { type: "string", minLength: 1, maxLength: 80 },
+            action: { type: "string", minLength: 1, maxLength: 280 },
+            evidencePath: {
+              ...evidencePath,
+              description: "An exact supplied evidence path, or null when the action has no file coordinate.",
+            },
           },
+          required: ["title", "action", "evidencePath"],
         },
-        required: ["title", "action", "evidencePath"],
       },
     },
-  },
-  required: ["summary", "explanation", "evidencePaths", "brief"],
-} as const;
+    required: ["summary", "explanation", "evidencePaths", "brief"],
+  } as const;
+}
 
 function answerEvidencePaths(answer: AgentAnswer): Set<string> {
   const crediblePaths = (results: Array<{ path: string; confidence: string }>) =>
@@ -208,6 +221,10 @@ export async function synthesizeAgentAnswer(
 
   const reasoningEffort = options.reasoningEffort ?? "low";
   const fetcher = options.fetcher ?? fetch;
+  const allowedPaths = answerEvidencePaths(answer);
+  const allowedCommands = answerEvidenceCommands(answer);
+  const sortedAllowedPaths = [...allowedPaths].sort();
+  const sortedAllowedCommands = [...allowedCommands].sort();
 
   try {
     const startedAt = Date.now();
@@ -229,7 +246,9 @@ export async function synthesizeAgentAnswer(
           "A pinned repository map proves that a path exists at the commit; it does not prove that two files are related.",
           "Treat possible matches and warnings as uncertainty, never as confirmed implementation, caller, or test evidence.",
           "Use only exact paths present in the evidence when filling evidencePaths.",
+          "The allowedEvidencePaths list is authoritative for every evidencePaths and brief evidencePath value.",
           "Do not introduce or suggest a shell command unless that exact command appears in the supplied deterministic evidence.",
+          "The allowedCommands list is authoritative for shell commands.",
           "If the evidence is incomplete, say what is missing and suggest a supported next question.",
           "For a contribution request, use brief to turn the evidence into an ordered first-contribution plan that separates setup, implementation, and verification.",
           "Be concise, practical, and welcoming to a developer who is new to the repository.",
@@ -238,6 +257,8 @@ export async function synthesizeAgentAnswer(
           question: answer.query,
           repository: answer.repo,
           commit: answer.sha,
+          allowedEvidencePaths: sortedAllowedPaths,
+          allowedCommands: sortedAllowedCommands,
           deterministicEvidence: answer,
         }),
         text: {
@@ -245,7 +266,7 @@ export async function synthesizeAgentAnswer(
             type: "json_schema",
             name: "wayfinder_answer",
             strict: true,
-            schema: outputJsonSchema,
+            schema: outputJsonSchema(sortedAllowedPaths),
           },
         },
       }),
@@ -260,11 +281,9 @@ export async function synthesizeAgentAnswer(
     const synthesis = synthesisSchema.safeParse(JSON.parse(text));
     if (!synthesis.success) return answer;
 
-    const allowedPaths = answerEvidencePaths(answer);
-    const allowedCommands = answerEvidenceCommands(answer);
     if (synthesis.data.evidencePaths.some((path) => !allowedPaths.has(path))) return answer;
     if (synthesis.data.brief.some((step) => step.evidencePath !== null && !allowedPaths.has(step.evidencePath))) return answer;
-    if (containsUnsupportedEvidence(synthesis.data, allowedPaths, allowedCommands)) return answer;
+    if (containsUnsupportedEvidence(synthesis.data, new Set([...allowedPaths, answer.repo]), allowedCommands)) return answer;
 
     return {
       ...answer,

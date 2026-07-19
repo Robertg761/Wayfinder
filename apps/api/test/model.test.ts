@@ -80,7 +80,27 @@ describe("synthesizeAgentAnswer", () => {
       model: "gpt-5.6-luna",
       store: false,
       reasoning: { effort: "low" },
-      text: { format: { type: "json_schema", strict: true } },
+      text: {
+        format: {
+          type: "json_schema",
+          strict: true,
+          schema: {
+            properties: {
+              summary: { maxLength: 420 },
+              explanation: { maxLength: 1_200 },
+              evidencePaths: { maxItems: 5, items: { enum: ["src/auth/session.ts"] } },
+              brief: {
+                maxItems: 4,
+                items: { properties: { evidencePath: { anyOf: [{ enum: ["src/auth/session.ts"] }, { type: "null" }] } } },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(JSON.parse(body.input)).toMatchObject({
+      allowedEvidencePaths: ["src/auth/session.ts"],
+      allowedCommands: [],
     });
   });
 
@@ -123,6 +143,20 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toBe(freeAnswer);
+  });
+
+  it("allows the deterministic repository identity in model prose", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "In example/trail, authentication is handled in src/auth/session.ts.",
+      explanation: "Start with the supplied implementation coordinate.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "gpt-5.6",
+      summary: "In example/trail, authentication is handled in src/auth/session.ts.",
+    });
   });
 
   it("rejects commands that are absent from deterministic repository evidence", async () => {
