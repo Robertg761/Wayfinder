@@ -565,6 +565,47 @@ function firstPresent(selectors: string[]): Element | null {
   return null;
 }
 
+function findRepositoryIdentity(repo: string): HTMLAnchorElement | null {
+  const expectedPath = `/${repo}`.replace(/\/$/, '').toLowerCase();
+  const [owner = '', name = ''] = repo.split('/');
+  const expectedLabels = new Set([
+    name.toLowerCase(),
+    `${owner}/${name}`.toLowerCase(),
+    `${owner} / ${name}`.toLowerCase(),
+  ]);
+  const candidates = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).filter((anchor) => {
+    try {
+      const path = new URL(anchor.href, window.location.href).pathname.replace(/\/$/, '').toLowerCase();
+      if (path !== expectedPath) return false;
+      const rect = anchor.getBoundingClientRect();
+      const style = window.getComputedStyle(anchor);
+      return rect.width > 8 && rect.height > 8
+        && style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number.parseFloat(style.opacity) > 0;
+    } catch {
+      return false;
+    }
+  });
+
+  const score = (anchor: HTMLAnchorElement): number => {
+    const text = (anchor.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const accessibleLabel = (anchor.getAttribute('aria-label') ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    let value = expectedLabels.has(text) ? 80 : expectedLabels.has(accessibleLabel) ? 70 : 0;
+    if (anchor.closest('nav[aria-label*="breadcrumb" i], [data-testid*="breadcrumb" i], [data-component*="breadcrumb" i]')) value += 50;
+    if (anchor.closest('header, [role="banner"], nav')) value += 20;
+    if (anchor.getAttribute('aria-current') === 'page') value += 10;
+    if (anchor.closest('article, .markdown-body, [data-testid*="issue" i], [data-testid*="comment" i]')) value -= 120;
+    return value;
+  };
+
+  const ranked = candidates
+    .map((anchor) => ({ anchor, score: score(anchor) }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score);
+  return ranked[0]?.anchor ?? null;
+}
+
 function findReleasesLink(repo: string): HTMLAnchorElement | null {
   const expectedPath = `/${repo}/releases`.toLowerCase();
   const candidates = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).filter((anchor) => {
@@ -711,7 +752,9 @@ function guideStops(): GuideStop[] {
     // A tour target does not need to start inside the viewport. The guide moves
     // to each target with scrollIntoView, so excluding off-screen landmarks can
     // incorrectly make a fully rendered repository look empty.
-    const target = firstPresent(selectors);
+    const target = location.view === 'other' && stop.label === 'Repository name'
+      ? findRepositoryIdentity(`${location.owner}/${location.repo}`) ?? firstPresent(selectors)
+      : firstPresent(selectors);
     return target ? [{ ...stop, target }] : [];
   });
 }

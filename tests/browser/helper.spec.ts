@@ -486,6 +486,40 @@ test('recovers when GitHub renders landmarks after the first guided snapshot', a
   await expect(page.getByRole('heading', { name: 'Learn this repository one landmark at a time.' })).toBeVisible();
 });
 
+test('recovers the repository landmark after leaving and returning to a modern GitHub subpage', async () => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(fixtureUrl);
+  await selectMode('Guided');
+  await page.getByRole('button', { name: 'Close helper' }).click();
+
+  await page.evaluate(() => {
+    history.pushState({}, '', '/settings/profile');
+    document.dispatchEvent(new Event('turbo:load'));
+  });
+  await expect(page.locator('#wayfinder-page-guide')).toBeHidden();
+
+  await page.evaluate(() => {
+    document.querySelector('main')!.innerHTML = `
+      <nav aria-label="Breadcrumbs">
+        <a href="/example">example</a>
+        <a href="/example/wayfinder-fixture">wayfinder-fixture</a>
+      </nav>
+      <h1>Releases: example/wayfinder-fixture</h1>
+      <section data-testid="release-card"><h2>Wayfinder v1.0.0</h2></section>
+    `;
+    history.pushState({}, '', '/example/wayfinder-fixture/releases');
+    document.dispatchEvent(new Event('turbo:load'));
+  });
+  await page.waitForTimeout(1_300);
+
+  await openHelper();
+  await expect(page.getByRole('heading', { name: 'Learn this repository one landmark at a time.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Getting this page into focus.' })).toBeHidden();
+  await page.getByRole('button', { name: 'Show me around' }).click();
+  await expect(page.getByText('Repository name', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'example / wayfinder-fixture' })).toBeVisible();
+});
+
 test('finds guided landmarks outside the initial viewport', async () => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(fixtureUrl);

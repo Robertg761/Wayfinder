@@ -27,7 +27,7 @@ Updated July 19, 2026.
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
 - [x] All 169 unit and integration tests pass
-- [x] All 47 browser workflows pass
+- [x] All 48 browser workflows pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, unit tests, all browser workflows, builds, packaging, archive integrity, and checksum verification
@@ -85,6 +85,7 @@ Luna is fixed in source. The recorded live Luna verification used Worker version
 - [x] Confirm cache timestamps and full repository refresh controls
 - [x] Confirm three consecutive GitHub reloads preserve both the host page and helper
 - [x] Run automated browser coverage for reloads, navigation, keyboard dismissal, reduced motion, and non-repository routes
+- [x] Confirm Guided mode recovers the repository landmark after leaving and returning to a modern GitHub Releases page
 - [ ] Capture the four screenshots listed in `docs/DEMO_SCRIPT.md` (two verified helper frames are already in `docs/assets`)
 
 ## Needs submission assets
@@ -115,7 +116,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-357f36c91c7792e58ef8098b08783c9192e4762570ead0307dc42c1f5af52434
+cb8d09b2a3cf4611f02d23c93abb14b5e41542f7e30175a0ccc8025ad6b81025
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.
