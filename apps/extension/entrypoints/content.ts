@@ -331,6 +331,8 @@ const helperStyles = `
     text-transform: uppercase;
   }
 
+  .wf-kicker.wf-top-kicker { padding-right: 36px; }
+
   .wf-step-count { color: var(--wf-moss); }
 
   .wf-bubble h2 {
@@ -389,7 +391,7 @@ const helperStyles = `
     font-size: 12px !important;
   }
 
-  .wf-agent-head { padding-right: 30px; }
+  .wf-agent-head { padding-right: 0; }
   .wf-mode-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--wf-line); border-radius: 999px; background: var(--wf-surface-card); }
   .wf-mode-switch button { padding: 5px 8px; border: 0; border-radius: 999px; background: transparent; color: var(--wf-text-muted); cursor: pointer; font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
   .wf-mode-switch button.active { background: var(--wf-ink); color: var(--wf-paper); }
@@ -1027,6 +1029,7 @@ export default defineContentScript({
       const generation = ++renderGeneration;
       announcementGeneration += 1;
       copy.innerHTML = markup;
+      copy.querySelector<HTMLElement>('.wf-kicker')?.classList.add('wf-top-kicker');
       status.textContent = '';
       if (options.open !== false) {
         bubbleOpen = true;

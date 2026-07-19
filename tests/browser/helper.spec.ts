@@ -351,6 +351,19 @@ test('survives repeated page reloads without damaging the host page', async () =
   }
 });
 
+test('keeps the close control clear of the compact experience switch', async () => {
+  await page.goto(fixtureUrl);
+  for (const mode of ['Guided', 'Quick'] as const) {
+    await selectMode(mode);
+    const closeBox = await page.getByRole('button', { name: 'Close helper' }).boundingBox();
+    const modeBox = await page.getByRole('group', { name: 'Wayfinder experience mode' }).boundingBox();
+
+    expect(closeBox).not.toBeNull();
+    expect(modeBox).not.toBeNull();
+    expect(closeBox!.x - (modeBox!.x + modeBox!.width)).toBeGreaterThanOrEqual(8);
+  }
+});
+
 test('captures contribution intent before dispatch and supports keyboard dismissal', async () => {
   await page.goto(fixtureUrl);
   await selectMode('Quick');

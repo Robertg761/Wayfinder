@@ -27,7 +27,7 @@ Updated July 19, 2026.
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
 - [x] All 169 unit and integration tests pass
-- [x] All 48 browser workflows pass
+- [x] All 49 browser workflows pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, unit tests, all browser workflows, builds, packaging, archive integrity, and checksum verification
@@ -37,6 +37,7 @@ Updated July 19, 2026.
 - [x] Repository setup ignores nested subsystem READMEs and preserves documented command order
 - [x] Representative evidence URLs return HTTP 200
 - [x] Production preview passes at 320 pixels with no page-level horizontal overflow
+- [x] Close control keeps at least 8 pixels of clearance from the Guided/Quick switch in both modes
 - [x] Public installation answer and command-copy interaction verified in the narrow preview
 - [x] Deprecated pagination wrapper regression fixed and tested
 - [x] Contribution verification remains goal-linked and demotes test-support fixtures
@@ -101,9 +102,9 @@ Luna is fixed in source. The recorded live Luna verification used Worker version
 
 ## Needs release propagation
 
-- [ ] Publish the July 19 source candidate to the public repository
-- [ ] Deploy the July 19 setup-guidance hardening
-- [ ] Rerun the strengthened five-repository matrix against the deployed Worker
+- [x] Publish the July 19 source candidate to the public repository
+- [x] Deploy the July 19 setup-guidance hardening
+- [x] Rerun the strengthened five-repository matrix against the deployed Worker
 
 ## Release artifact
 
@@ -116,7 +117,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-cb8d09b2a3cf4611f02d23c93abb14b5e41542f7e30175a0ccc8025ad6b81025
+8061b57a49b420f7afaa9cecabaca93a7bbca4af2b556e3e1c3f98caeee67499
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

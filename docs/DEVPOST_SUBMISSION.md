@@ -80,7 +80,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The automated suite covers 169 unit and integration cases plus 48 complete browser workflows across URL context, late-rendered and off-screen landmarks, leave-and-return recovery on modern GitHub subpages, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent and evidence scoping, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, model fallback, responsive layout, and keyboard focus visibility.
+- The automated suite covers 169 unit and integration cases plus 49 complete browser workflows across URL context, late-rendered and off-screen landmarks, leave-and-return recovery on modern GitHub subpages, compact control clearance, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent and evidence scoping, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, model fallback, responsive layout, and keyboard focus visibility.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -127,9 +127,9 @@ Verified screenshot candidates:
 ## Verified submission facts
 
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
-- Current Worker version: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
+- Current Worker version: `d9e3cf89-57a8-4bad-8a18-75f35e4623cf`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `cb8d09b2a3cf4611f02d23c93abb14b5e41542f7e30175a0ccc8025ad6b81025`
-- Automated checks: 169 unit and integration tests, 48 browser workflows, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `8061b57a49b420f7afaa9cecabaca93a7bbca4af2b556e3e1c3f98caeee67499`
+- Automated checks: 169 unit and integration tests, 49 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

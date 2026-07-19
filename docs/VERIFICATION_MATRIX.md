@@ -4,13 +4,13 @@ Updated July 19, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
-Current Worker version: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
+Current Worker version: `d9e3cf89-57a8-4bad-8a18-75f35e4623cf`
 
-Full cross-repository matrix baseline: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
+Full cross-repository matrix baseline: `d9e3cf89-57a8-4bad-8a18-75f35e4623cf`
 
 The matrix runs through the public Worker without sending an OpenAI key or GitHub token. Each focused case stays on the deterministic route, maps the current default-branch commit, requests orientation, checks both developer and end-user installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
 
-The July 19 source candidate strengthens the matrix further: every consumer command must name the mapped product, and every setup step must come from root-level or explicitly named setup documentation. Targeted local-Worker replays passed on current ripgrep and Next.js commits after removing unrelated platform-preparation commands from the ripgrep development route and `.conductor/README.md` commands from the Next.js route. Deploy this candidate and rerun all five cases before replacing the public baseline below.
+The July 19 release strengthens the matrix further: every consumer command must name the mapped product, and every setup step must come from root-level or explicitly named setup documentation. Targeted local-Worker replays passed on current ripgrep and Next.js commits after removing unrelated platform-preparation commands from the ripgrep development route and `.conductor/README.md` commands from the Next.js route. The complete strengthened matrix then passed against the deployed Worker.
 
 ## Results
 
@@ -18,11 +18,13 @@ The July 19 source candidate strengthens the matrix further: every consumer comm
 |---|---|---:|---:|---|---|---|
 | TypeScript SDK | `openai/openai-node@2706888499a777b47d851aeb479f846f80932765` | 6 stops | 4 dev / 3 use | Where is pagination implemented? | `src/core/pagination.ts` | Pass, strong |
 | Python framework | `pallets/flask@36e4a824f340fdee7ed50937ba8e7f6bc7d17f81` | 6 stops | 1 dev / release fallback | Where is request routing implemented? | `src/flask/sansio/scaffold.py` | Pass, strong |
-| Rust CLI | `BurntSushi/ripgrep@227381db0ee83dfa4341f1e27ff9617c0f5ad992` | 6 stops | 6 dev / 6 use | Which file defines the command line executable? | `crates/core/main.rs` | Pass, strong |
+| Rust CLI | `BurntSushi/ripgrep@227381db0ee83dfa4341f1e27ff9617c0f5ad992` | 6 stops | 8 dev / 8 use | Which file defines the command line executable? | `crates/core/main.rs` | Pass, strong |
 | Go CLI | `cli/cli@2af8c115be240a8018add33bf5c7a9ba5070a62c` | 6 stops | 2 dev / release fallback | Where is authentication handled? | `pkg/cmd/auth/login/login.go` | Pass, strong |
-| Truncated monorepo | `vercel/next.js@0491db047b8f9c4a5f9d0285ad9ed514bb134873` | 6 stops | 10 dev / release fallback | Where is routing implemented? | `packages/next/src/shared/lib/router/routes/app.ts` | Pass, likely |
+| Truncated monorepo | `vercel/next.js@0491db047b8f9c4a5f9d0285ad9ed514bb134873` | 6 stops | 4 dev / release fallback | Where is routing implemented? | `packages/next/src/shared/lib/router/routes/app.ts` | Pass, likely |
 
 Flask, GitHub CLI, and Next.js correctly keep repository-development setup separate from end-user guidance. When no documented consumer command exists, they return a conditional latest-release fallback instead of presenting contributor setup as installation.
+
+Worker version `d9e3cf89-57a8-4bad-8a18-75f35e4623cf` passed the strengthened complete matrix after the July 19 release. Product-specific consumer-command validation and root-level setup-evidence validation passed across all five repository shapes, every representative evidence URL returned HTTP 200, and the model budget remained at `$0.043734` with no reservation, confirming that the matrix stayed deterministic.
 
 Worker version `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf` passed the complete matrix after the task-execution hardening release. Health reported the public API limiter active, all five repositories returned an explicit non-manifest runtime entry point, developer and consumer audiences stayed separate, and every representative evidence path resolved at the mapped commit SHA. The model budget remained at `$0.043734`, confirming that the focused matrix stayed deterministic.
 
