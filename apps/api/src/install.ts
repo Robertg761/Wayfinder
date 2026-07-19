@@ -51,6 +51,22 @@ const commandPrefixes = [
   "apt ",
   "apt-get ",
   "curl ",
+  "wget ",
+  "sudo ",
+  "doas ",
+  "dnf ",
+  "zypper ",
+  "pacman ",
+  "emerge ",
+  "port ",
+  "nix-env ",
+  "flox ",
+  "guix ",
+  "pkg ",
+  "pkg_add ",
+  "pkgin ",
+  "pkgman ",
+  "xbps-install ",
   "./",
 ];
 
@@ -85,15 +101,78 @@ function pythonPackageInstall(command: string): boolean {
 }
 
 export function isConsumerInstallCommand(command: string): boolean {
-  const lower = command.toLowerCase().replace(/\s+/g, " ").trim();
+  const lower = command.toLowerCase().replace(/\s+/g, " ").trim().replace(/^(?:sudo|doas)\s+/, "");
   if (!lower || /<[^>]+>/.test(lower)) return false;
   if (/^(?:npm|pnpm|yarn|bun) (?:install|add) (?:-g |--global )?[^-\s][^\s]*/.test(lower)) return true;
   if (/^(?:npx|deno) .*\badd\b/.test(lower)) return true;
   if (pythonPackageInstall(lower) || /^(?:pipx install|uv tool install) [^-\s][^\s]*/.test(lower)) return true;
-  if (/^cargo install (?!.*(?:--path|\s\.\.?\/))[^-\s][^\s]*/.test(lower)) return true;
+  if (/^cargo (?:binstall|install) (?!.*(?:--path|\s\.\.?\/))[^-\s][^\s]*/.test(lower)) return true;
   if (/^go install [^\s]+@[^\s]+/.test(lower)) return true;
-  if (/^(?:brew|winget|choco|scoop) install [^-\s][^\s]*/.test(lower)) return true;
-  if (/^(?:apt|apt-get) install (?:-y )?[^-\s][^\s]*/.test(lower)) return true;
+  if (/^(?:brew|winget|choco|scoop|port|dnf|zypper|flox|guix|pkg|pkgin|pkgman) install [^-\s][^\s]*/.test(lower)) return true;
+  if (/^(?:apt|apt-get) (?:-y )?install (?:-y )?[^-\s][^\s]*/.test(lower)) return true;
+  if (/^pacman\s+-[^\s]*s[^\s]*\s+[^-\s][^\s]*/.test(lower)) return true;
+  if (/^(?:emerge|pkg_add) [^-\s][^\s]*/.test(lower)) return true;
+  if (/^nix-env\s+--install\s+[^-\s][^\s]*/.test(lower)) return true;
+  if (/^xbps-install\s+(?:-[^\s]+\s+)*[^-\s][^\s]*/.test(lower)) return true;
+  return false;
+}
+
+function isConsumerDistributionCommand(command: string): boolean {
+  if (isConsumerInstallCommand(command)) return true;
+  const lower = command.toLowerCase().replace(/\s+/g, " ").trim().replace(/^(?:sudo|doas)\s+/, "");
+  if (/^(?:curl|wget)\b/.test(lower) && /(?:releases?\/download|\.(?:deb|rpm|dmg|pkg|msi|exe|zip|tar\.(?:gz|xz|bz2)))(?:\s|$|[?#])/.test(lower)) return true;
+  return /^(?:dpkg\s+-i|rpm\s+-i|gh\s+release\s+download|docker\s+pull)\b/.test(lower);
+}
+
+function normalizedProductAliases(map: RepoMap, files: Record<string, string>, packageJson: PackageJson | null): Set<string> {
+  const aliases = new Set<string>();
+  const genericNames = new Set(["app", "cli", "core", "lib", "library", "sdk", "tool"]);
+  const genericSuffixes = new Set(["cli", "go", "js", "node", "py", "python", "rust", "sdk", "ts", "typescript"]);
+  const add = (value: string | undefined | null, allowGeneric = false): void => {
+    if (!value) return;
+    const normalized = value.toLowerCase().trim();
+    const scopedTokens = normalized.match(/[a-z0-9]+/g) ?? [];
+    if (normalized.startsWith("@") && scopedTokens.length > 1) aliases.add(scopedTokens.join(""));
+    const unscoped = normalized.replace(/^@[^/]+\//, "");
+    const tokens = unscoped.match(/[a-z0-9]+/g) ?? [];
+    if (tokens.length === 0) return;
+    const joined = tokens.join("");
+    if (allowGeneric || !genericNames.has(joined)) aliases.add(joined);
+    if (tokens.length > 1 && genericSuffixes.has(tokens.at(-1) ?? "")) {
+      const stem = tokens.slice(0, -1).join("");
+      if (stem.length >= 3) aliases.add(stem);
+    }
+  };
+
+  add(map.repo.split("/").at(-1), true);
+  add(packageJson?.name);
+
+  for (const [path, content] of Object.entries(files)) {
+    const fileName = path.toLowerCase().split("/").at(-1);
+    if (fileName === "cargo.toml") {
+      add(content.match(/(?:^|\n)\s*\[package\][\s\S]*?(?:^|\n)\s*name\s*=\s*["']([^"']+)["']/m)?.[1]);
+    } else if (fileName === "pyproject.toml") {
+      add(content.match(/(?:^|\n)\s*\[(?:project|tool\.poetry)\][\s\S]*?(?:^|\n)\s*name\s*=\s*["']([^"']+)["']/m)?.[1]);
+    } else if (fileName === "go.mod") {
+      add(content.match(/(?:^|\n)\s*module\s+([^\s]+)/)?.[1]?.replace(/\/v\d+$/, "").split("/").filter(Boolean).at(-1));
+    }
+  }
+
+  return new Set([...aliases].filter((alias) => alias.length >= 2));
+}
+
+function commandReferencesProduct(command: string, aliases: Set<string>): boolean {
+  const tokens = command.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  for (const alias of aliases) {
+    for (let start = 0; start < tokens.length; start += 1) {
+      let joined = "";
+      for (let end = start; end < Math.min(tokens.length, start + 4); end += 1) {
+        joined += tokens[end];
+        if (joined === alias) return true;
+        if (joined.length > alias.length) break;
+      }
+    }
+  }
   return false;
 }
 
@@ -110,6 +189,39 @@ function titleForCommand(command: string): string {
   return "Run the setup command";
 }
 
+type SectionAudience = "use" | "develop" | "neutral";
+type ContextualInstallStep = InstallStep & { _sectionAudience: SectionAudience };
+
+function markdownSectionAudience(markdown: string, lineNumber: number | undefined): SectionAudience {
+  if (!lineNumber) return "neutral";
+  const lines = markdown.split(/\r?\n/).slice(0, Math.max(0, lineNumber - 1));
+  let heading = "";
+  for (const line of lines) {
+    const match = line.match(/^#{1,6}\s+(.+)$/);
+    if (match) heading = match[1].toLowerCase();
+  }
+  if (/\b(build|building|contribut|develop|development|from source|local development|running tests?|tests?)\b/.test(heading)) return "develop";
+  if (/\b(download|installation|installing|packages?|prebuilt|pre-built|usage)\b/.test(heading)) return "use";
+  return "neutral";
+}
+
+function isRepositoryDevelopmentCommand(command: string): boolean {
+  const lower = command.toLowerCase().replace(/\s+/g, " ").trim().replace(/^(?:sudo|doas)\s+/, "");
+  return /^(?:npm|pnpm|yarn|bun)(?: (?:ci|i|install)(?:\s+--[^\s]+)*)?$/.test(lower)
+    || /^(?:(?:python|python3)\s+-m\s+)?pip(?:3)?\s+install\s+(?:-e|--editable|-r|--requirement)\b/.test(lower)
+    || /^(?:python|python3)\s+-m\s+venv\b/.test(lower)
+    || /^(?:uv\s+sync|poetry\s+install)\b/.test(lower)
+    || /^(?:git|cd|cp|mv|export|source|make|just|docker|docker-compose|corepack|rustup)\b/.test(lower)
+    || /^cargo\s+(?:build|check|clippy|fmt|run|test)\b/.test(lower)
+    || /^go\s+(?:build|generate|run|test)\b/.test(lower);
+}
+
+function plainInstallStep(step: InstallStep | ContextualInstallStep): InstallStep {
+  if (!("_sectionAudience" in step)) return step;
+  const { _sectionAudience: _ignored, ...plain } = step;
+  return plain;
+}
+
 export function extractMarkdownCommands(markdown: string, path: string): InstallStep[] {
   const lines = markdown.split(/\r?\n/);
   const steps: InstallStep[] = [];
@@ -122,7 +234,7 @@ export function extractMarkdownCommands(markdown: string, path: string): Install
     const line = lines[index];
     const heading = line.match(/^#{1,6}\s+(.+)$/);
     if (heading && !inFence) {
-      relevantSection = /(install|setup|getting started|get started|quickstart|quick start|development|developing|local|build|test|running|run locally|usage)/i.test(heading[1]);
+      relevantSection = /(install|setup|getting started|get started|quickstart|quick start|development|developing|local|build|test|running|run locally|usage|download|prebuilt|pre-built|package)/i.test(heading[1]);
       continue;
     }
 
@@ -146,7 +258,7 @@ export function extractMarkdownCommands(markdown: string, path: string): Install
       evidence: evidence(path, [index + 1, index + 1]),
       confidence: "documented",
     });
-    if (steps.length >= 10) break;
+    if (steps.length >= 40) break;
   }
 
   return steps;
@@ -193,9 +305,14 @@ function addUniqueStep(
 function orderDevelopmentSteps(steps: InstallStep[]): InstallStep[] {
   const prerequisite = (step: InstallStep): boolean =>
     /^(Clone the repository|Enter the project directory|Prepare environment settings|Install dependencies|Install the project for development)$/.test(step.title);
+  const inferredPrerequisites = steps.filter((step) => step.confidence !== "documented" && prerequisite(step));
+  const stableSteps = steps.filter((step) => !inferredPrerequisites.includes(step));
+  const firstExecution = stableSteps.findIndex((step) => /^(Start the project|Run the tests|Build the project)$/.test(step.title));
+  const insertionIndex = firstExecution === -1 ? 0 : firstExecution;
   const ordered = [
-    ...steps.filter(prerequisite),
-    ...steps.filter((step) => !prerequisite(step)),
+    ...stableSteps.slice(0, insertionIndex),
+    ...inferredPrerequisites,
+    ...stableSteps.slice(insertionIndex),
   ];
   return ordered.map((step, index) => ({ ...step, order: index + 1 }));
 }
@@ -224,31 +341,44 @@ export function generateInstallGuide(
       return leftReadme - rightReadme || left.split("/").length - right.split("/").length || left.localeCompare(right);
     });
   if (readme && !documentationPaths.includes(readmePath)) documentationPaths.unshift(readmePath);
-  const documentedSteps = documentationPaths
-    .flatMap((path) => extractMarkdownCommands(files[path] ?? (path === readmePath ? readme ?? "" : ""), path))
+  const documentedSteps: ContextualInstallStep[] = documentationPaths
+    .flatMap((path) => {
+      const markdown = files[path] ?? (path === readmePath ? readme ?? "" : "");
+      return extractMarkdownCommands(markdown, path).map((step) => ({
+        ...step,
+        _sectionAudience: markdownSectionAudience(markdown, step.evidence.lines?.[0]),
+      }));
+    })
     .filter((step, index, all) => all.findIndex((candidate) => candidate.command === step.command) === index)
     .map((step, index) => ({ ...step, order: index + 1 }));
-  const consumerSteps = documentedSteps.filter((step) => isConsumerInstallCommand(step.command));
-  const placeholderSteps = documentedSteps.filter((step) => /<[^>]+>/.test(step.command));
-  const steps = audience === "use"
-    ? [...consumerSteps]
-    : documentedSteps.filter((step) => !consumerSteps.includes(step) && !placeholderSteps.includes(step));
-  const seenCommands = new Set(steps.map((step) => step.command.toLowerCase().replace(/\s+/g, " ").trim()));
-  const prerequisites: InstallPrerequisite[] = [];
-  const runtimes = new Set<string>();
-  const warnings: string[] = [];
-  if (audience === "develop" && consumerSteps.length > 0) {
-    warnings.push("Published-package and placeholder commands were omitted because this guide prepares the repository for local contribution.");
-  }
-
   const packagePath = shallowestPath(paths, "package.json");
   let packageJson: PackageJson | null = null;
+  const warnings: string[] = [];
   if (packagePath) {
     try {
       packageJson = JSON.parse(files[packagePath]) as PackageJson;
     } catch {
       warnings.push("The primary package.json could not be parsed, so script inference was skipped.");
     }
+  }
+
+  const productAliases = normalizedProductAliases(map, files, packageJson);
+  const consumerSteps = documentedSteps
+    .filter((step) => isConsumerDistributionCommand(step.command) && commandReferencesProduct(step.command, productAliases))
+    .map((step) => ({ ...step, title: "Install the published package" }));
+  const consumerCommands = new Set(consumerSteps.map((step) => step.command));
+  const placeholderSteps = documentedSteps.filter((step) => /<[^>]+>/.test(step.command));
+  const steps = audience === "use"
+    ? [...consumerSteps]
+    : documentedSteps
+      .filter((step) => !consumerCommands.has(step.command) && !placeholderSteps.includes(step))
+      .filter((step) => step._sectionAudience !== "use" || isRepositoryDevelopmentCommand(step.command))
+      .map((step) => isConsumerDistributionCommand(step.command) ? { ...step, title: "Install development tooling" } : step);
+  const seenCommands = new Set(steps.map((step) => step.command.toLowerCase().replace(/\s+/g, " ").trim()));
+  const prerequisites: InstallPrerequisite[] = [];
+  const runtimes = new Set<string>();
+  if (audience === "develop" && consumerSteps.length > 0) {
+    warnings.push("Published-package and placeholder commands were omitted because this guide prepares the repository for local contribution.");
   }
 
   const lockManagers = map.setupFiles
@@ -273,7 +403,7 @@ export function generateInstallGuide(
       packageManager,
       runtimes: [],
       prerequisites: [],
-      steps: steps.slice(0, 8),
+      steps: steps.slice(0, 8).map(plainInstallStep),
       warnings,
       generatedAt: new Date().toISOString(),
     };
@@ -402,7 +532,7 @@ export function generateInstallGuide(
     packageManager,
     runtimes: [...runtimes],
     prerequisites,
-    steps: orderedSteps.slice(0, 12),
+    steps: orderedSteps.slice(0, 12).map(plainInstallStep),
     warnings,
     generatedAt: new Date().toISOString(),
   };
@@ -412,10 +542,30 @@ function setupPathScore(path: string): number {
   const lower = path.toLowerCase();
   const depth = path.split("/").length;
   const fileName = lower.split("/").at(-1) ?? "";
-  const priority = /readme|install|setup|getting-started/.test(fileName) ? 0 :
+  const priority = /readme|contributing|install|setup|getting-started/.test(fileName) ? 0 :
     /package\.json|pyproject\.toml|cargo\.toml|go\.mod/.test(fileName) ? 1 :
     /version|toolchain|\.env\.(example|sample)/.test(fileName) ? 2 : 3;
   return depth * 1_000 + priority * 100 + path.length;
+}
+
+function isAuthoritativeSetupPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  if (!lower.includes("/")) {
+    return /^(readme([^/]*)?\.md|contributing([^/]*)?\.md|install([^/]*)?\.md|installation([^/]*)?\.md|setup([^/]*)?\.md|getting-started([^/]*)?\.md|package\.json|pyproject\.toml|cargo\.toml|go\.mod|requirements[^/]*\.txt|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb?|uv\.lock|poetry\.lock|\.nvmrc|\.node-version|\.python-version|rust-toolchain(?:\.toml)?|\.tool-versions|\.env\.(?:example|sample)|makefile|justfile|dockerfile)$/i.test(lower);
+  }
+  return /^\.github\/contributing([^/]*)?\.md$/i.test(lower)
+    || /^docs\/(?:install|installation|setup|getting-started)(?:\.[^/]*)?\.md$/i.test(lower);
+}
+
+export function selectSetupPaths(map: RepoMap): string[] {
+  return [...new Set([
+    ...map.setupFiles,
+    ...map.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path),
+  ])]
+    .filter((path) => !/(^|\/)(examples?|fixtures?|ecosystem-tests?|test|tests|__tests__)(\/|$)/i.test(path))
+    .filter(isAuthoritativeSetupPath)
+    .sort((left, right) => setupPathScore(left) - setupPathScore(right))
+    .slice(0, 16);
 }
 
 export async function createInstallGuide(
@@ -423,14 +573,7 @@ export async function createInstallGuide(
   token?: string,
   audience: "use" | "develop" = "develop",
 ): Promise<InstallGuide> {
-  const setupPaths = [...new Set([
-    ...map.setupFiles,
-    ...map.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path),
-  ])]
-    .filter((path) => !/(^|\/)(examples?|fixtures?|ecosystem-tests?|test|tests|__tests__)(\/|$)/i.test(path))
-    .filter((path) => /(^|\/)(readme([^/]*)?\.md|contributing([^/]*)?\.md|package\.json|pyproject\.toml|cargo\.toml|go\.mod|requirements[^/]*\.txt|\.nvmrc|\.node-version|\.python-version|rust-toolchain(\.toml)?|\.tool-versions|\.env\.(example|sample)|makefile|justfile|dockerfile)$/i.test(path))
-    .sort((left, right) => setupPathScore(left) - setupPathScore(right))
-    .slice(0, 16);
+  const setupPaths = selectSetupPaths(map);
 
   const loaded = await Promise.all(setupPaths.map(async (path) => {
     const content = await fetchRepoFile(map.repo, path, map.sha, token).catch((error) => {

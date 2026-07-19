@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible Wayfinder reliability, task, or interface defect.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Wayfinder. Do not include tokens, private repository content, or unpatched security details. Use the security policy for sensitive reports.
+  - type: input
+    id: repository
+    attributes:
+      label: Public repository and page
+      description: Which public GitHub repository and route were you viewing?
+      placeholder: https://github.com/owner/repository/blob/main/path/to/file.ts
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Wayfinder mode
+      options:
+        - Guided
+        - Quick
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task and question
+      description: What were you asking Wayfinder to do?
+      placeholder: Describe the user goal and the exact question, with sensitive data removed.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Opened ...
+        2. Selected ...
+        3. Asked ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+      description: Include the wrong path, command, UI state, or error message when relevant.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and operating system
+      placeholder: Chrome 140 on macOS 15
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, private repository content, and other sensitive data.
+          required: true

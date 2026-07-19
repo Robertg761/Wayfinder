@@ -1,6 +1,6 @@
 # Public Verification Matrix
 
-Updated July 18, 2026.
+Updated July 19, 2026.
 
 Endpoint: `https://wayfinder-api.hopit-robert.workers.dev`
 
@@ -9,6 +9,8 @@ Current Worker version: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
 Full cross-repository matrix baseline: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
 
 The matrix runs through the public Worker without sending an OpenAI key or GitHub token. Each focused case stays on the deterministic route, maps the current default-branch commit, requests orientation, checks both developer and end-user installation guidance, asks one file-discovery question, and verifies representative evidence through `raw.githubusercontent.com`.
+
+The July 19 source candidate strengthens the matrix further: every consumer command must name the mapped product, and every setup step must come from root-level or explicitly named setup documentation. Targeted local-Worker replays passed on current ripgrep and Next.js commits after removing unrelated platform-preparation commands from the ripgrep development route and `.conductor/README.md` commands from the Next.js route. Deploy this candidate and rerun all five cases before replacing the public baseline below.
 
 ## Results
 
@@ -53,8 +55,11 @@ The matrix caught concrete errors that smaller fixtures did not expose:
 5. A Rust CLI helper outranked the literal `main.rs` executable entry.
 6. Next.js eval, example, and benchmark code outranked framework router source.
 7. Generic files named `test.ts` outranked tests that matched the actual contribution feature.
+8. A nested tool README was treated as repository-wide setup evidence in a large monorepo.
+9. A syntactically valid package install for a developer tool was presented as end-user installation for the repository.
+10. Prerequisite reordering could move a documented directory change ahead of the command that created it.
 
-Each fix now has regression coverage in `apps/api/test/find.test.ts`.
+Each fix now has focused regression coverage in the API suite.
 
 ## Repeat the matrix
 
@@ -76,4 +81,4 @@ Override the target service when testing a local or preview Worker:
 WAYFINDER_API_URL=http://localhost:8787 pnpm smoke:public node
 ```
 
-The script exits nonzero when routing selects the wrong tool, no coordinate is returned, an expected landmark changes, or a representative evidence URL is unavailable.
+The script exits nonzero when routing selects the wrong tool, no coordinate is returned, an expected landmark changes, consumer guidance names another product, setup evidence leaks from a subsystem README, or a representative evidence URL is unavailable.

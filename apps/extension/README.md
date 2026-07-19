@@ -38,6 +38,13 @@ pnpm --filter @wayfinder/extension build
 pnpm --filter @wayfinder/extension zip
 ```
 
+The toolbar artwork is generated from the tracked compass SVG. Regenerate all
+Chrome icon sizes from the workspace root with:
+
+```bash
+pnpm icons:extension
+```
+
 The production directory is `.output/chrome-mv3`. The distributable archive is `.output/wayfinderextension-0.1.0-chrome.zip`.
 
 ## Install the production build manually

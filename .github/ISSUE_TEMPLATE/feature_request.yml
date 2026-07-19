@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a concrete repository-navigation or contribution workflow.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Repository problem
+      description: What becomes difficult when someone opens an unfamiliar public repository?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Desired Wayfinder workflow
+      description: Describe the user goal, visible interaction, and evidence Wayfinder should produce.
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: Example and success signal
+      description: Link a public repository where this would help and explain how we could verify it.
+    validations:
+      required: true

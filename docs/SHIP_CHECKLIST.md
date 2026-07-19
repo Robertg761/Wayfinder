@@ -1,6 +1,6 @@
 # Wayfinder Ship Checklist
 
-Updated July 18, 2026.
+Updated July 19, 2026.
 
 ## Complete
 
@@ -26,13 +26,15 @@ Updated July 18, 2026.
 - [x] Production manifest includes GitHub, local Worker, and public Worker origins
 - [x] Chrome extension archive generated and inspected
 - [x] Typecheck passes
-- [x] All 162 unit and integration tests pass
-- [x] All 46 browser workflows pass
+- [x] All 169 unit and integration tests pass
+- [x] All 47 browser workflows pass
 - [x] Extension production build passes
 - [x] Worker dry run passes
 - [x] GitHub Actions CI runs typecheck, unit tests, all browser workflows, builds, packaging, archive integrity, and checksum verification
 - [x] Public `openai/openai-node` orientation, installation, and file-find API dry run
 - [x] Public matrix across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo
+- [x] Consumer commands must name the repository product rather than an unrelated developer tool
+- [x] Repository setup ignores nested subsystem READMEs and preserves documented command order
 - [x] Representative evidence URLs return HTTP 200
 - [x] Production preview passes at 320 pixels with no page-level horizontal overflow
 - [x] Public installation answer and command-copy interaction verified in the narrow preview
@@ -45,6 +47,9 @@ Updated July 18, 2026.
 - [x] Timed demo script
 - [x] Devpost story draft
 - [x] Public privacy statement and contributor guide
+- [x] MIT license added to the release candidate
+- [x] Security policy, structured issue forms, and pull request checklist added to the release candidate
+- [x] Branded Chrome icons generated reproducibly from the tracked compass SVG
 
 ## Live model verification
 
@@ -71,7 +76,7 @@ Luna is fixed in source. The recorded live Luna verification used Worker version
 - [x] Confirm the floating helper appears automatically on a public repository
 - [x] Complete all four on-page landmarks and confirm the helper moves, highlights, scrolls, and explains each target
 - [x] Confirm `Explain this` answers about the highlighted landmark without moving or opening generic starters
-- [ ] Install the production zip in a clean Chrome profile
+- [ ] Extract the production zip and load it unpacked in a clean Chrome profile
 - [x] Confirm orientation loads from the public Worker
 - [x] Run the installation and contribution questions from the demo script
 - [x] Click a tour stop, install source, and file result
@@ -87,11 +92,17 @@ Luna is fixed in source. The recorded live Luna verification used Worker version
 - [ ] Ask another person to choose a public repository and complete the four core jobs
 - [ ] Record the primary demo
 - [ ] Record or retain a free-mode backup demo
-- [ ] Publish the source repository and add its URL to Devpost
+- [x] Publish the source repository and add its URL to Devpost
 - [ ] Add the demo video URL
 - [ ] Paste and review `docs/DEVPOST_SUBMISSION.md`
 - [ ] Verify every Devpost claim against this checklist
 - [ ] Submit before July 21, 2026 at 5:00 PM Pacific Time
+
+## Needs release propagation
+
+- [ ] Publish the July 19 source candidate to the public repository
+- [ ] Deploy the July 19 setup-guidance hardening
+- [ ] Rerun the strengthened five-repository matrix against the deployed Worker
 
 ## Release artifact
 
@@ -104,7 +115,7 @@ apps/extension/.output/wayfinderextension-0.1.0-chrome.zip
 Current SHA-256:
 
 ```text
-3661bd55ae389682a16b42764193d83d0a40ae174e14a49f73014d5ac5f09440
+357f36c91c7792e58ef8098b08783c9192e4762570ead0307dc42c1f5af52434
 ```
 
 Rebuild the archive after any extension source or configuration change, then update the checksum in this file and the Devpost draft.

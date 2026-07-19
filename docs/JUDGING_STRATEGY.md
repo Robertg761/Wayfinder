@@ -46,11 +46,11 @@ Proof to show: explain why the obvious file is not always the correct implementa
 
 ## Remaining highest-leverage work
 
-1. Run and capture one credit-backed Trail Plan with GPT-5.6.
-2. Record the three-minute primary demo and a deterministic backup.
-3. Capture consistent screenshots with the helper in compact, landmark, and expanded answer states.
-4. Test Trail Plan on at least three languages and repository shapes.
-5. Add the final video, screenshots, and verified claims to Devpost.
+1. Capture the verified credit-backed GPT-5.6 Trail Plan in the expanded answer surface.
+2. Record the three-minute primary demo and retain a deterministic backup.
+3. Complete the compact and expanded-answer screenshot set alongside the two verified frames already in `docs/assets`.
+4. Ask one person unfamiliar with Wayfinder to complete the four core jobs on a public repository.
+5. Add the final video and screenshots to Devpost, review every claim against the ship checklist, and submit.
 
 ## Cut rule
 

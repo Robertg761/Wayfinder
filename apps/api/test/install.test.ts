@@ -1,6 +1,6 @@
 import type { RepoMap } from "@wayfinder/contracts";
 import { describe, expect, it } from "vitest";
-import { extractMarkdownCommands, generateInstallGuide, isConsumerInstallCommand } from "../src/install";
+import { extractMarkdownCommands, generateInstallGuide, isConsumerInstallCommand, selectSetupPaths } from "../src/install";
 
 function makeMap(overrides: Partial<RepoMap> = {}): RepoMap {
   return {
@@ -52,8 +52,11 @@ describe("isConsumerInstallCommand", () => {
     "pip install trail-sdk",
     "pipx install trail-cli",
     "cargo install ripgrep",
+    "cargo binstall ripgrep",
     "go install example.com/trail/cmd/trail@latest",
     "brew install trail",
+    "sudo apt-get install trail",
+    "doas pkg_add trail",
   ])("recognizes documented consumer installs across ecosystems: %s", (command) => {
     expect(isConsumerInstallCommand(command)).toBe(true);
   });
@@ -168,6 +171,22 @@ describe("generateInstallGuide", () => {
     expect(contributor.steps.map((step) => step.command)).toEqual(["npm install", "npm test"]);
   });
 
+  it("recognizes short repository names without matching an unrelated package", () => {
+    const readme = [
+      "# jq",
+      "## Installation",
+      "```bash",
+      "brew install jq",
+      "cargo install cargo-fuzz",
+      "```",
+    ].join("\n");
+    const map = makeMap({ repo: "jqlang/jq", readme, setupFiles: ["README.md"] });
+
+    expect(generateInstallGuide(map, { "README.md": readme }, "use").steps.map((step) => step.command)).toEqual([
+      "brew install jq",
+    ]);
+  });
+
   it("keeps non-JavaScript consumer commands and omits them from contributor setup", () => {
     const readme = [
       "# Trail",
@@ -192,6 +211,59 @@ describe("generateInstallGuide", () => {
     expect(generateInstallGuide(map, { "README.md": readme }, "develop").steps).toEqual([]);
   });
 
+  it("keeps product installs separate from similarly shaped development tooling", () => {
+    const readme = [
+      "# ripgrep",
+      "## Installation",
+      "```bash",
+      "curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep_14.1.1-1_amd64.deb",
+      "cargo install ripgrep",
+      "cargo binstall ripgrep",
+      "sudo dnf config-manager --set-enabled crb",
+      "sudo dnf install https://example.com/epel-release-latest.noarch.rpm",
+      "sudo dnf install ripgrep",
+      "```",
+      "## Building",
+      "```bash",
+      "git clone https://github.com/BurntSushi/ripgrep",
+      "cd ripgrep",
+      "cargo build --release",
+      "```",
+      "## Running tests",
+      "```bash",
+      "cargo test --all",
+      "```",
+    ].join("\n");
+    const contributing = [
+      "# Contributing",
+      "## Development setup",
+      "```bash",
+      "cargo install cargo-fuzz",
+      "```",
+    ].join("\n");
+    const map = makeMap({ repo: "BurntSushi/ripgrep", language: "Rust", readme, setupFiles: ["README.md", "CONTRIBUTING.md", "Cargo.toml"] });
+    const files = { "README.md": readme, "CONTRIBUTING.md": contributing, "Cargo.toml": "[package]\nname = \"ripgrep\"" };
+
+    const consumer = generateInstallGuide(map, files, "use");
+    const contributor = generateInstallGuide(map, files, "develop");
+
+    expect(consumer.steps.map((step) => step.command)).toEqual([
+      "curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep_14.1.1-1_amd64.deb",
+      "cargo install ripgrep",
+      "cargo binstall ripgrep",
+      "sudo dnf install ripgrep",
+    ]);
+    expect(consumer.steps.some((step) => step.command.includes("cargo-fuzz"))).toBe(false);
+    expect(contributor.steps.map((step) => step.command)).toEqual([
+      "git clone https://github.com/BurntSushi/ripgrep",
+      "cd ripgrep",
+      "cargo build --release",
+      "cargo test --all",
+      "cargo install cargo-fuzz",
+    ]);
+    expect(contributor.steps.at(-1)?.title).toBe("Install development tooling");
+  });
+
   it("moves inferred dependency installation before documented start commands", () => {
     const readme = ["# Trail", "## Development", "```bash", "pnpm dev", "```"].join("\n");
     const map = makeMap({ readme, setupFiles: ["README.md", "package.json", "pnpm-lock.yaml"] });
@@ -204,6 +276,30 @@ describe("generateInstallGuide", () => {
     expect(guide.steps.map((step) => step.order)).toEqual([1, 2]);
   });
 
+  it("preserves documented setup order while inserting inferred dependencies", () => {
+    const readme = [
+      "# Trail",
+      "## Development",
+      "```bash",
+      "git worktree add ../trail-feature -b feature",
+      "cd ../trail-feature",
+      "pnpm dev",
+      "```",
+    ].join("\n");
+    const map = makeMap({ readme, setupFiles: ["README.md", "package.json", "pnpm-lock.yaml"] });
+    const guide = generateInstallGuide(map, {
+      "README.md": readme,
+      "package.json": JSON.stringify({ packageManager: "pnpm@10", scripts: { dev: "vite" } }),
+    });
+
+    expect(guide.steps.map((step) => step.command)).toEqual([
+      "git worktree add ../trail-feature -b feature",
+      "cd ../trail-feature",
+      "pnpm install",
+      "pnpm dev",
+    ]);
+  });
+
   it("does not invent a registry command from a public application manifest", () => {
     const map = makeMap({ setupFiles: ["package.json", "package-lock.json"] });
     const guide = generateInstallGuide(map, {
@@ -212,5 +308,41 @@ describe("generateInstallGuide", () => {
 
     expect(guide.steps).toEqual([]);
     expect(guide.warnings).toContain("No documented consumer install command was found. Check GitHub Releases for a packaged download; if none exists, use the repository's source setup instructions.");
+  });
+});
+
+describe("selectSetupPaths", () => {
+  it("uses repository-level setup evidence without leaking subsystem README commands", () => {
+    const map = makeMap({
+      setupFiles: [
+        "README.md",
+        "CONTRIBUTING.md",
+        "package.json",
+        ".conductor/README.md",
+        ".agents/skills/README.md",
+        "packages/widget/README.md",
+        "docs/setup.md",
+        ".github/CONTRIBUTING.md",
+      ],
+      tree: [
+        { path: "Cargo.toml", type: "blob" },
+        { path: "crates/core/Cargo.toml", type: "blob" },
+      ],
+    });
+
+    expect(selectSetupPaths(map)).toEqual(expect.arrayContaining([
+      "README.md",
+      "CONTRIBUTING.md",
+      "package.json",
+      "Cargo.toml",
+      "docs/setup.md",
+      ".github/CONTRIBUTING.md",
+    ]));
+    expect(selectSetupPaths(map)).not.toEqual(expect.arrayContaining([
+      ".conductor/README.md",
+      ".agents/skills/README.md",
+      "packages/widget/README.md",
+      "crates/core/Cargo.toml",
+    ]));
   });
 });

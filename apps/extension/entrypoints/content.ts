@@ -299,6 +299,8 @@ const helperStyles = `
     width: min(326px, calc(100vw - 28px));
     max-height: min(430px, calc(100vh - 28px));
     overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     pointer-events: auto;
     padding: 18px;
     border: 1px solid var(--wf-ink);
@@ -407,7 +409,8 @@ const helperStyles = `
     text-align: left;
     font: 700 11px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .wf-question-grid button:hover { border-color: var(--wf-gold); background: var(--wf-surface-gold); }
+  .wf-question-grid button:hover,
+  .wf-question-grid button:focus-visible { border-color: var(--wf-gold); background: var(--wf-surface-gold); }
   .wf-composer { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding-top: 11px; border-top: 1px dashed var(--wf-line); }
   .wf-composer textarea {
     min-height: 58px;
@@ -431,6 +434,18 @@ const helperStyles = `
     letter-spacing: .08em;
     text-transform: uppercase;
   }
+  .wf-question-grid button:focus-visible,
+  .wf-composer textarea:focus-visible,
+  .wf-composer button:focus-visible,
+  .wf-followups button:focus-visible,
+  .wf-answer-nav button:focus-visible,
+  details.wf-detail summary:focus-visible {
+    outline: 2px solid var(--wf-focus);
+    outline-offset: 2px;
+  }
+  .wf-composer textarea:focus-visible { border-color: var(--wf-focus); box-shadow: 0 0 0 3px var(--wf-surface-gold); }
+  .wf-composer button:hover,
+  .wf-composer button:focus-visible { background: var(--wf-rust); }
   .wf-loading { display: grid; place-items: center; min-height: 190px; text-align: center; }
   .wf-loading-mark { width: 42px; height: 42px; margin-bottom: 15px; border: 2px solid var(--wf-line); border-top-color: var(--wf-rust); border-radius: 50%; animation: wf-spin 900ms linear infinite; }
   .wf-answer { display: grid; gap: 13px; }
@@ -463,6 +478,8 @@ const helperStyles = `
   .wf-answer.concise .wf-detail { display: none; }
   details.wf-detail { padding: 8px 10px; border: 1px solid var(--wf-line); border-radius: 10px; }
   details.wf-detail summary { cursor: pointer; color: var(--wf-moss); font: 700 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  details.wf-detail summary:hover,
+  details.wf-detail summary:focus-visible { color: var(--wf-rust); }
   .wf-open, .wf-copy-command {
     width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--wf-ink); border-radius: 8px; background: transparent; color: var(--wf-ink); cursor: pointer; text-align: left; font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere;
   }
@@ -478,8 +495,12 @@ const helperStyles = `
   .wf-evidence a { text-decoration: none; }
   .wf-evidence a:hover, .wf-evidence a:focus-visible { border-color: var(--wf-gold); background: var(--wf-surface-gold); outline-color: var(--wf-focus); }
   .wf-followups { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--wf-line); }
+  .wf-followups button:hover,
+  .wf-followups button:focus-visible { border-color: var(--wf-gold); background: var(--wf-surface-gold); }
   .wf-answer-nav { display: flex; justify-content: space-between; gap: 8px; }
   .wf-answer-nav button { padding: 7px 10px; border: 0; background: transparent; color: var(--wf-rust); cursor: pointer; font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .wf-answer-nav button:hover,
+  .wf-answer-nav button:focus-visible { background: var(--wf-surface-gold); border-radius: 7px; }
   .wf-error { padding: 13px; border: 1px solid var(--wf-rust); border-radius: 10px; background: var(--wf-surface-error); }
   .wf-error p { font-size: 13px; }
   @keyframes wf-spin { to { transform: rotate(360deg); } }
@@ -492,6 +513,19 @@ const helperStyles = `
     .wf-dock, .wf-helper, .wf-highlight, .wf-bubble { transition-duration: 0ms; }
     .wf-body, .wf-needle, .wf-ping { animation: none; }
     .wf-loading-mark { animation: none; }
+  }
+
+  @media (max-width: 420px) {
+    .wf-question-grid,
+    .wf-composer { grid-template-columns: 1fr; }
+    .wf-question-grid button { min-height: 48px; }
+    .wf-composer button { min-height: 40px; }
+  }
+
+  @media (forced-colors: active) {
+    .wf-highlight { border-color: Highlight; box-shadow: none; }
+    .wf-helper:focus-visible,
+    .wf-bubble :focus-visible { outline-color: Highlight; }
   }
 `;
 

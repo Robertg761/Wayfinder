@@ -4,7 +4,7 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   manifest: {
     name: 'Wayfinder',
-    description: 'A floating on-page agent that points out, explains, and maps any GitHub repository.',
+    description: 'A floating evidence-first guide that maps and explains public GitHub repositories.',
     permissions: ['storage'],
     host_permissions: [
       'https://github.com/*',

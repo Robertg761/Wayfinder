@@ -731,6 +731,14 @@ test('keeps the expanded agent surface reachable in a narrow viewport', async ()
   expect(state.maxHeight).toBeLessThanOrEqual(472);
   await expect(page.getByRole('heading', { name: 'Get the answer, then the evidence.' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Question for Wayfinder' })).toBeVisible();
+  const responsiveLayout = await page.evaluate(() => {
+    const shadow = document.querySelector('#wayfinder-page-guide')!.shadowRoot!;
+    return {
+      questionColumns: getComputedStyle(shadow.querySelector('.wf-question-grid')!).gridTemplateColumns.split(' ').length,
+      composerColumns: getComputedStyle(shadow.querySelector('.wf-composer')!).gridTemplateColumns.split(' ').length,
+    };
+  });
+  expect(responsiveLayout).toEqual({ questionColumns: 1, composerColumns: 1 });
   await expect.poll(() => page.evaluate(() => {
     const shadow = document.querySelector('#wayfinder-page-guide')!.shadowRoot!;
     const active = shadow.activeElement;
@@ -739,6 +747,34 @@ test('keeps the expanded agent surface reachable in a narrow viewport', async ()
     const focused = active.getBoundingClientRect();
     return focused.bottom > bubble.top + 8 && focused.top < bubble.bottom - 8;
   })).toBe(true);
+});
+
+test('shows a visible keyboard focus treatment on task and composer controls', async () => {
+  await page.goto(fixtureUrl);
+  await selectMode('Quick');
+  await expect(page.getByRole('button', { name: 'Quick', exact: true })).toBeFocused();
+  const task = page.getByRole('button', { name: 'What does this project do?' });
+  await page.keyboard.press('Tab');
+  await expect(task).toBeFocused();
+  const taskOutline = await task.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
+  });
+  expect(taskOutline.style).not.toBe('none');
+  expect(taskOutline.width).toBeGreaterThanOrEqual(2);
+
+  const composer = page.getByRole('textbox', { name: 'Question for Wayfinder' });
+  for (let step = 0; step < 6; step += 1) await page.keyboard.press('Tab');
+  await expect(composer).toBeFocused();
+  const composerFocus = await composer.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      outlineWidth: Number.parseFloat(style.outlineWidth),
+      shadow: style.boxShadow,
+    };
+  });
+  expect(composerFocus.outlineWidth).toBeGreaterThanOrEqual(2);
+  expect(composerFocus.shadow).not.toBe('none');
 });
 
 test('keeps an open answer on screen while the viewport is resized', async () => {

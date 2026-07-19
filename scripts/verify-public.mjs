@@ -6,23 +6,27 @@ const repositoryCases = {
     repo: "openai-node",
     question: "Where is pagination implemented?",
     expectedTopPath: "src/core/pagination.ts",
+    consumerCommandPattern: /(?:^|[^a-z])openai(?:[^a-z]|$)/i,
   },
   python: {
     owner: "pallets",
     repo: "flask",
     question: "Where is request routing implemented?",
     expectedTopPaths: ["src/flask/sansio/app.py", "src/flask/sansio/scaffold.py"],
+    consumerCommandPattern: /(?:^|[^a-z])flask(?:[^a-z]|$)/i,
   },
   rust: {
     owner: "BurntSushi",
     repo: "ripgrep",
     question: "Which file defines the command line executable?",
     expectedTopPath: "crates/core/main.rs",
+    consumerCommandPattern: /(?:^|[^a-z])ripgrep(?:[^a-z]|$)/i,
   },
   go: {
     owner: "cli",
     repo: "cli",
     question: "Where is authentication handled?",
+    consumerCommandPattern: /(?:github\.com\/cli\/cli|(?:^|[^a-z])gh(?:[^a-z]|$)|(?:^|[^a-z])cli(?:[^a-z]|$))/i,
   },
   monorepo: {
     owner: "vercel",
@@ -32,6 +36,7 @@ const repositoryCases = {
       "packages/next/src/shared/lib/router/routes/app.ts",
       "packages/next-routing/src/index.ts",
     ],
+    consumerCommandPattern: /(?:^|[^a-z])next(?:\.js)?(?:[^a-z]|$)/i,
   },
 };
 
@@ -104,6 +109,18 @@ async function verifyRepository(name, repositoryCase) {
   }
   if (consumer.intent !== "installation" || consumer.guide.audience !== "use") {
     throw new Error("end-user install question did not reach the consumer guide");
+  }
+  const unrelatedConsumerCommand = consumer.guide.steps.find((step) => !repositoryCase.consumerCommandPattern.test(step.command));
+  if (unrelatedConsumerCommand) {
+    throw new Error(`consumer guide included a command for another product: ${unrelatedConsumerCommand.command}`);
+  }
+  const rootSetupEvidence = (path) => !path.includes("/")
+    || /^\.github\/contributing([^/]*)?\.md$/i.test(path)
+    || /^docs\/(?:install|installation|setup|getting-started)(?:\.[^/]*)?\.md$/i.test(path);
+  const leakedSubsystemStep = [...development.guide.steps, ...consumer.guide.steps]
+    .find((step) => !rootSetupEvidence(step.evidence.path));
+  if (leakedSubsystemStep) {
+    throw new Error(`setup guide included subsystem documentation: ${leakedSubsystemStep.evidence.path}`);
   }
   if (finder.intent !== "file-find" || finder.finder.results.length === 0) {
     throw new Error("file question did not return a repository coordinate");

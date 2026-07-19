@@ -58,4 +58,7 @@ Those services process data under their respective terms and privacy policies.
 
 ## Contact
 
-Report a privacy or security concern through the source repository's issue tracker after the repository is published.
+Report a non-sensitive privacy concern through the
+[Wayfinder issue tracker](https://github.com/Robertg761/Wayfinder/issues). For a
+vulnerability or sensitive report, follow [SECURITY.md](SECURITY.md) instead of
+posting the details publicly.

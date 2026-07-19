@@ -1,6 +1,8 @@
 # Devpost Submission Draft
 
-This document is ready to paste after the final Chrome and live GPT-5.6 checks. Do not claim the model screenshot or live model call until the checklist records that proof.
+This document is ready to paste. The remaining placeholders are the demo video
+URL and the final GPT-5.6 synthesis screenshot; keep those claims aligned with
+the ship checklist.
 
 ## Project name
 
@@ -57,7 +59,7 @@ A TypeScript Cloudflare Worker provides explicit repository tools:
 - deterministic intent router
 - multi-tool contribution orchestrator
 
-The mapper reads GitHub metadata, the exact viewed branch, tag, or commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. Current-file questions first distinguish source, test, documentation, configuration, data, and other files, then route summary, dependency, caller, test, and impact actions separately. Relationship results require target-specific evidence; documentation is summarized from its own headings instead of being treated as executable source. The install tool extracts documented commands with line references and uses manifests only for clearly labeled inference.
+The mapper reads GitHub metadata, the exact viewed branch, tag, or commit, README content, setup landmarks, and a compact source tree. The file finder ranks the full filtered tree, then fetches only the five strongest small text candidates for content and symbol evidence. Current-file questions first distinguish source, test, documentation, configuration, data, and other files, then route summary, dependency, caller, test, and impact actions separately. Relationship results require target-specific evidence; documentation is summarized from its own headings instead of being treated as executable source. The install tool extracts documented commands with line references, limits repository-wide setup evidence to authoritative root and dedicated setup documents, verifies that consumer commands name the actual project, and uses manifests only for clearly labeled inference.
 
 GPT-5.6 Luna is connected through the OpenAI Responses API for contribution Trail Plans. The model receives the user's question and the completed typed evidence, uses the lowest reasoning level that passes our evaluation, and must return strict structured output containing a direct answer, explanation, citations, and up to four ordered actions. Responses are not stored. Before the answer reaches the extension, the Worker verifies that every model evidence path and action coordinate occurs in the deterministic result. Focused questions stay on the deterministic route, and successful model calls report token usage, latency, and estimated cost.
 
@@ -78,7 +80,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
 - The production Worker is live and the Chrome package uses it automatically.
-- The automated suite covers 162 unit and integration cases plus 46 complete browser workflows across URL context, late-rendered and off-screen landmarks, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, and model fallback.
+- The automated suite covers 169 unit and integration cases plus 47 complete browser workflows across URL context, late-rendered and off-screen landmarks, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent and evidence scoping, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, model fallback, responsive layout, and keyboard focus visibility.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
 - The live public dry run correctly found `src/core/pagination.ts` in `openai/openai-node` after excluding its deprecated wrapper.
 
@@ -114,6 +116,7 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 
 - Public health endpoint: `https://wayfinder-api.hopit-robert.workers.dev/health`
 - Source repository: `https://github.com/Robertg761/Wayfinder`
+- License: `https://github.com/Robertg761/Wayfinder/blob/main/LICENSE`
 - Demo video: add after recording
 
 Verified screenshot candidates:
@@ -126,7 +129,7 @@ Verified screenshot candidates:
 - Public Worker URL: `https://wayfinder-api.hopit-robert.workers.dev`
 - Current Worker version: `a819c6ca-aeea-49fc-bd66-fa1ca69e9cdf`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
-- Archive SHA-256: `3661bd55ae389682a16b42764193d83d0a40ae174e14a49f73014d5ac5f09440`
-- Automated checks: 162 unit and integration tests, 46 browser workflows, typecheck, extension production build, Worker dry run
+- Archive SHA-256: `357f36c91c7792e58ef8098b08783c9192e4762570ead0307dc42c1f5af52434`
+- Automated checks: 169 unit and integration tests, 47 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

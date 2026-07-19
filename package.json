@@ -2,6 +2,15 @@
   "name": "wayfinder",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Robertg761/Wayfinder.git"
+  },
+  "homepage": "https://github.com/Robertg761/Wayfinder#readme",
+  "bugs": {
+    "url": "https://github.com/Robertg761/Wayfinder/issues"
+  },
   "packageManager": "pnpm@10.30.1",
   "engines": {
     "node": ">=22"
@@ -12,6 +21,7 @@
     "dev:extension": "pnpm --filter @wayfinder/extension dev",
     "deploy:api": "pnpm --filter @wayfinder/api exec wrangler deploy",
     "eval:luna": "pnpm --filter @wayfinder/api test:luna",
+    "icons:extension": "node scripts/render-extension-icons.mjs",
     "smoke:public": "node scripts/verify-public.mjs",
     "test": "pnpm -r test",
     "test:browser": "pnpm --filter @wayfinder/extension build && playwright test",

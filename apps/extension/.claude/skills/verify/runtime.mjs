@@ -59,8 +59,27 @@ async function createHarness(name, state = {}) {
   });
   return {context,page,profile,api,close:async()=>{await context.close();await rm(profile,{recursive:true,force:true});}};
 }
-async function open(page){ const launcher=page.locator('#wayfinder-page-guide').getByRole('button',{name:/Wayfinder helper/}).first(); if(await launcher.getAttribute('aria-expanded')!=='true') await page.getByRole('button',{name:'Open Wayfinder helper'}).click(); await page.getByRole('button',{name:'Close helper'}).waitFor(); }
-async function choose(page, mode){ await open(page); const first=page.getByRole('button',{name:mode==='Guided'?'Guide me':'Quick map'}); if(await first.isVisible().catch(()=>false)){ if(mode==='Quick'){await page.getByRole('button',{name:'Guide me'}).click();await page.getByRole('button',{name:'Quick',exact:true}).click();}else await first.click(); } else { const b=page.getByRole('button',{name:mode,exact:true}); if(await b.getAttribute('aria-pressed')!=='true') await b.click(); } }
+async function open(page){
+  const launcher=page.locator('#wayfinder-page-guide').getByRole('button',{name:/Wayfinder helper/}).first();
+  if(await launcher.getAttribute('aria-expanded')!=='true') await page.getByRole('button',{name:'Open Wayfinder helper'}).click();
+  await page.getByRole('button',{name:'Close helper'}).waitFor();
+  await page.waitForFunction(()=>Boolean(document.querySelector('#wayfinder-page-guide')?.shadowRoot?.querySelector('.wf-copy')?.firstElementChild));
+}
+async function choose(page, mode){
+  await open(page);
+  const first=page.getByRole('button',{name:mode==='Guided'?'Guide me':'Quick map'});
+  const switchButton=page.getByRole('button',{name:mode,exact:true});
+  await Promise.race([
+    first.waitFor({state:'visible',timeout:5000}),
+    switchButton.waitFor({state:'visible',timeout:5000}),
+  ]);
+  if(await first.isVisible().catch(()=>false)){
+    if(mode==='Quick'){
+      await page.getByRole('button',{name:'Guide me'}).click();
+      await page.getByRole('button',{name:'Quick',exact:true}).click();
+    }else await first.click();
+  }else if(await switchButton.getAttribute('aria-pressed')!=='true') await switchButton.click();
+}
 async function uiState(page){ return page.evaluate(()=>{const host=document.querySelector('#wayfinder-page-guide'),root=host?.shadowRoot,b=root?.querySelector('.wf-bubble'),active=root?.activeElement;const r=b?.getBoundingClientRect();return {hidden:host?.hidden,expanded:root?.querySelector('.wf-helper')?.getAttribute('aria-expanded'),maxHeight:parseFloat(b?.style.maxHeight||'0'),clientHeight:b?.clientHeight,scrollHeight:b?.scrollHeight,scrollTop:b?.scrollTop,rect:r?{x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height}:null,active:active?.getAttribute('aria-label')||active?.textContent?.trim()||active?.tagName,status:root?.querySelector('[role=status]')?.textContent,copyLive:root?.querySelector('.wf-copy')?.hasAttribute('aria-live'),highlight:root?.querySelector('.wf-highlight')?.classList.contains('visible'),dockLeft:(root?.querySelector('.wf-dock'))?.style.left,scheme:getComputedStyle(host).colorScheme,panel:getComputedStyle(host).getPropertyValue('--wf-surface-panel').trim(),ink:getComputedStyle(host).getPropertyValue('--wf-ink').trim()};}); }
 const report=[];
 
