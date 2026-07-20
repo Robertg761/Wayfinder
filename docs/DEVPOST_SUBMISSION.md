@@ -9,11 +9,11 @@ Wayfinder
 
 ## Tagline
 
-An evidence-first agent that guides you through any unfamiliar GitHub repository.
+Learn it, install it, or contribute with confidence—without leaving GitHub.
 
 ## Short description
 
-Wayfinder is a floating repository agent for GitHub. Its animated compass helper travels to real page landmarks, points them out, explains what they reveal, and expands in place for deeper questions. It extracts sourced installation steps, finds where a feature is implemented, and turns a contribution goal into an evidence-backed Trail Plan. GPT-5.6 reasons across the typed tool results to produce an ordered field brief, while strict path validation prevents it from inventing repository coordinates.
+Wayfinder is the friendly front door to an unfamiliar GitHub repository. Its animated compass helper explains the page, shows what the project does, takes regular users to the right installer, and turns a contribution idea into a clear Trail Plan. GPT-5.6 makes the guidance approachable while Wayfinder keeps every file, command, and download tied to real repository evidence.
 
 ## Inspiration
 
@@ -23,12 +23,14 @@ General chat tools can help, but they make users move context out of GitHub and 
 
 ## What it does
 
-Wayfinder appears as a small helper directly on GitHub. The user chooses Guided mode for a patient, project-specific tour or Quick mode for a quiet, compact developer map. It can lead a visual tour of the repository name, branch, file tree, README, breadcrumbs, code, and line coordinates. When a user asks a deeper question, the same helper expands to show repository answers, commands, Trail Plans, current-file relationships, and clickable evidence.
+Wayfinder appears as a small helper directly on GitHub. Guided mode turns the page into a friendly, project-specific tour. Quick mode gives the highlights without the homework. Ask how to install a finished app and Wayfinder can open GitHub Releases, detect the user's platform, and point to the packaged download instead of a source archive. Ask how to contribute and the same helper builds a clear route through setup, implementation, and verification.
 
 It can:
 
 - summarize a repository and build a clickable reading route
 - show a compact snapshot with stack, package manager, ref, commit, key directories, entry point, and local commands
+- recognize a finished application, open GitHub Releases, detect the user's platform and architecture, and highlight the matching packaged download
+- avoid steering regular users toward source archives, checksums, update metadata, or developer-only setup
 - separate published-project installation from local repository development
 - extract installation, development, test, and build commands from repository evidence
 - label commands as documented, inferred, or conflicting
@@ -78,6 +80,7 @@ We also needed a useful path before model credits arrived. That constraint produ
 - Paid model traffic has both per-client rate limiting and a persistent global budget cap.
 - The same typed contracts drive free mode, model mode, caching, and the interface.
 - Trail Plan combines orientation, sourced setup, implementation discovery, and related tests into one contributor workflow.
+- Consumer install guidance can move from a repository to its Releases page and highlight the correct OS-specific installer in place.
 - The production Worker is live and the Chrome package uses it automatically.
 - The automated suite covers 178 unit and integration cases plus 49 complete browser workflows across URL context, late-rendered and off-screen landmarks, leave-and-return recovery on modern GitHub subpages, compact control clearance, editor focus and host-page shortcut containment, mode persistence, public request validation, ref correctness, latest-release and architecture selection, delayed release assets, per-tab navigation isolation, setup intent and evidence scoping, file-type-aware current-file context, model allowance fallback, global budget accounting, local and edge caching, repository mapping, tours, contribution routing, file ranking, model fallback, responsive layout, and keyboard focus visibility.
 - A repeatable public smoke test passes across TypeScript, Python, Rust, Go, and a truncated JavaScript monorepo.
@@ -130,8 +133,8 @@ Verified screenshot candidates:
 - Current Worker version: `aefe4f70-4fd4-4aa0-9cb2-7e29e3b2530a`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `8061b57a49b420f7afaa9cecabaca93a7bbca4af2b556e3e1c3f98caeee67499`
-- Local demo master: `playwright-report/wayfinder-demo/wayfinder-build-week-demo.mp4` (1:58.72, 1280x720 H.264/AAC)
-- Demo SHA-256: `4e4b2659b881b0446b3b06f9e76722d43a1f2bd1a15113fee413e4097831d2b1`
+- Local demo master: `playwright-report/wayfinder-demo/wayfinder-build-week-demo.mp4` (1:57.55, 1280x720 H.264/AAC)
+- Demo SHA-256: `2b1a31c9b63983a3625cf3ddc58bd50a350cb32a6db34e1f065b44d045237076`
 - Automated checks: 178 unit and integration tests, 49 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

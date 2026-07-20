@@ -1,74 +1,79 @@
 # Wayfinder Demo Script
 
-Target length: 1 minute 59 seconds.
+Target length: 1 minute 58 seconds.
 
-Demo repository: `openai/openai-node` at the current default-branch commit.
+Demo repositories:
+
+- `Robertg761/HA-Desktop-Widget` for Guided, Quick, and consumer installation
+- `openai/openai-node` for the contribution Trail Plan
 
 ## Before recording
 
 1. Install `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip` in a clean Chrome profile.
-2. Open `https://github.com/openai/openai-node`.
-3. Confirm `https://wayfinder-api.hopit-robert.workers.dev/health` returns `ok: true`.
-4. If credits are available, confirm health reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`.
-5. Keep the browser at a normal laptop width so the helper movement and expanded answers remain readable.
-6. Clear prior Wayfinder turns or reopen the repository before recording.
-7. Keep the GitHub page unobstructed. Do not add persistent chapter labels over the product UI.
+2. Confirm `https://wayfinder-api.hopit-robert.workers.dev/health` returns `ok: true`.
+3. Keep the browser at a normal laptop width so the helper and highlighted GitHub landmarks remain readable.
+4. Clear prior Wayfinder turns or use a fresh browser profile.
+5. Keep the GitHub page unobstructed. Do not add persistent chapter labels over the product UI.
 
 ## Primary script
 
-### 0:00 to 0:19, the problem
+### 0:00 to 0:05, disclosure and title
 
-Show the Wayfinder title card, then open `openai/openai-node`.
+Show the Wayfinder title card.
 
-Say: "This demonstration uses an AI-generated narration voice from OpenAI.
+Say: "This demonstration uses an AI-generated narration voice from OpenAI."
 
-Opening a new repository is easy. Finding the right first edit is not. Wayfinder lives directly on GitHub and turns ‘I want to contribute’ into a verified trail of files, commands, and tests."
+### 0:05 to 0:18, the promise
 
-### 0:19 to 0:31, Guided mode
+Open the Home Assistant Desktop Widget repository and reveal the Wayfinder helper.
 
-Open the helper, choose Guided mode, and begin the repository tour. Let the helper point to real GitHub landmarks without covering the product with editorial overlays.
+Say: "GitHub repositories can contain everything you need and still leave you wondering where to begin. Wayfinder gives every project a friendly front door: understand it, install it, and find a confident path to your first contribution."
 
-Say: "Guided mode teaches the terrain. The helper moves only to point out a real GitHub landmark, explaining both the term and what it means for this project. Its state survives GitHub navigation."
+### 0:18 to 0:28, Guided mode
 
-### 0:31 to 0:43, Quick mode
+Begin the project tour and let Wayfinder point to the repository name and its real GitHub landmark.
 
-Switch to Quick mode and show the repository snapshot with its pinned ref, stack, entry point, and sourced commands.
+Say: "Guided mode meets you on the page. It moves to real GitHub landmarks and explains why each one matters, turning an intimidating wall of files into a tour you can follow."
 
-Say: "Quick mode is the fast path. Wayfinder maps the exact viewed ref and commit, identifies the stack, package manager, entry points, and sourced commands. Every link opens pinned evidence, never a guessed file."
+### 0:28 to 0:37, Quick mode
 
-### 0:43 to 1:05, the Trail Plan
+Show the compact project overview and reading route.
 
-Ask: `I want to change speech generation. Plan my first contribution.`
+Say: "Need the highlights? Quick mode shows what the project does, how it is organized, where it starts, and the commands its maintainers provide."
 
-Show the repository map, sourced setup commands, implementation coordinate, paired test, and ordered GPT-5.6 field brief.
+### 0:37 to 1:01, install the finished app
 
-Say: "Now I ask, ‘I want to change speech generation. Plan my first contribution.’
+Ask: `How do I install it?`
 
-Wayfinder runs a repository map, setup analysis, implementation search, and verification search. GPT-5.6 Luna turns those typed results into an ordered Trail Plan: establish a clean baseline, open the real speech implementation, and follow its paired test."
+Show Wayfinder recognize a published desktop app, open GitHub Releases, detect macOS, and highlight `HA-Desktop-Widget-3.7.4-universal.dmg` instead of a source archive.
 
-### 1:05 to 1:20, the trust boundary
+Say: "Here is one of my favorite features. Ask, ‘How do I install it?’ Wayfinder recognizes that Home Assistant Desktop Widget is a finished app. It takes me to Releases, detects macOS, and points directly at the universal installer. No digging through asset names. No accidental source archive. Just the right download, exactly where it lives."
 
-Keep the verified evidence links and synthesis provenance visible.
+### 1:01 to 1:25, plan a contribution
 
-Say: "The model writes the plan, but the tools own the facts. The Worker validates every citation and action against deterministic repository evidence. Unsupported paths, model failures, and budget limits fall back safely to the deterministic result."
+Open `openai/openai-node` and ask: `I want to change speech generation. Plan my first contribution.`
 
-### 1:20 to 1:40, Codex execution proof
+Show the ordered plan, implementation coordinate, and paired test.
+
+Say: "Wayfinder is just as useful when you want to contribute. On OpenAI’s Node SDK, I ask, ‘I want to change speech generation. Plan my first contribution.’ Wayfinder turns that goal into a Trail Plan: get the project running, open the relevant implementation, and follow the test that proves the change works."
+
+### 1:25 to 1:36, useful AI with visible evidence
+
+Keep the GPT-5.6 synthesis label and repository-backed links visible.
+
+Say: "GPT-5.6 makes the plan clear and approachable, while every file and command remains tied to real repository evidence. The AI guides you; the project remains the source of truth."
+
+### 1:36 to 1:48, Codex execution proof
 
 Show the Codex execution-partner card.
 
-Say: "Codex was the execution partner behind the build. It audited every Wayfinder task, found real failures in guidance, file relationships, navigation recovery, and budget protection, implemented the fixes, expanded the test suite, deployed the Worker, and verified the public experience across five very different repositories."
+Say: "Codex was my execution partner throughout the build. It audited the experience, fixed navigation and reliability problems, expanded the tests, deployed the service, and helped prove Wayfinder across very different public repositories."
 
-### 1:40 to 1:50, evidence check
+### 1:48 to 1:57, close
 
-Ask: `Where is pagination implemented?` Show `src/core/pagination.ts` as the strongest result.
+Show the closing card and leave a short silent beat after the narration.
 
-Say: "One last query asks where pagination is implemented. Wayfinder skips the tempting deprecated forwarding file and points to the core implementation instead."
-
-### 1:50 to 1:59, close
-
-Cut directly to the closing card and leave a short silent beat after the narration.
-
-Say: "That is Wayfinder: the missing trail between intention and a confident first pull request, right where the work happens."
+Say: "Wayfinder turns ‘I found a promising project’ into ‘I know what to do next.’ Learn it. Install it. Contribute with confidence."
 
 ## Backup path
 
@@ -83,9 +88,10 @@ If the model API is unavailable, continue in deterministic mode. That fallback i
 
 ## Screenshot list
 
-Capture at least these four frames at a consistent panel width:
+Capture these frames at a consistent panel width:
 
-1. Repository orientation and reading route
-2. Trail Plan showing Survey, Prepare, Trace, and Prove
-3. Speech implementation and test coordinates, plus `src/core/pagination.ts` from the follow-up
-4. GPT-5.6 field brief and verified evidence, only after the live model check passes
+1. Guided mode pointing at the repository name
+2. Quick mode showing the project overview
+3. Install guidance highlighting the universal macOS `.dmg` on GitHub Releases
+4. GPT-5.6 Trail Plan with the speech implementation and paired test
+5. Final `Learn it · Install it · Contribute` card
