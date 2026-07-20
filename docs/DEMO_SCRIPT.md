@@ -1,6 +1,6 @@
 # Wayfinder Demo Script
 
-Target length: 2 minutes 55 seconds.
+Target length: 1 minute 59 seconds.
 
 Demo repository: `openai/openai-node` at the current default-branch commit.
 
@@ -12,58 +12,63 @@ Demo repository: `openai/openai-node` at the current default-branch commit.
 4. If credits are available, confirm health reports `modelConfigured: true`, `modelProtected: true`, and `modelEnabled: true`.
 5. Keep the browser at a normal laptop width so the helper movement and expanded answers remain readable.
 6. Clear prior Wayfinder turns or reopen the repository before recording.
+7. Keep the GitHub page unobstructed. Do not add persistent chapter labels over the product UI.
 
 ## Primary script
 
-### 0:00 to 0:20, the problem
+### 0:00 to 0:19, the problem
 
-Say: "An unfamiliar repository gives you thousands of files, but not a path through them. Wayfinder is a guide that lives right on GitHub and takes you from a question to verified code evidence."
+Show the Wayfinder title card, then open `openai/openai-node`.
 
-Open `openai/openai-node` and let the floating helper appear. Choose "Guide me," then select "Show me around." Let the attached character and bubble travel to the repository name and one more GitHub landmark while they highlight and explain each target. Point out that each stop teaches the real GitHub term and adds a fact about this project. Then select "Explain this" and show that Wayfinder answers about that exact landmark without moving or opening generic starters.
+Say: "This demonstration uses an AI-generated narration voice from OpenAI.
 
-### 0:20 to 0:45, orientation becomes navigation
+Opening a new repository is easy. Finding the right first edit is not. Wayfinder lives directly on GitHub and turns ‘I want to contribute’ into a verified trail of files, commands, and tests."
 
-Switch the helper header to Quick mode and open the repository snapshot. Point out the purpose, TypeScript stack, package manager, viewed ref, pinned commit, key directories, entry point, and local commands. Open `src/index.ts`, then use the separate file actions to show its summary, explicit imports, resolved local dependencies, evidence-backed caller candidates, and paired tests. Briefly open `README.md` and show that Wayfinder presents its role and outline without inventing source callers or tests.
+### 0:19 to 0:31, Guided mode
 
-Ask "How do I install it?" Wayfinder should first scroll to and highlight the repository's Releases link with "Step 1 of 2." Select "Open Releases." It should use the detected OS—or ask macOS, Windows, or Linux when detection is unavailable—then physically move beside the matching packaged asset, label it "Step 2 of 2," and highlight the exact download. Then return to an answer and open a cited file to show the same cross-page trail ending on pinned source evidence.
+Open the helper, choose Guided mode, and begin the repository tour. Let the helper point to real GitHub landmarks without covering the product with editorial overlays.
 
-Say: "Guided mode helps someone learn the terrain. Quick mode gives an experienced developer the important facts immediately. These are not generated file names. Every answer is mapped from the exact branch and pinned commit, and my trail stays available as I inspect the evidence."
+Say: "Guided mode teaches the terrain. The helper moves only to point out a real GitHub landmark, explaining both the term and what it means for this project. Its state survives GitHub navigation."
 
-### 0:45 to 1:55, the Trail Plan moment
+### 0:31 to 0:43, Quick mode
+
+Switch to Quick mode and show the repository snapshot with its pinned ref, stack, entry point, and sourced commands.
+
+Say: "Quick mode is the fast path. Wayfinder maps the exact viewed ref and commit, identifies the stack, package manager, entry points, and sourced commands. Every link opens pinned evidence, never a guessed file."
+
+### 0:43 to 1:05, the Trail Plan
 
 Ask: `I want to change speech generation. Plan my first contribution.`
 
-Show:
+Show the repository map, sourced setup commands, implementation coordinate, paired test, and ordered GPT-5.6 field brief.
 
-- the repository landmark in Survey
-- sourced setup commands in Prepare
-- `src/resources/audio/speech.ts` in Trace
-- `tests/api-resources/audio/speech.test.ts` in Prove
-- the ordered GPT-5.6 field brief when model mode is available
+Say: "Now I ask, ‘I want to change speech generation. Plan my first contribution.’
 
-Say: "A new contributor does not need another repository summary. They need a route from intention to a safe first edit. Wayfinder orchestrates its repository tools, then GPT-5.6 turns the evidence into an ordered field brief: establish a baseline, open the real implementation, and follow the verification path."
+Wayfinder runs a repository map, setup analysis, implementation search, and verification search. GPT-5.6 Luna turns those typed results into an ordered Trail Plan: establish a clean baseline, open the real speech implementation, and follow its paired test."
 
-Open the implementation and verification coordinates.
+### 1:05 to 1:20, the trust boundary
 
-Say: "Every command and coordinate remains inspectable. I can move from the contribution goal to the source and its proof without leaving GitHub or guessing a path."
+Keep the verified evidence links and synthesis provenance visible.
 
-Ask: `Where is pagination implemented?` Open `src/core/pagination.ts`.
+Say: "The model writes the plan, but the tools own the facts. The Worker validates every citation and action against deterministic repository evidence. Unsupported paths, model failures, and budget limits fall back safely to the deterministic result."
 
-Say: "The finder also detects that the obvious pagination file is a deprecated forwarding wrapper and leads me to the core implementation instead."
+### 1:20 to 1:40, Codex execution proof
 
-### 1:55 to 2:35, trust boundary
+Show the Codex execution-partner card.
 
-If model mode is configured, point out the `GPT-5.6 synthesis` badge, field brief, and verified evidence links.
+Say: "Codex was the execution partner behind the build. It audited every Wayfinder task, found real failures in guidance, file relationships, navigation recovery, and budget protection, implemented the fixes, expanded the test suite, deployed the Worker, and verified the public experience across five very different repositories."
 
-Say: "GPT-5.6 is doing the planning, but it does not get to invent the map. The Worker checks every model citation and action coordinate against deterministic tool output. Any invalid path or model failure falls back automatically."
+### 1:40 to 1:50, evidence check
 
-If credits are not available, show the `Deterministic route` badge instead.
+Ask: `Where is pagination implemented?` Show `src/core/pagination.ts` as the strongest result.
 
-Say: "The same workflow remains useful without model credits. The GPT-5.6 path is implemented and tested, and activates by adding the Worker secret."
+Say: "One last query asks where pagination is implemented. Wayfinder skips the tempting deprecated forwarding file and points to the core implementation instead."
 
-### 2:35 to 2:55, close
+### 1:50 to 1:59, close
 
-Say: "Wayfinder turns 'I want to contribute' into an evidence-backed route through a repository, right where the work happens. It is not another chat window. It is the missing trail between intention and a confident first pull request."
+Cut directly to the closing card and leave a short silent beat after the narration.
+
+Say: "That is Wayfinder: the missing trail between intention and a confident first pull request, right where the work happens."
 
 ## Backup path
 

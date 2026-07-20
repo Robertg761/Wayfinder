@@ -130,8 +130,8 @@ Verified screenshot candidates:
 - Current Worker version: `aefe4f70-4fd4-4aa0-9cb2-7e29e3b2530a`
 - Chrome archive: `apps/extension/.output/wayfinderextension-0.1.0-chrome.zip`
 - Archive SHA-256: `8061b57a49b420f7afaa9cecabaca93a7bbca4af2b556e3e1c3f98caeee67499`
-- Local demo master: `playwright-report/wayfinder-demo/wayfinder-build-week-demo.mp4` (2:05.53, 1280x720 H.264/AAC)
-- Demo SHA-256: `1a4065529f86d87a44a9e58a7b08dd33880970cd8f54247f40911ff30b29917c`
+- Local demo master: `playwright-report/wayfinder-demo/wayfinder-build-week-demo.mp4` (1:58.72, 1280x720 H.264/AAC)
+- Demo SHA-256: `4e4b2659b881b0446b3b06f9e76722d43a1f2bd1a15113fee413e4097831d2b1`
 - Automated checks: 178 unit and integration tests, 49 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning
