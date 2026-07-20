@@ -1,7 +1,7 @@
-# Devpost Submission Draft
+# Devpost Submission
 
-This document is ready to paste. The public repository, health endpoint,
-license, and demo video links are verified.
+This document mirrors the submitted Devpost project. The public repository,
+health endpoint, license, demo video, and project page links are verified.
 
 ## Project name
 
@@ -9,7 +9,8 @@ Wayfinder
 
 ## Tagline
 
-Learn it, install it, or contribute with confidence—without leaving GitHub.
+Your friendly guide to any GitHub repository: learn the project, find the right
+installer, or plan a contribution without leaving the page.
 
 ## Short description
 
@@ -120,6 +121,7 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 - Source repository: `https://github.com/Robertg761/Wayfinder`
 - License: `https://github.com/Robertg761/Wayfinder/blob/main/LICENSE`
 - Demo video: `https://youtu.be/QChwx5A8jdM`
+- Devpost project: `https://devpost.com/software/wayfinder-ydzc24`
 
 Verified screenshot candidates:
 
@@ -135,6 +137,7 @@ Verified screenshot candidates:
 - Archive SHA-256: `8061b57a49b420f7afaa9cecabaca93a7bbca4af2b556e3e1c3f98caeee67499`
 - Local demo master: `playwright-report/wayfinder-demo/wayfinder-build-week-demo.mp4` (1:57.65, 1280x720 H.264/AAC)
 - Demo SHA-256: `07bfe78b126d21fe7206241a43026886cd28ae0986f99761b008f70ae09812f2`
+- Devpost status: submitted on July 20, 2026
 - Automated checks: 178 unit and integration tests, 49 browser workflows, typecheck, extension production build, Worker dry run
 - Live public matrix: see `docs/VERIFICATION_MATRIX.md`
 - Live GPT-5.6 credit-backed call: passed with `gpt-5.6-luna` at low reasoning

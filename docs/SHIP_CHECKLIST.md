@@ -95,10 +95,10 @@ Luna is fixed in source. The recorded live Luna verification used Worker version
 - [x] Record the primary demo
 - [ ] Record or retain a free-mode backup demo
 - [x] Publish the source repository and add its URL to Devpost
-- [ ] Add the demo video URL
-- [ ] Paste and review `docs/DEVPOST_SUBMISSION.md`
-- [ ] Verify every Devpost claim against this checklist
-- [ ] Submit before July 21, 2026 at 5:00 PM Pacific Time
+- [x] Add the demo video URL
+- [x] Paste and review `docs/DEVPOST_SUBMISSION.md`
+- [x] Verify every Devpost claim against this checklist
+- [x] Submit before July 21, 2026 at 5:00 PM Pacific Time
 
 ## Needs release propagation
 
