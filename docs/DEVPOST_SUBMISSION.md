@@ -1,7 +1,7 @@
 # Devpost Submission Draft
 
-This document is ready to paste. The remaining placeholder is the public demo
-video URL; keep that link aligned with the ship checklist.
+This document is ready to paste. The public repository, health endpoint,
+license, and demo video links are verified.
 
 ## Project name
 
@@ -119,7 +119,7 @@ We also learned that a model does not need to own retrieval to provide meaningfu
 - Public health endpoint: `https://wayfinder-api.hopit-robert.workers.dev/health`
 - Source repository: `https://github.com/Robertg761/Wayfinder`
 - License: `https://github.com/Robertg761/Wayfinder/blob/main/LICENSE`
-- Demo video: add after recording
+- Demo video: `https://youtu.be/QChwx5A8jdM`
 
 Verified screenshot candidates:
 
