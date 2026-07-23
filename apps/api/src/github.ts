@@ -194,7 +194,6 @@ const readmeResponseSchema = z.object({
   encoding: z.string(),
 });
 
-type GitHubRepoResponse = z.infer<typeof repoResponseSchema>;
 type GitHubTreeResponse = z.infer<typeof treeResponseSchema>;
 
 function parseUpstream<Schema extends z.ZodTypeAny>(schema: Schema, body: unknown, resource: string): z.infer<Schema> {

@@ -80,6 +80,25 @@ describe("public API request boundaries", () => {
     expect(traversalOwner.status).toBe(400);
   });
 
+  it("labels unknown routes with the shared error shape and contract version", async () => {
+    const response = await worker.fetch(new Request("https://wayfinder.test/nope"), {});
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: "not_found", code: "request-failed" });
+    expect(response.headers.get("X-Wayfinder-Contract-Version")).toBe("1");
+  });
+
+  it("gives contract violations a code and message alongside the issues", async () => {
+    const response = await post("/tour", { map: { nope: true } });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      code: "request-failed",
+      message: expect.stringContaining("contract"),
+    });
+  });
+
   it("returns a client error for malformed JSON", async () => {
     const response = await worker.fetch(new Request("https://wayfinder.test/tour", {
       method: "POST",
