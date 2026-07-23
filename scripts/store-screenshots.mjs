@@ -12,7 +12,6 @@ const context = await chromium.launchPersistentContext(profile, {
 });
 const page = context.pages()[0] ?? await context.newPage();
 const shot = (name) => page.screenshot({ path: join(outDir, name) });
-const inHelper = (selector) => page.locator('#wayfinder-page-guide');
 
 try {
   await page.goto('https://github.com/Robertg761/Wayfinder', { waitUntil: 'domcontentloaded', timeout: 60000 });
