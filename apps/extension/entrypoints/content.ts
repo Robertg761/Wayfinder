@@ -1,4 +1,4 @@
-import type { AgentAnswer, RepoLocation, RepoMap, RepoTour, WayfinderErrorResponse } from '@wayfinder/contracts';
+import type { AgentAnswer, InstallStep, RepoLocation, RepoMap, RepoTour, WayfinderErrorResponse } from '@wayfinder/contracts';
 import {
   agentCacheTtl,
   agentResponseCacheKey,
@@ -491,6 +491,7 @@ const helperStyles = `
   .wf-copy-command { background: var(--wf-ink); color: var(--wf-paper); }
   .wf-copy-command[aria-busy="true"] { cursor: progress; opacity: .72; }
   .wf-copy-command[data-copy-state]::after { content: attr(data-copy-state); float: right; margin-left: 10px; color: var(--wf-gold); }
+  .wf-command-note { display: block; margin-top: 5px; color: var(--wf-rust); font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
   .wf-evidence { display: flex; flex-wrap: wrap; gap: 6px; }
   .wf-evidence .wf-open { display: inline-flex; width: auto; margin-top: 0; }
   .wf-evidence a, .wf-followups button { padding: 7px 9px; border: 1px solid var(--wf-line); border-radius: 999px; background: transparent; color: var(--wf-moss); cursor: pointer; font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
@@ -639,28 +640,35 @@ type ReleaseAssetLink = {
   anchor: HTMLAnchorElement;
 };
 
-function releaseAssetLinks(): ReleaseAssetLink[] {
+function releaseAssetLinks(repo: string): ReleaseAssetLink[] {
   const latestReleaseCard = document.querySelector(
     '[data-testid="release-card"], [data-testid*="release-card"], section[aria-labelledby*="release" i], article[data-test-selector*="release" i]',
   );
   const releaseRoot: ParentNode = latestReleaseCard ?? document;
-  const links = Array.from(releaseRoot.querySelectorAll<HTMLAnchorElement>('a[href*="/releases/download/"]')).map((anchor) => {
+  // Only genuine GitHub release-asset URLs for this repository qualify. A
+  // README or comment can contain look-alike links to any host; those must
+  // never become a highlighted download stop.
+  const expectedPathPrefix = `/${repo}/releases/download/`.toLowerCase();
+  const links = Array.from(releaseRoot.querySelectorAll<HTMLAnchorElement>('a[href*="/releases/download/"]')).flatMap((anchor) => {
     let fileName = '';
     let releaseTag = '';
     try {
-      const segments = new URL(anchor.href, window.location.href).pathname.split('/').filter(Boolean);
+      const url = new URL(anchor.href, window.location.href);
+      if (url.hostname !== 'github.com') return [];
+      if (!url.pathname.toLowerCase().startsWith(expectedPathPrefix)) return [];
+      const segments = url.pathname.split('/').filter(Boolean);
       fileName = decodeURIComponent(segments.at(-1) ?? '');
       const downloadIndex = segments.findIndex((segment, index) => segment === 'download' && segments[index - 1] === 'releases');
       releaseTag = downloadIndex >= 0 ? decodeURIComponent(segments[downloadIndex + 1] ?? '') : '';
     } catch {
-      fileName = '';
+      return [];
     }
-    return {
+    return [{
       name: fileName || anchor.textContent?.replace(/\s+/g, ' ').trim() || 'download',
       href: anchor.href,
       anchor,
       releaseTag,
-    };
+    }];
   });
   // When GitHub has an explicit newest-release card, an empty list means that
   // card is still rendering or has no assets. Never fall through to an older
@@ -670,6 +678,16 @@ function releaseAssetLinks(): ReleaseAssetLink[] {
   return links
     .filter((link) => !latestTag || link.releaseTag === latestTag)
     .map(({ releaseTag: _releaseTag, ...link }) => link);
+}
+
+function commandCautionNote(step: Pick<InstallStep, 'caution'>): string {
+  if (!step.caution) return '';
+  const shape = step.caution === 'elevated-privileges'
+    ? 'It requests elevated privileges'
+    : step.caution === 'pipe-to-shell'
+      ? 'It pipes downloaded content into a shell'
+      : 'It downloads from outside GitHub';
+  return `<span class="wf-command-note">${escapeHtml(`${shape} and comes from the repo's own README — review before running.`)}</span>`;
 }
 
 function platformName(platform: PlatformFamily): string {
@@ -1399,7 +1417,7 @@ export default defineContentScript({
         const prerequisites = answer.guide.prerequisites.length
           ? `<ol class="wf-route-list">${answer.guide.prerequisites.map((item) => `<li><strong>Prerequisite</strong><p>${escapeHtml(item.text)}</p><span class="wf-confidence">${escapeHtml(item.confidence)}</span>${pathLink(item.evidence.path, item.evidence.path, item.evidence.lines)}</li>`).join('')}</ol>`
           : '';
-        const steps = (consumerReleaseFlow ? [] : answer.guide.steps).map((step) => `<li><strong>${String(step.order).padStart(2, '0')} ${escapeHtml(step.title)}</strong><span class="wf-confidence">${escapeHtml(step.confidence)}</span><button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}" aria-label="Copy command: ${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>${pathLink(step.evidence.path, step.evidence.path, step.evidence.lines)}</li>`).join('');
+        const steps = (consumerReleaseFlow ? [] : answer.guide.steps).map((step) => `<li><strong>${String(step.order).padStart(2, '0')} ${escapeHtml(step.title)}</strong><span class="wf-confidence">${escapeHtml(step.confidence)}</span><button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}" aria-label="Copy command: ${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>${commandCautionNote(step)}${pathLink(step.evidence.path, step.evidence.path, step.evidence.lines)}</li>`).join('');
         const warnings = !consumerReleaseFlow && answer.guide.warnings.length ? `<ul class="wf-warning-list">${answer.guide.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : '';
         const commandRoute = consumerReleaseFlow ? '' : `<ol class="wf-route-list">${steps || '<li><p>No trustworthy package command was found.</p></li>'}</ol>`;
         sections.push(`${releaseRoute}${meta}${warnings}${consumerReleaseFlow ? '' : prerequisites}${commandRoute}`);
@@ -1441,7 +1459,7 @@ export default defineContentScript({
       }
 
       if (answer.intent === 'contribution' && !answer.brief?.length) {
-        const setup = answer.trail.guide.steps.slice(0, 2).map((step) => `<button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}" aria-label="Copy command: ${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>`).join('');
+        const setup = answer.trail.guide.steps.slice(0, 2).map((step) => `<button type="button" class="wf-copy-command" data-command="${escapeHtml(step.command)}" aria-label="Copy command: ${escapeHtml(step.command)}">${escapeHtml(step.command)}</button>${commandCautionNote(step)}`).join('');
         const implementation = answer.trail.implementation.results[0];
         const verification = answer.trail.verification.results[0];
         sections.push(`<ol class="wf-route-list"><li><strong>01 Establish a baseline</strong>${setup || '<p>Review the field notes before changing the repository.</p>'}</li><li><strong>02 Open the likely implementation</strong><p>${escapeHtml(implementation?.reason ?? 'No strong implementation coordinate was found.')}</p>${implementation ? pathLink(implementation.path, implementation.path, implementation.lines) : ''}</li><li><strong>03 Follow the verification path</strong><p>${escapeHtml(verification?.reason ?? 'No related verification coordinate was found.')}</p>${verification ? pathLink(verification.path, verification.path, verification.lines) : ''}</li></ol>`);
@@ -1783,9 +1801,10 @@ export default defineContentScript({
       showFallback = true,
       architecture?: ArchitectureFamily,
     ): boolean => {
+      if (!currentLocation) return false;
       installPlatform = platform;
       installArchitecture = architecture ?? detectArchitectureFamily(navigator.userAgent, navigator.platform);
-      const assets = releaseAssetLinks();
+      const assets = releaseAssetLinks(`${currentLocation.owner}/${currentLocation.repo}`);
       const recommendation = preferredReleaseAsset(assets, platform, navigator.userAgent, installArchitecture);
       const target = recommendation
         ? assets.find((asset) => asset.href === recommendation.href)?.anchor ?? null
@@ -1895,7 +1914,7 @@ export default defineContentScript({
           renderPlatformChoice();
           return true;
         }
-        const visibleAssets = releaseAssetLinks();
+        const visibleAssets = releaseAssetLinks(guide.repo);
         if (installArchitecture === 'unknown' && releaseArchitectureChoices(visibleAssets, installPlatform).length > 0) {
           await clearPendingGuide();
           bubbleOpen = true;
