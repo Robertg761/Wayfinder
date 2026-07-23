@@ -2,8 +2,12 @@ import type { GitHubView, RepoLocation } from '@wayfinder/contracts';
 
 const reservedRoots = new Set([
   'about',
+  'account',
+  'apps',
+  'codespaces',
   'collections',
   'customer-stories',
+  'dashboard',
   'enterprise',
   'events',
   'explore',
@@ -15,13 +19,16 @@ const reservedRoots = new Set([
   'organizations',
   'orgs',
   'pricing',
+  'readme',
   'search',
   'security',
   'settings',
   'signup',
   'sponsors',
+  'stars',
   'team',
   'topics',
+  'trending',
   'users',
 ]);
 

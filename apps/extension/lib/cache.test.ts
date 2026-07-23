@@ -3,8 +3,11 @@ import {
   agentResponseCacheKey,
   clearRepositoryCache,
   getCached,
+  reconcileCacheIndex,
   repositoryCacheKey,
   setCached,
+  trailCacheKey,
+  trailCacheTtl,
   type CacheStorage,
 } from './cache';
 
@@ -54,5 +57,49 @@ describe('Wayfinder extension cache', () => {
     await clearRepositoryCache(storage, 'openai/openai-node');
     await expect(getCached(storage, 'one', 10_100)).resolves.toBeNull();
     await expect(getCached(storage, 'two', 10_100)).resolves.toMatchObject({ value: 2 });
+  });
+
+  it('uses a two-part hash so near-collisions stay distinguishable', () => {
+    const base = agentResponseCacheKey('openai/openai-node', 'abc1234', 'where is auth?', null);
+    expect(base.split(':').at(-1)).toMatch(/^[0-9a-z]+-[0-9a-z]+$/);
+    expect(base).not.toBe(agentResponseCacheKey('openai/openai-node', 'abc1234', 'where is auth', null));
+  });
+
+  it('evicts the oldest entries when trails join the shared index', async () => {
+    const storage = memoryStorage();
+    for (let index = 0; index < 18; index += 1) {
+      await setCached(storage, 'entry-' + index, 'repo/' + index, 'agent', index, 60_000, 10_000 + index);
+    }
+    await setCached(storage, trailCacheKey('example/trail'), 'example/trail', 'trail', { saved: true }, trailCacheTtl, 20_000);
+
+    await expect(getCached(storage, trailCacheKey('example/trail'), 20_100)).resolves.toMatchObject({ value: { saved: true } });
+    // The oldest agent entry fell out of the bounded index and off disk.
+    expect(storage.values['entry-0']).toBeUndefined();
+    await expect(getCached(storage, 'entry-1', 20_100)).resolves.toMatchObject({ value: 1 });
+  });
+
+  it('sweeps orphaned wayfinder keys that are not in the index', async () => {
+    const storage = memoryStorage();
+    await setCached(storage, repositoryCacheKey('openai', 'openai-node'), 'openai/openai-node', 'repository', 1, 60_000, 10_000);
+    storage.values['wayfinder:trail:legacy/repo'] = { question: 'old', answer: {}, savedAt: '2026-01-01' };
+    storage.values['wayfinder:agent:v2:stale:hash'] = { version: 1, value: 1 };
+    storage.values['wayfinder:preferences:v1'] = { mode: 'guided' };
+
+    await reconcileCacheIndex(storage, 10_100);
+
+    expect(storage.values['wayfinder:trail:legacy/repo']).toBeUndefined();
+    expect(storage.values['wayfinder:agent:v2:stale:hash']).toBeUndefined();
+    // Preferences are not index-managed and must survive the sweep.
+    expect(storage.values['wayfinder:preferences:v1']).toEqual({ mode: 'guided' });
+    await expect(getCached(storage, repositoryCacheKey('openai', 'openai-node'), 10_200)).resolves.toMatchObject({ value: 1 });
+  });
+
+  it('drops expired index entries and their stored values during reconciliation', async () => {
+    const storage = memoryStorage();
+    await setCached(storage, repositoryCacheKey('openai', 'openai-node'), 'openai/openai-node', 'repository', 1, 1_000, 10_000);
+
+    await reconcileCacheIndex(storage, 12_000);
+
+    expect(storage.values[repositoryCacheKey('openai', 'openai-node')]).toBeUndefined();
   });
 });
