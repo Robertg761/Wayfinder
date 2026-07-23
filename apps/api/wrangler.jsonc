@@ -53,7 +53,9 @@
   // Deploy experiments with `wrangler deploy --env dev`: a separate Worker
   // name, budget ledger namespace, and rate-limit namespaces, so a staging
   // push can never touch the production ledger or its rate-limit counters.
-  // The top-level (no --env) configuration remains production.
+  // The top-level (no --env) configuration remains production. The dev
+  // namespace ids below are verified unique in this account (2026-07-23:
+  // only wayfinder-api binds rate limiters, using 3022301/3022302).
   "env": {
     "dev": {
       "name": "wayfinder-api-dev",
