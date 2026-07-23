@@ -172,7 +172,7 @@ function fileContextFor(map: ReturnType<typeof mapFor>, query: string, currentPa
     sha: map.sha,
     query,
     intent: 'file-context',
-    mode: 'free',
+    mode: 'deterministic',
     summary,
     explanation: documentation
       ? 'File type is part of the evidence boundary: documentation is not treated as an ordinary source module.'
@@ -236,7 +236,7 @@ async function handleApi(route: Route): Promise<void> {
     const guide = developGuide(map);
     if (/how do i install it/i.test(query)) {
       await route.fulfill({ json: {
-        repo: map.repo, sha: map.sha, query, intent: 'installation', mode: 'free',
+        repo: map.repo, sha: map.sha, query, intent: 'installation', mode: 'deterministic',
         summary: 'I found one sourced setup step.', suggestions: [], evidencePaths: ['package.json'], generatedAt: '2026-07-15T12:00:00.000Z',
         guide: {
           ...guide,
@@ -249,7 +249,7 @@ async function handleApi(route: Route): Promise<void> {
     }
     if (/use this project/i.test(query)) {
       await route.fulfill({ json: {
-        repo: map.repo, sha: map.sha, query, intent: 'installation', mode: 'free',
+        repo: map.repo, sha: map.sha, query, intent: 'installation', mode: 'deterministic',
         summary: 'I found one consumer installation command.', suggestions: [], evidencePaths: ['package.json'], generatedAt: '2026-07-15T12:00:00.000Z',
         guide: { ...guide, audience: 'use', steps: [{ ...guide.steps[1], title: 'Install the published package', command: 'pnpm add wayfinder-fixture' }] },
       } });
@@ -260,7 +260,7 @@ async function handleApi(route: Route): Promise<void> {
       return;
     }
     await route.fulfill({ json: {
-      repo: map.repo, sha: map.sha, query, intent: 'orientation', mode: /ai provenance/i.test(query) ? 'gpt-5.6' : 'free',
+      repo: map.repo, sha: map.sha, query, intent: 'orientation', mode: /ai provenance/i.test(query) ? 'model' : 'deterministic',
       summary: `${map.repo} orientation`, explanation: 'A detailed fixture explanation used to exercise the expanded answer surface.',
       suggestions: ['Where are the tests?'], evidencePaths: ['src/index.ts'], generatedAt: '2026-07-15T12:00:00.000Z',
       tour: tourFor(map), guide,
