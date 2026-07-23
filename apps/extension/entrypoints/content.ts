@@ -1841,9 +1841,14 @@ export default defineContentScript({
       if (event.key !== 'Escape' || (!bubbleOpen && !tourMoving && activeStep < 0)) return;
       // Escape belongs to whichever surface owns focus. When the user is in
       // GitHub's own UI (a dialog, the command palette, a file filter), the
-      // page keeps its Escape behavior; Wayfinder only claims the key while
-      // focus is inside its shadow root.
-      if (shadow.activeElement === null && document.activeElement !== host) return;
+      // page keeps its Escape behavior. Wayfinder claims the key while focus
+      // is inside its shadow root, and also while nothing holds focus at all
+      // (body/null) — a moving tour replaces its trigger button, dropping
+      // focus to the body, and Escape must still cancel that tour.
+      const activeElement = document.activeElement;
+      const focusInHelper = shadow.activeElement !== null || activeElement === host;
+      const focusUnclaimed = !activeElement || activeElement === document.body || activeElement === document.documentElement;
+      if (!focusInHelper && !focusUnclaimed) return;
       event.preventDefault();
       dismissHelper();
     };
