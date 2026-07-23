@@ -1,4 +1,14 @@
-import type { AgentAnswer, InstallStep, RepoLocation, RepoMap, RepoTour, WayfinderErrorResponse } from '@wayfinder/contracts';
+import {
+  agentAnswerSchema,
+  repoMapSchema,
+  repoTourSchema,
+  type AgentAnswer,
+  type InstallStep,
+  type RepoLocation,
+  type RepoMap,
+  type RepoTour,
+  type WayfinderErrorResponse,
+} from '@wayfinder/contracts';
 import {
   agentCacheTtl,
   agentResponseCacheKey,
@@ -85,6 +95,29 @@ function requestErrorLabels(error: WayfinderRequestError): [string, string] {
 
 const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL
   ?? (import.meta.env.PROD ? 'https://wayfinder-api.hopit-robert.workers.dev' : 'http://localhost:8787');
+
+const apiHeaders = () => ({
+  'Content-Type': 'application/json',
+  'X-Wayfinder-Extension-Version': browser.runtime.getManifest().version,
+});
+
+// Wire and cache payloads are validated against the shared contract schemas.
+// A response or cached value that no longer matches (older extension, newer
+// Worker, corrupted storage) is discarded instead of rendered blindly.
+function parseRepositoryBundle(value: unknown): RepositoryBundle | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as { map?: unknown; tour?: unknown };
+  const map = repoMapSchema.safeParse(candidate.map);
+  const tour = repoTourSchema.safeParse(candidate.tour);
+  return map.success && tour.success ? { map: map.data, tour: tour.data } : null;
+}
+
+function contractMismatchError(payload: string): WayfinderRequestError {
+  return new WayfinderRequestError(
+    `Wayfinder received a ${payload} that does not match this extension's contract. Update the extension if this keeps happening.`,
+    'request-failed',
+  );
+}
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (character) => ({
@@ -531,27 +564,6 @@ const helperStyles = `
     .wf-bubble :focus-visible { outline-color: Highlight; }
   }
 `;
-
-function firstVisible(selectors: string[]): Element | null {
-  for (const selector of selectors) {
-    const candidates = Array.from(document.querySelectorAll(selector));
-    const match = candidates.find((element) => {
-      const rect = element.getBoundingClientRect();
-      const style = window.getComputedStyle(element);
-      return rect.width > 16
-        && rect.height > 8
-        && rect.bottom > 0
-        && rect.right > 0
-        && rect.top < window.innerHeight
-        && rect.left < window.innerWidth
-        && style.display !== 'none'
-        && style.visibility !== 'hidden'
-        && Number.parseFloat(style.opacity) > 0;
-    });
-    if (match) return match;
-  }
-  return null;
-}
 
 function firstPresent(selectors: string[]): Element | null {
   for (const selector of selectors) {
@@ -1263,13 +1275,20 @@ export default defineContentScript({
       if (repository && !forceRefresh && matchesCapturedLocation(repository)) return repository;
 
       const key = repositoryCacheKey(location.owner, location.repo, location.ref);
-      const cached = await getCached<RepositoryBundle>(storage, key).catch(() => null);
+      const cachedEntry = await getCached<unknown>(storage, key).catch(() => null);
       assertOperationCurrent(operation);
-      const stale = cached ?? await getCached<RepositoryBundle>(storage, key, Date.now(), true).catch(() => null);
+      const staleEntry = cachedEntry ?? await getCached<unknown>(storage, key, Date.now(), true).catch(() => null);
       assertOperationCurrent(operation);
-      if (cached && !forceRefresh && matchesCapturedLocation(cached.value)) {
-        repository = cached.value;
-        repositoryCachedAt = cached.cachedAt;
+      const cachedBundle = cachedEntry ? parseRepositoryBundle(cachedEntry.value) : null;
+      const stale = staleEntry
+        ? (() => {
+            const bundle = parseRepositoryBundle(staleEntry.value);
+            return bundle ? { value: bundle, cachedAt: staleEntry.cachedAt } : null;
+          })()
+        : null;
+      if (cachedBundle && !forceRefresh && matchesCapturedLocation(cachedBundle)) {
+        repository = cachedBundle;
+        repositoryCachedAt = cachedEntry?.cachedAt ?? null;
         repositoryCacheState = 'cached';
         return repository;
       }
@@ -1277,7 +1296,7 @@ export default defineContentScript({
       try {
         const mapResponse = await fetch(`${apiUrl}/map`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiHeaders(),
           body: JSON.stringify({ owner: location.owner, repo: location.repo, ref: location.ref }),
           signal: requestSignal(operation),
         });
@@ -1291,11 +1310,13 @@ export default defineContentScript({
             failure?.resetAt,
           );
         }
-        const map = await mapResponse.json() as RepoMap;
+        const parsedMap = repoMapSchema.safeParse(await mapResponse.json());
         assertOperationCurrent(operation);
+        if (!parsedMap.success) throw contractMismatchError('repository map');
+        const map = parsedMap.data;
         const tourResponse = await fetch(`${apiUrl}/tour`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiHeaders(),
           body: JSON.stringify({ map }),
           signal: requestSignal(operation),
         });
@@ -1309,8 +1330,10 @@ export default defineContentScript({
             failure?.resetAt,
           );
         }
-        const tour = await tourResponse.json() as RepoTour;
+        const parsedTour = repoTourSchema.safeParse(await tourResponse.json());
         assertOperationCurrent(operation);
+        if (!parsedTour.success) throw contractMismatchError('repository route');
+        const tour = parsedTour.data;
         const bundle = { map, tour };
         if (!matchesCapturedLocation(bundle)) {
           throw new WayfinderRequestError('Wayfinder received repository evidence for a different project or revision.', 'request-failed');
@@ -1542,8 +1565,14 @@ export default defineContentScript({
         const bundle = await ensureRepository(operation, forceRefresh);
         assertOperationCurrent(operation);
         const key = agentResponseCacheKey(bundle.map.repo, bundle.map.sha, trimmed, operation.location.view === 'blob' ? operation.location.path ?? null : null);
-        fallbackAnswer = await getCached<AgentAnswer>(storage, key, Date.now(), true).catch(() => null);
+        const fallbackEntry = await getCached<unknown>(storage, key, Date.now(), true).catch(() => null);
         assertOperationCurrent(operation);
+        if (fallbackEntry) {
+          const parsedFallback = agentAnswerSchema.safeParse(fallbackEntry.value);
+          fallbackAnswer = parsedFallback.success
+            ? { value: parsedFallback.data, cachedAt: fallbackEntry.cachedAt, expiresAt: fallbackEntry.expiresAt }
+            : null;
+        }
         if (!forceRefresh) {
           const cached = fallbackAnswer && Date.parse(fallbackAnswer.expiresAt) > Date.now() ? fallbackAnswer : null;
           if (cached && cached.value.repo === bundle.map.repo && cached.value.sha === bundle.map.sha) {
@@ -1554,7 +1583,7 @@ export default defineContentScript({
         }
         const response = await fetch(`${apiUrl}/agent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiHeaders(),
           body: JSON.stringify({ map: bundle.map, query: trimmed, currentPath: operation.location.view === 'blob' ? operation.location.path ?? null : null }),
           signal: requestSignal(operation),
         });
@@ -1564,8 +1593,10 @@ export default defineContentScript({
           assertOperationCurrent(operation);
           throw new WayfinderRequestError(failure?.message ?? 'The guide could not complete that dispatch.', failure?.code ?? 'request-failed', failure?.resetAt);
         }
-        const answer = await response.json() as AgentAnswer;
+        const parsedAnswer = agentAnswerSchema.safeParse(await response.json());
         assertOperationCurrent(operation);
+        if (!parsedAnswer.success) throw contractMismatchError('guide answer');
+        const answer = parsedAnswer.data;
         if (answer.repo !== bundle.map.repo || answer.sha !== bundle.map.sha) {
           throw new WayfinderRequestError('Wayfinder received an answer for a different repository revision.', 'request-failed');
         }

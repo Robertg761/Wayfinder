@@ -68,6 +68,18 @@ A missing README is an allowed repository shape. GitHub rate limits, authenticat
 
 The content script mounts at document idle and checks URL identity without observing GitHub's entire document tree. Every navigation invalidates the active request token, aborts in-flight network work, clears tour state, and rebuilds the open helper surface from the new repository or file context. This prevents an older response or tour control from being applied to a newer GitHub page.
 
+## Contract versioning
+
+The wire shapes live in `packages/contracts` as zod schemas; both apps derive their TypeScript types from those schemas with `z.infer`, so a shape can only change in one place. The Worker validates every inbound request body against the shared schemas, and the extension validates every response and every cached payload the same way, discarding values that no longer conform.
+
+Version negotiation is deliberately minimal:
+
+- `CONTRACT_VERSION` (in `packages/contracts`) is bumped on any incompatible wire change.
+- The Worker sends it on every response as the `X-Wayfinder-Contract-Version` header and as the `contractVersion` field of `/health`.
+- The extension identifies itself with an `X-Wayfinder-Extension-Version` request header (its manifest version), giving the Worker's logs the client-version dimension needed to decide when an old contract can be retired.
+
+A response that fails schema validation is treated as a contract mismatch: the extension shows a retryable error suggesting an extension update rather than rendering unvalidated data.
+
 ## GPT-5.6 boundary
 
 The OpenAI key exists only in the Worker environment. The model request uses the Responses API with:

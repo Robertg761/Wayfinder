@@ -1,4 +1,12 @@
-import type { RepoMap, WayfinderErrorCode } from "@wayfinder/contracts";
+import {
+  agentRequestSchema,
+  CONTRACT_VERSION,
+  findRequestSchema,
+  installRequestSchema,
+  mapRequestSchema,
+  tourRequestSchema,
+  type WayfinderErrorCode,
+} from "@wayfinder/contracts";
 import { z } from "zod";
 import { classifyAgentIntent, createAgentAnswer, hasSpecificContributionGoal } from "./agent";
 import { createRepoMap, GitHubApiError, publicReadOnlyToken, UpstreamFetchBudget } from "./github";
@@ -36,59 +44,13 @@ interface Env {
   };
 }
 
-const mapRequestSchema = z.object({
-  owner: z.string().min(1).max(100).regex(/^(?!\.{1,2}$)[a-zA-Z0-9_.-]+$/),
-  repo: z.string().min(1).max(100).regex(/^(?!\.{1,2}$)[a-zA-Z0-9_.-]+$/),
-  ref: z.string().trim().min(1).max(255).regex(/^(?!\.|\/)(?!.*(?:^|\/)\.\.?\/?$)[^\u0000-\u001f\u007f~^:?*[\\]+$/).nullable().optional(),
-});
-
-const repositoryPathSchema = z.string()
-  .min(1)
-  .max(1_000)
-  .refine((path) =>
-    !path.startsWith("/") &&
-    !/[\u0000-\u001f\u007f]/.test(path) &&
-    path.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== ".."),
-  { message: "Repository paths must be normalized relative paths." });
-
-const repoMapSchema = z.object({
-  repo: z.string().min(3).max(201).regex(/^(?!\.{1,2}\/)(?!.*\/\.{1,2}$)[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/),
-  sha: z.string().regex(/^[a-f0-9]{7,64}$/i),
-  requestedRef: z.string().min(1).max(255).nullable(),
-  resolvedRef: z.string().min(1).max(255),
-  defaultBranch: z.string().min(1).max(255),
-  description: z.string().max(500).nullable(),
-  homepage: z.string().max(2_048).nullable(),
-  language: z.string().max(100).nullable(),
-  stars: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  readme: z.string().max(16_000).nullable(),
-  tree: z.array(z.object({
-    path: repositoryPathSchema,
-    type: z.enum(["blob", "tree"]),
-    size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-  })).max(4_000),
-  setupFiles: z.array(repositoryPathSchema).max(200),
-  truncated: z.boolean(),
-  generatedAt: z.string().datetime(),
-});
-
-const tourRequestSchema = z.object({ map: repoMapSchema });
-const installRequestSchema = z.object({
-  map: repoMapSchema,
-  audience: z.enum(["use", "develop"]).optional(),
-});
-const findRequestSchema = z.object({
-  map: repoMapSchema,
-  query: z.string().trim().min(2).max(240),
-  currentPath: repositoryPathSchema.nullable().optional(),
-});
-const agentRequestSchema = findRequestSchema;
 const MODEL_BUDGET_LEDGER_NAME = "luna-lifetime-v3";
 
 const corsHeaders = {
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type,X-Wayfinder-Extension-Version",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   "Access-Control-Allow-Origin": "*",
+  "X-Wayfinder-Contract-Version": String(CONTRACT_VERSION),
 };
 
 function json(body: unknown, status = 200): Response {
@@ -137,7 +99,15 @@ async function readBoundedJson(request: Request): Promise<unknown> {
 }
 
 function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 500): Response {
-  if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
+  // Every error response carries the same { error, code, message } shape.
+  if (error instanceof z.ZodError) {
+    return json({
+      error: "invalid_request",
+      code: "request-failed",
+      message: "The request did not match the Wayfinder API contract.",
+      issues: error.issues,
+    }, 400);
+  }
   if (error instanceof RequestTooLargeError) {
     return json({
       error: "request_too_large",
@@ -342,6 +312,7 @@ export default {
       return json({
         ok: true,
         service: "wayfinder-api",
+        contractVersion: CONTRACT_VERSION,
         apiProtected,
         modelConfigured,
         modelProtected,
@@ -374,7 +345,7 @@ export default {
     if (request.method === "POST" && url.pathname === "/tour") {
       try {
         const input = tourRequestSchema.parse(await readBoundedJson(request));
-        return json(generateTour(input.map as RepoMap));
+        return json(generateTour(input.map));
       } catch (error) {
         return requestFailure(error, "tour_failed");
       }
@@ -384,7 +355,7 @@ export default {
       try {
         const input = installRequestSchema.parse(await readBoundedJson(request));
         const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
-        return json(await createInstallGuide(input.map as RepoMap, token, input.audience ?? "develop", new UpstreamFetchBudget()));
+        return json(await createInstallGuide(input.map, token, input.audience ?? "develop", new UpstreamFetchBudget()));
       } catch (error) {
         return requestFailure(error, "install_guide_failed");
       }
@@ -394,7 +365,7 @@ export default {
       try {
         const input = findRequestSchema.parse(await readBoundedJson(request));
         const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
-        return json(await createFileFind(input.map as RepoMap, input.query, input.currentPath ?? null, token, { budget: new UpstreamFetchBudget() }));
+        return json(await createFileFind(input.map, input.query, input.currentPath ?? null, token, { budget: new UpstreamFetchBudget() }));
       } catch (error) {
         return requestFailure(error, "file_find_failed");
       }
@@ -408,7 +379,7 @@ export default {
           ? modelOptions(request, env, ctx)
           : undefined;
         return json(await createAgentAnswer(
-          input.map as RepoMap,
+          input.map,
           input.query,
           input.currentPath ?? null,
           token,
@@ -420,6 +391,10 @@ export default {
       }
     }
 
-    return json({ error: "not_found" }, 404);
+    return json({
+      error: "not_found",
+      code: "request-failed",
+      message: "This route is not part of the Wayfinder API.",
+    }, 404);
   },
 } satisfies ExportedHandler<Env>;

@@ -5,6 +5,7 @@ import {
   createRepoMap,
   dedupeTree,
   describeGitHubFailure,
+  fetchRepoFile,
   filterTree,
   githubCacheTtl,
   githubFetch,
@@ -408,5 +409,48 @@ describe("map output conformance", () => {
     expect(map.description).toHaveLength(500);
     expect(map.homepage).toHaveLength(2_048);
     expect(map.tree.map((entry) => entry.path)).toEqual(["src/index.ts", "README.md"]);
+  });
+});
+
+describe("authenticated failure and file-content guards", () => {
+  it("labels a 401 as a token problem, not a repository problem", () => {
+    expect(describeGitHubFailure(401, null, null)).toMatchObject({
+      code: "github-auth-failed",
+      message: expect.stringContaining("token"),
+    });
+  });
+
+  function contentResponse(body: unknown): typeof fetch {
+    return vi.fn<typeof fetch>().mockImplementation(async () => Response.json(body)) as unknown as typeof fetch;
+  }
+
+  it("rejects a non-base64 file encoding", async () => {
+    vi.stubGlobal("fetch", contentResponse({ content: "abc", encoding: "utf-8", size: 3 }));
+    await expect(fetchRepoFile("openai/openai-node", "README.md", "main"))
+      .rejects.toThrow("unsupported file encoding");
+  });
+
+  it("refuses to inspect an oversized file", async () => {
+    vi.stubGlobal("fetch", contentResponse({ content: "abc", encoding: "base64", size: 1_000_001 }));
+    await expect(fetchRepoFile("openai/openai-node", "README.md", "main"))
+      .rejects.toThrow("too large");
+  });
+
+  it("maps a malformed content payload to a typed upstream failure", async () => {
+    vi.stubGlobal("fetch", contentResponse({ nothing: true }));
+    await expect(fetchRepoFile("openai/openai-node", "README.md", "main"))
+      .rejects.toMatchObject({ code: "upstream-unavailable", status: 502 });
+  });
+
+  it("throws on malformed base64 content instead of returning garbage", async () => {
+    vi.stubGlobal("fetch", contentResponse({ content: "%%%not-base64%%%", encoding: "base64", size: 16 }));
+    await expect(fetchRepoFile("openai/openai-node", "README.md", "main")).rejects.toThrow();
+  });
+
+  it("rejects a malformed repository identity before any request", async () => {
+    const fetcher = vi.fn() as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetcher);
+    await expect(fetchRepoFile("not-a-repo", "README.md", "main")).rejects.toThrow("owner/repo format");
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });
