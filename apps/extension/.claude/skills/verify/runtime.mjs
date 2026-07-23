@@ -26,7 +26,7 @@ function mapFor(owner, repo, ref = null) {
     tree: [{path:'src',type:'tree'},{path:'tests',type:'tree'},{path:'README.md',type:'blob'},{path:'package.json',type:'blob'},{path:'src/index.ts',type:'blob'},{path:'tests/index.test.ts',type:'blob'}],
     setupFiles: ['package.json','pnpm-lock.yaml'], truncated:false, generatedAt:'2026-07-15T12:00:00.000Z' };
 }
-function tourFor(map) { return { repo:map.repo, sha:map.sha, summary:map.description, stack:['TypeScript','Node.js'], entryPoints:[{path:'src/index.ts',why:'Primary entry point.'}], stops:[{order:1,title:'Start here',path:'src/index.ts',lines:[1,40],explanation:'Primary entry point.',lookFor:'Exports.'}] }; }
+function tourFor(map) { return { repo:map.repo, sha:map.sha, summary:map.description, stack:['TypeScript','Node.js'], runtimeEntryPoint:{path:'src/index.ts',why:'Primary entry point.'}, entryPoints:[{path:'src/index.ts',why:'Primary entry point.'}], stops:[{order:1,title:'Start here',path:'src/index.ts',lines:[1,40],explanation:'Primary entry point.',lookFor:'Exports.'}] }; }
 function guideFor(map) { return { repo:map.repo, sha:map.sha, audience:'develop', packageManager:'pnpm', runtimes:['Node.js >=22'], prerequisites:[{text:'Use Node.js 22.',evidence:{path:'package.json',lines:[1,12]},confidence:'documented'}], steps:[{order:1,title:'Run the tests',command:'pnpm test',evidence:{path:'package.json',lines:[6,10]},confidence:'documented'},{order:2,title:'Install dependencies',command:'pnpm install',evidence:{path:'package.json',lines:[1,12]},confidence:'documented'}], warnings:[], generatedAt:'2026-07-15T12:00:00.000Z' }; }
 
 async function createHarness(name, state = {}) {
@@ -49,11 +49,11 @@ async function createHarness(name, state = {}) {
     if(url.pathname==='/agent'){
       const map=body.map, query=String(body.query??''); api.requests.push({path:'/agent',repo:map.repo,query}); if(api.agentFailures>0){api.agentFailures--;return route.fulfill({status:503,json:{code:'upstream-unavailable',message:'Fixture agent unavailable.'}}).catch(()=>{});} const guide=guideFor(map);
       if(/use this project/i.test(query)) return route.fulfill({ json: {
-        repo: map.repo, sha: map.sha, query, intent: 'installation', mode: 'free',
+        repo: map.repo, sha: map.sha, query, intent: 'installation', mode: 'deterministic',
         summary: 'I found one consumer installation command.', suggestions: [], evidencePaths: ['package.json'], generatedAt: '2026-07-15T12:00:00.000Z',
         guide: { ...guide, audience: 'use', steps: [{ ...guide.steps[1], title: 'Install the published package', command: 'pnpm add wayfinder-fixture' }] },
       } });
-      return route.fulfill({json:{repo:map.repo,sha:map.sha,query,intent:'orientation',mode:'free',summary:`${map.repo} orientation`,explanation:'A detailed fixture explanation used to exercise the expanded answer surface.',suggestions:['Where are the tests?'],evidencePaths:['src/index.ts'],generatedAt:'2026-07-15T12:00:00.000Z',tour:tourFor(map),guide,brief:[{title:'Read the entry point',action:'Inspect the exported surface.',evidencePath:'src/index.ts'},{title:'Pair it with tests',action:'Confirm behavior in the test suite.',evidencePath:'tests/index.test.ts'}]}});
+      return route.fulfill({json:{repo:map.repo,sha:map.sha,query,intent:'orientation',mode:'deterministic',summary:`${map.repo} orientation`,explanation:'A detailed fixture explanation used to exercise the expanded answer surface.',suggestions:['Where are the tests?'],evidencePaths:['src/index.ts'],generatedAt:'2026-07-15T12:00:00.000Z',tour:tourFor(map),guide,brief:[{title:'Read the entry point',action:'Inspect the exported surface.',evidencePath:'src/index.ts'},{title:'Pair it with tests',action:'Confirm behavior in the test suite.',evidencePath:'tests/index.test.ts'}]}});
     }
     return route.fulfill({status:404,json:{error:'not_found'}});
   });

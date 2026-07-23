@@ -2,7 +2,7 @@
   "name": "@wayfinder/extension",
   "description": "A floating evidence-first guide that maps and explains public GitHub repositories.",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
