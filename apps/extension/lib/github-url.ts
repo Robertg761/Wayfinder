@@ -33,7 +33,20 @@ function safeDecode(value: string): string {
   }
 }
 
-export function parseGitHubUrl(input: string, visibleRef?: string | null): RepoLocation | null {
+function matchingRefLength(routeTail: string[], candidateRef: string | null | undefined): number {
+  const normalized = candidateRef?.trim().replace(/^refs\/(?:heads|tags)\//, '') || null;
+  const refSegments = normalized?.split('/').filter(Boolean) ?? [];
+  const matches = refSegments.length > 0 &&
+    refSegments.length <= routeTail.length &&
+    refSegments.every((segment, index) => routeTail[index] === segment);
+  return matches ? refSegments.length : 0;
+}
+
+export function parseGitHubUrl(
+  input: string,
+  visibleRef?: string | null,
+  knownRefs: Array<string | null | undefined> = [],
+): RepoLocation | null {
   let url: URL;
   try {
     url = new URL(input);
@@ -58,11 +71,13 @@ export function parseGitHubUrl(input: string, visibleRef?: string | null): RepoL
   if (route === 'tree' || route === 'blob') {
     view = route;
     const routeTail = segments.slice(3);
-    const normalizedVisibleRef = visibleRef?.trim().replace(/^refs\/heads\//, '') || null;
-    const visibleRefSegments = normalizedVisibleRef?.split('/').filter(Boolean) ?? [];
-    const matchesVisibleRef = visibleRefSegments.length > 0 &&
-      visibleRefSegments.every((segment, index) => routeTail[index] === segment);
-    const refLength = matchesVisibleRef ? visibleRefSegments.length : 1;
+    // A slash-containing branch (feature/navigation) is ambiguous in the URL.
+    // Prefer the ref GitHub renders on the page, then any ref Wayfinder
+    // already knows for this repository (longest match first), before
+    // falling back to the single-segment guess.
+    const refLength = matchingRefLength(routeTail, visibleRef) ||
+      Math.max(0, ...knownRefs.map((candidate) => matchingRefLength(routeTail, candidate))) ||
+      1;
     ref = routeTail.slice(0, refLength).join('/') || null;
     path = routeTail.slice(refLength).join('/') || null;
   } else if (route) {

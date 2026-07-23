@@ -394,3 +394,53 @@ describe("commandCaution", () => {
     expect(guide.steps[1].caution).toBe("external-download");
   });
 });
+
+describe("package-manager ecosystem separation", () => {
+  it("never lets a Python lock drive Node install or script commands", () => {
+    const map = makeMap({ setupFiles: ["package.json", "uv.lock", "pyproject.toml"] });
+    const guide = generateInstallGuide(map, {
+      "package.json": JSON.stringify({ scripts: { test: "vitest" } }),
+      "pyproject.toml": "[project]\nname = \"trail\"",
+    });
+
+    expect(guide.steps.map((step) => step.command)).toContain("npm install");
+    expect(guide.steps.map((step) => step.command)).not.toContain("uv install");
+    expect(guide.steps.map((step) => step.command)).not.toContain("uv test");
+    expect(guide.warnings.every((warning) => !warning.includes("Multiple root package-manager signals"))).toBe(true);
+  });
+
+  it("uses the Python lock for the Python development install", () => {
+    const map = makeMap({ language: "Python", setupFiles: ["pyproject.toml", "uv.lock"] });
+    const guide = generateInstallGuide(map, {
+      "pyproject.toml": "[project]\nname = \"trail\"",
+    });
+
+    expect(guide.steps.map((step) => step.command)).toContain("uv sync");
+    expect(guide.packageManager).toBe("uv");
+  });
+
+  it("falls back to an editable pip install without a Python lock", () => {
+    const map = makeMap({ language: "Python", setupFiles: ["pyproject.toml"] });
+    const guide = generateInstallGuide(map, {
+      "pyproject.toml": "[project]\nname = \"trail\"",
+    });
+
+    expect(guide.steps.map((step) => step.command)).toContain("python -m pip install -e .");
+  });
+});
+
+describe("markdown fence heading tracking", () => {
+  it("ignores shell comments inside fences when classifying section audience", () => {
+    const markdown = [
+      "## Development",
+      "",
+      "```bash",
+      "# Usage",
+      "pnpm run demo",
+      "```",
+    ].join("\n");
+    const guide = generateInstallGuide(makeMap(), { "README.md": markdown }, "develop");
+
+    expect(guide.steps.map((step) => step.command)).toContain("pnpm run demo");
+  });
+});

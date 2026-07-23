@@ -129,8 +129,8 @@ describe("GitHub response caching", () => {
         cacheEverything: true,
         cacheTtlByStatus: {
           "200-299": 300,
-          "400-499": 0,
-          "500-599": 0,
+          "400-499": -1,
+          "500-599": -1,
         },
       },
     });
@@ -295,5 +295,118 @@ describe("public read-only token guard", () => {
     // The failed check is not cached; the next request re-verifies.
     const succeeding = userEndpoint("repo");
     await expect(publicReadOnlyToken("classic-token", succeeding)).resolves.toBeUndefined();
+  });
+});
+
+describe("empty repository and unknown ref messaging", () => {
+  it("explains an empty repository instead of a generic failure", () => {
+    expect(describeGitHubFailure(409, null, null)).toMatchObject({
+      code: "repository-unavailable",
+      message: expect.stringContaining("empty"),
+    });
+  });
+
+  it("explains an unknown branch, tag, or commit", () => {
+    expect(describeGitHubFailure(422, null, null)).toMatchObject({
+      code: "repository-unavailable",
+      message: expect.stringContaining("branch, tag, or commit"),
+    });
+  });
+});
+
+describe("upstream response shape validation", () => {
+  function repoStub(overrides: Record<string, (url: string) => Response | null> = {}): typeof fetch {
+    return vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      for (const resolve of Object.values(overrides)) {
+        const response = resolve(url);
+        if (response) return response;
+      }
+      if (url.endsWith("/repos/openai/openai-node")) {
+        return Response.json({
+          default_branch: "main",
+          description: null,
+          homepage: null,
+          language: "TypeScript",
+          stargazers_count: 1,
+        });
+      }
+      if (url.endsWith("/commits/main")) return Response.json({ sha: "a".repeat(40) });
+      if (url.includes("/git/trees/")) {
+        return Response.json({ sha: "a".repeat(40), truncated: false, tree: [{ path: "src/index.ts", type: "blob" }] });
+      }
+      if (url.includes("/readme")) return Response.json({ content: btoa("# Readme"), encoding: "base64" });
+      return Response.json({ message: "not found" }, { status: 404 });
+    }) as unknown as typeof fetch;
+  }
+
+  it("maps a malformed repository response to a typed upstream failure", async () => {
+    vi.stubGlobal("fetch", repoStub({
+      repo: (url) => url.endsWith("/repos/openai/openai-node") ? Response.json({ unexpected: true }) : null,
+    }));
+
+    await expect(createRepoMap("openai", "openai-node"))
+      .rejects.toMatchObject({ code: "upstream-unavailable", status: 502 });
+  });
+
+  it("maps a malformed commit response to a typed upstream failure", async () => {
+    vi.stubGlobal("fetch", repoStub({
+      commit: (url) => url.endsWith("/commits/main") ? Response.json({ sha: "not-a-sha!" }) : null,
+    }));
+
+    await expect(createRepoMap("openai", "openai-node"))
+      .rejects.toMatchObject({ code: "upstream-unavailable", status: 502 });
+  });
+
+  it("tolerates lenient metadata fields without failing the map", async () => {
+    vi.stubGlobal("fetch", repoStub({
+      repo: (url) => url.endsWith("/repos/openai/openai-node")
+        ? Response.json({ default_branch: "main", description: 42, homepage: null, language: null, stargazers_count: "many" })
+        : null,
+    }));
+
+    await expect(createRepoMap("openai", "openai-node")).resolves.toMatchObject({
+      description: null,
+      stars: 0,
+    });
+  });
+});
+
+describe("map output conformance", () => {
+  it("clamps metadata and drops paths that would fail the public API schema", async () => {
+    const longDescription = "d".repeat(600);
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/repos/openai/openai-node")) {
+        return Response.json({
+          default_branch: "main",
+          description: longDescription,
+          homepage: "https://example.com/" + "h".repeat(2_100),
+          language: "TypeScript",
+          stargazers_count: 5,
+        });
+      }
+      if (url.endsWith("/commits/main")) return Response.json({ sha: "a".repeat(40) });
+      if (url.includes("/git/trees/")) {
+        return Response.json({
+          sha: "a".repeat(40),
+          truncated: false,
+          tree: [
+            { path: "src/index.ts", type: "blob" },
+            { path: "x/" + "y".repeat(1_100), type: "blob" },
+            { path: "src/../escape.ts", type: "blob" },
+            { path: "control\u0007bell.ts", type: "blob" },
+            { path: "README.md", type: "blob" },
+          ],
+        });
+      }
+      if (url.includes("/readme")) return Response.json({ content: btoa("# Readme"), encoding: "base64" });
+      return Response.json({ message: "not found" }, { status: 404 });
+    }));
+
+    const map = await createRepoMap("openai", "openai-node");
+    expect(map.description).toHaveLength(500);
+    expect(map.homepage).toHaveLength(2_048);
+    expect(map.tree.map((entry) => entry.path)).toEqual(["src/index.ts", "README.md"]);
   });
 });
