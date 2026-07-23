@@ -1,7 +1,7 @@
 import type { RepoMap, WayfinderErrorCode } from "@wayfinder/contracts";
 import { z } from "zod";
 import { classifyAgentIntent, createAgentAnswer, hasSpecificContributionGoal } from "./agent";
-import { createRepoMap, GitHubApiError } from "./github";
+import { createRepoMap, GitHubApiError, publicReadOnlyToken, UpstreamFetchBudget } from "./github";
 import { createFileFind } from "./find";
 import { createInstallGuide } from "./install";
 import { generateTour } from "./tour";
@@ -16,10 +16,16 @@ import {
 export { ModelBudget };
 
 interface Env {
+  // Must be a fine-grained personal access token limited to public read
+  // access. Classic tokens carrying the "repo" scope are refused at runtime
+  // because they would let this public Worker read private repositories.
   GITHUB_TOKEN?: string;
   OPENAI_API_KEY?: string;
   OPENAI_REASONING_EFFORT?: string;
   MODEL_BUDGET_USD?: string;
+  // Shared secret; when set, ?diagnostics=<key> on /health reveals budget
+  // figures and deployment metadata. Without it they stay operator-only.
+  HEALTH_DIAGNOSTICS_KEY?: string;
   MODEL_RATE_LIMITER?: RateLimit;
   API_RATE_LIMITER?: RateLimit;
   MODEL_BUDGET?: DurableObjectNamespace;
@@ -89,8 +95,56 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: corsHeaders });
 }
 
+const REQUEST_BODY_LIMIT_BYTES = 1_500_000;
+
+class RequestTooLargeError extends Error {
+  constructor() {
+    super("The repository request is too large to process safely.");
+    this.name = "RequestTooLargeError";
+  }
+}
+
+// Reads and parses the JSON body while enforcing the byte cap on the actual
+// stream, so a missing or forged Content-Length header cannot bypass it.
+async function readBoundedJson(request: Request): Promise<unknown> {
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > REQUEST_BODY_LIMIT_BYTES) {
+    throw new RequestTooLargeError();
+  }
+  if (!request.body) return JSON.parse("");
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > REQUEST_BODY_LIMIT_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw new RequestTooLargeError();
+    }
+    chunks.push(value);
+  }
+
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(combined));
+}
+
 function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 500): Response {
   if (error instanceof z.ZodError) return json({ error: "invalid_request", issues: error.issues }, 400);
+  if (error instanceof RequestTooLargeError) {
+    return json({
+      error: "request_too_large",
+      code: "request-failed",
+      message: error.message,
+    }, 413);
+  }
   if (error instanceof SyntaxError) {
     return json({
       error: "invalid_json",
@@ -107,20 +161,18 @@ function requestFailure(error: unknown, fallbackError: string, fallbackStatus = 
       ...(error.resetAt ? { resetAt: error.resetAt } : {}),
     }, status);
   }
-  const message = error instanceof Error ? error.message : "Unknown error";
+  // Uncaught errors stay in observability logs; their messages are not part
+  // of the public contract and may carry internal detail.
+  console.error(JSON.stringify({
+    event: "unhandled-request-error",
+    error: fallbackError,
+    detail: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+  }));
   const code: WayfinderErrorCode = "request-failed";
-  return json({ error: fallbackError, code, message }, fallbackStatus);
+  return json({ error: fallbackError, code, message: "Wayfinder could not complete this request. Try again shortly." }, fallbackStatus);
 }
 
 async function publicApiGate(request: Request, env: Env, path: string): Promise<Response | null> {
-  const contentLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(contentLength) && contentLength > 1_500_000) {
-    return json({
-      error: "request_too_large",
-      code: "request-failed",
-      message: "The repository request is too large to process safely.",
-    }, 413);
-  }
   if (!env.API_RATE_LIMITER) return null;
 
   const clientKey = request.headers.get("cf-connecting-ip")?.trim() || "unknown-client";
@@ -203,28 +255,39 @@ export function createBudgetedModelFetcher(
   };
 }
 
-async function modelOptions(request: Request, env: Env): Promise<{
+function modelOptions(request: Request, env: Env): {
   apiKey: string;
   reasoningEffort: ReasoningEffort;
   fetcher: typeof fetch;
-} | undefined> {
+  authorize: () => Promise<boolean>;
+} | undefined {
   const apiKey = env.OPENAI_API_KEY?.trim();
-  if (!apiKey || !env.MODEL_RATE_LIMITER || !env.MODEL_BUDGET) return undefined;
+  const limiter = env.MODEL_RATE_LIMITER;
+  if (!apiKey || !limiter || !env.MODEL_BUDGET) return undefined;
 
   const clientKey = request.headers.get("cf-connecting-ip")?.trim() || "unknown-client";
-  try {
-    const { success } = await env.MODEL_RATE_LIMITER.limit({ key: "agent:" + clientKey });
-    const configuredEffort = env.OPENAI_REASONING_EFFORT?.trim();
-    const reasoningEffort: ReasoningEffort = configuredEffort === "medium" || configuredEffort === "high"
-      ? configuredEffort
-      : "low";
-    if (!success) return undefined;
+  const configuredEffort = env.OPENAI_REASONING_EFFORT?.trim();
+  const reasoningEffort: ReasoningEffort = configuredEffort === "medium" || configuredEffort === "high"
+    ? configuredEffort
+    : "low";
 
+  try {
     const budgetId = env.MODEL_BUDGET.idFromName(MODEL_BUDGET_LEDGER_NAME);
     const budget = env.MODEL_BUDGET.get(budgetId);
     const fetcher = createBudgetedModelFetcher(budget, budgetLimitMicroUsd(env.MODEL_BUDGET_USD));
 
-    return { apiKey, reasoningEffort, fetcher };
+    // The per-client allowance is charged immediately before the model call,
+    // so answers that end deterministically never consume it.
+    const authorize = async (): Promise<boolean> => {
+      try {
+        const { success } = await limiter.limit({ key: "agent:" + clientKey });
+        return success;
+      } catch {
+        return false;
+      }
+    };
+
+    return { apiKey, reasoningEffort, fetcher, authorize };
   } catch {
     return undefined;
   }
@@ -239,6 +302,8 @@ export default {
       const modelConfigured = Boolean(env.OPENAI_API_KEY?.trim());
       const modelProtected = Boolean(env.MODEL_RATE_LIMITER);
       const apiProtected = Boolean(env.API_RATE_LIMITER);
+      const diagnosticsKey = env.HEALTH_DIAGNOSTICS_KEY?.trim();
+      const showDiagnostics = Boolean(diagnosticsKey) && url.searchParams.get("diagnostics") === diagnosticsKey;
       let modelBudgetProtected = false;
       let modelBudget: Record<string, number> | undefined;
       if (env.MODEL_BUDGET) {
@@ -263,6 +328,8 @@ export default {
           modelBudget = undefined;
         }
       }
+      // Budget figures and deployment metadata describe the operator's spend
+      // and rollout state, so they require the shared diagnostics key.
       return json({
         ok: true,
         service: "wayfinder-api",
@@ -275,8 +342,8 @@ export default {
         reasoningEffort: env.OPENAI_REASONING_EFFORT === "medium" || env.OPENAI_REASONING_EFFORT === "high"
           ? env.OPENAI_REASONING_EFFORT
           : "low",
-        ...(env.CF_VERSION_METADATA ? { deployment: env.CF_VERSION_METADATA } : {}),
-        ...(modelBudget ? { modelBudget } : {}),
+        ...(showDiagnostics && env.CF_VERSION_METADATA ? { deployment: env.CF_VERSION_METADATA } : {}),
+        ...(showDiagnostics && modelBudget ? { modelBudget } : {}),
       });
     }
 
@@ -287,8 +354,9 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/map") {
       try {
-        const input = mapRequestSchema.parse(await request.json());
-        return json(await createRepoMap(input.owner, input.repo, input.ref ?? null, env.GITHUB_TOKEN));
+        const input = mapRequestSchema.parse(await readBoundedJson(request));
+        const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
+        return json(await createRepoMap(input.owner, input.repo, input.ref ?? null, token, new UpstreamFetchBudget()));
       } catch (error) {
         return requestFailure(error, "map_failed", 502);
       }
@@ -296,7 +364,7 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/tour") {
       try {
-        const input = tourRequestSchema.parse(await request.json());
+        const input = tourRequestSchema.parse(await readBoundedJson(request));
         return json(generateTour(input.map as RepoMap));
       } catch (error) {
         return requestFailure(error, "tour_failed");
@@ -305,8 +373,9 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/guide/install") {
       try {
-        const input = installRequestSchema.parse(await request.json());
-        return json(await createInstallGuide(input.map as RepoMap, env.GITHUB_TOKEN, input.audience ?? "develop"));
+        const input = installRequestSchema.parse(await readBoundedJson(request));
+        const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
+        return json(await createInstallGuide(input.map as RepoMap, token, input.audience ?? "develop", new UpstreamFetchBudget()));
       } catch (error) {
         return requestFailure(error, "install_guide_failed");
       }
@@ -314,8 +383,9 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/find") {
       try {
-        const input = findRequestSchema.parse(await request.json());
-        return json(await createFileFind(input.map as RepoMap, input.query, input.currentPath ?? null, env.GITHUB_TOKEN));
+        const input = findRequestSchema.parse(await readBoundedJson(request));
+        const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
+        return json(await createFileFind(input.map as RepoMap, input.query, input.currentPath ?? null, token, { budget: new UpstreamFetchBudget() }));
       } catch (error) {
         return requestFailure(error, "file_find_failed");
       }
@@ -323,16 +393,18 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/agent") {
       try {
-        const input = agentRequestSchema.parse(await request.json());
+        const input = agentRequestSchema.parse(await readBoundedJson(request));
+        const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
         const allowedModel = classifyAgentIntent(input.query) === "contribution" && hasSpecificContributionGoal(input.query)
-          ? await modelOptions(request, env)
+          ? modelOptions(request, env)
           : undefined;
         return json(await createAgentAnswer(
           input.map as RepoMap,
           input.query,
           input.currentPath ?? null,
-          env.GITHUB_TOKEN,
+          token,
           allowedModel,
+          new UpstreamFetchBudget(),
         ));
       } catch (error) {
         return requestFailure(error, "agent_answer_failed");

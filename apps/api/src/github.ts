@@ -12,6 +12,81 @@ export class GitHubApiError extends Error {
   }
 }
 
+// One request fans out to a bounded number of GitHub lookups (map metadata,
+// tree, readme, plus inspected files). The cap stops a crafted map or query
+// from amplifying a single public request into an unbounded upstream sweep.
+const UPSTREAM_FETCH_LIMIT = 40;
+
+export class UpstreamFetchBudget {
+  private used = 0;
+
+  constructor(private readonly limit = UPSTREAM_FETCH_LIMIT) {}
+
+  consume(): void {
+    this.used += 1;
+    if (this.used > this.limit) {
+      throw new GitHubApiError(
+        "service-rate-limited",
+        "This question needed more repository lookups than Wayfinder allows for a single request. Ask a narrower question.",
+        429,
+      );
+    }
+  }
+}
+
+// GITHUB_TOKEN must be a fine-grained token limited to public read access.
+// Classic tokens expose their scopes on any API response; a token carrying
+// the "repo" scope can read private repositories through this Worker, so it
+// is never attached. Fine-grained tokens expose no scope header and cannot be
+// introspected here, so their permissions are the operator's responsibility.
+let tokenScopeCheck: { token: string; approved: Promise<boolean> } | null = null;
+
+async function classicTokenGrantsPrivateAccess(token: string, fetcher: typeof fetch): Promise<boolean> {
+  const response = await fetcher("https://api.github.com/user", {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "wayfinder-build-week",
+      "X-GitHub-Api-Version": "2022-11-28",
+      Authorization: "Bearer " + token,
+    },
+    signal: AbortSignal.timeout(5_000),
+  });
+  const scopes = response.headers.get("x-oauth-scopes");
+  if (scopes === null) return false;
+  return scopes.split(",").map((scope) => scope.trim()).includes("repo");
+}
+
+export function resetTokenScopeCheckForTests(): void {
+  tokenScopeCheck = null;
+}
+
+export async function publicReadOnlyToken(
+  token: string | undefined,
+  fetcher: typeof fetch = fetch,
+): Promise<string | undefined> {
+  const trimmed = token?.trim();
+  if (!trimmed) return undefined;
+  if (tokenScopeCheck?.token !== trimmed) {
+    const approved = classicTokenGrantsPrivateAccess(trimmed, fetcher).then((privateAccess) => {
+      if (privateAccess) {
+        console.error(JSON.stringify({
+          event: "github-token-rejected",
+          reason: "The configured GITHUB_TOKEN carries the classic \"repo\" scope, which can read private repositories. Replace it with a fine-grained public-read-only token.",
+        }));
+      }
+      return !privateAccess;
+    });
+    tokenScopeCheck = { token: trimmed, approved };
+  }
+  const approved = await tokenScopeCheck.approved.catch(() => {
+    // An unreachable scope check must not take the service down; retry on the
+    // next request instead of caching the failure.
+    tokenScopeCheck = null;
+    return true;
+  });
+  return approved ? trimmed : undefined;
+}
+
 export function describeGitHubFailure(
   status: number,
   remaining: string | null,
@@ -264,6 +339,7 @@ function decodeBase64(value: string): string {
 interface GitHubRequestRuntime {
   fetcher?: typeof fetch;
   timeoutMs?: number;
+  budget?: UpstreamFetchBudget;
 }
 
 const mutableGitHubCacheSeconds = 5 * 60;
@@ -282,6 +358,7 @@ export async function githubFetch<T>(
   token?: string,
   runtime: GitHubRequestRuntime = {},
 ): Promise<T> {
+  runtime.budget?.consume();
   const url = "https://api.github.com" + path;
   let response: Response;
   try {
@@ -338,6 +415,7 @@ export async function fetchRepoFile(
   path: string,
   ref: string,
   token?: string,
+  budget?: UpstreamFetchBudget,
 ): Promise<string> {
   const [owner, name] = repo.split("/");
   if (!owner || !name) throw new Error("Repository name must use owner/repo format.");
@@ -347,6 +425,7 @@ export async function fetchRepoFile(
   const response = await githubFetch<GitHubContentResponse>(
     prefix + "/contents/" + encodedPath + "?ref=" + encodeURIComponent(ref),
     token,
+    { budget },
   );
 
   if (response.encoding !== "base64") throw new Error("GitHub returned an unsupported file encoding.");
@@ -354,23 +433,29 @@ export async function fetchRepoFile(
   return decodeBase64(response.content).slice(0, 80_000);
 }
 
-export async function createRepoMap(owner: string, repo: string, requestedRef?: string | null, token?: string): Promise<RepoMap> {
+export async function createRepoMap(
+  owner: string,
+  repo: string,
+  requestedRef?: string | null,
+  token?: string,
+  budget?: UpstreamFetchBudget,
+): Promise<RepoMap> {
   const prefix = "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo);
-  const metadata = await githubFetch<GitHubRepoResponse>(prefix, token);
+  const metadata = await githubFetch<GitHubRepoResponse>(prefix, token, { budget });
   const resolvedRef = requestedRef?.trim() || metadata.default_branch;
-  const commit = await githubFetch<GitHubCommitResponse>(prefix + "/commits/" + encodeURIComponent(resolvedRef), token);
+  const commit = await githubFetch<GitHubCommitResponse>(prefix + "/commits/" + encodeURIComponent(resolvedRef), token, { budget });
   const pinnedRef = commit.sha;
 
   const [tree, readme] = await Promise.all([
-    githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef) + "?recursive=1", token),
-    githubFetch<GitHubReadmeResponse>(prefix + "/readme?ref=" + encodeURIComponent(pinnedRef), token).catch((error) => {
+    githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef) + "?recursive=1", token, { budget }),
+    githubFetch<GitHubReadmeResponse>(prefix + "/readme?ref=" + encodeURIComponent(pinnedRef), token, { budget }).catch((error) => {
       if (error instanceof GitHubApiError && error.code === "repository-unavailable") return null;
       throw error;
     }),
   ]);
 
   const rootTree = tree.truncated || tree.tree.length > 4_000
-    ? await githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef), token)
+    ? await githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef), token, { budget })
     : null;
   const filteredTree = compactTree(dedupeTree(filterTree([...(rootTree?.tree ?? []), ...tree.tree])));
   const setupFiles = collectSetupFiles([...(rootTree?.tree ?? []), ...tree.tree]);

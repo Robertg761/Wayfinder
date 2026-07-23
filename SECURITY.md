@@ -39,3 +39,18 @@ useful when they concern:
 - model-budget or rate-limit bypasses
 
 See [PRIVACY.md](PRIVACY.md) for the current data flow and retention policy.
+
+## Operator configuration requirements
+
+- `GITHUB_TOKEN` must be a **fine-grained personal access token limited to
+  public read access** (no repository selected, or public repositories only,
+  with read-only permissions). Never configure a classic token with the
+  `repo` scope: this Worker serves anonymous public traffic, and such a token
+  would let anyone read the operator's private repositories through it.
+  The Worker checks classic-token scopes at runtime and refuses to attach a
+  token that carries `repo`, but fine-grained token permissions cannot be
+  introspected from the API — verifying and rotating those is the operator's
+  responsibility.
+- `HEALTH_DIAGNOSTICS_KEY` (optional) gates the budget figures and deployment
+  metadata on `/health` behind `?diagnostics=<key>`. Without the key those
+  fields are never returned.

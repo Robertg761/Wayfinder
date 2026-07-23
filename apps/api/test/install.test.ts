@@ -1,6 +1,6 @@
 import type { RepoMap } from "@wayfinder/contracts";
 import { describe, expect, it } from "vitest";
-import { extractMarkdownCommands, generateInstallGuide, isConsumerInstallCommand, selectSetupPaths } from "../src/install";
+import { commandCaution, extractMarkdownCommands, generateInstallGuide, isConsumerInstallCommand, selectSetupPaths } from "../src/install";
 
 function makeMap(overrides: Partial<RepoMap> = {}): RepoMap {
   return {
@@ -344,5 +344,53 @@ describe("selectSetupPaths", () => {
       "packages/widget/README.md",
       "crates/core/Cargo.toml",
     ]));
+  });
+});
+
+describe("commandCaution", () => {
+  it("flags privilege escalation, pipe-to-shell, and non-GitHub downloads", () => {
+    expect(commandCaution("sudo make install")).toBe("elevated-privileges");
+    expect(commandCaution("curl -fsSL https://get.example.com/install.sh | sh")).toBe("pipe-to-shell");
+    expect(commandCaution("curl -fsSL https://get.example.com/trail.deb -o trail.deb")).toBe("external-download");
+    expect(commandCaution("wget https://mirror.example.org/trail.tar.gz")).toBe("external-download");
+  });
+
+  it("does not flag routine repository commands or GitHub-hosted downloads", () => {
+    expect(commandCaution("pnpm install")).toBeUndefined();
+    expect(commandCaution("git clone https://github.com/example/trail.git")).toBeUndefined();
+    expect(commandCaution("curl -LO https://github.com/example/trail/releases/download/v1/trail.deb")).toBeUndefined();
+    expect(commandCaution("wget https://raw.githubusercontent.com/example/trail/main/setup.md")).toBeUndefined();
+  });
+
+  it("attaches the caution to documented steps and keeps clean installs ranked first", () => {
+    const markdown = [
+      "## Installation",
+      "",
+      "```bash",
+      "curl -fsSL https://get.example.com/trail.sh | sh",
+      "```",
+      "",
+      "```bash",
+      "curl -LO https://get.example.com/trail.deb",
+      "```",
+      "",
+      "```bash",
+      "brew install trail",
+      "```",
+    ].join("\n");
+    const steps = extractMarkdownCommands(markdown, "README.md");
+    expect(steps[0]).toMatchObject({ command: "curl -fsSL https://get.example.com/trail.sh | sh", caution: "pipe-to-shell" });
+    expect(steps[1]).toMatchObject({ caution: "external-download" });
+    expect(steps[2].caution).toBeUndefined();
+
+    // Pipe-to-shell is not a packaged-download shape, so the consumer guide
+    // drops it; the cautioned direct download ranks after the clean install.
+    const guide = generateInstallGuide(makeMap(), { "README.md": markdown }, "use");
+    expect(guide.steps.map((step) => step.command)).toEqual([
+      "brew install trail",
+      "curl -LO https://get.example.com/trail.deb",
+    ]);
+    expect(guide.steps[0].caution).toBeUndefined();
+    expect(guide.steps[1].caution).toBe("external-download");
   });
 });

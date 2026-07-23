@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import worker, { createBudgetedModelFetcher } from "../src/index";
 import { reserveCostMicroUsd } from "../src/budget";
 
@@ -124,18 +124,45 @@ describe("public API request boundaries", () => {
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
     });
-    await expect(fullyProtected.json()).resolves.toMatchObject({
+    const fullBody = await fullyProtected.json() as Record<string, unknown>;
+    expect(fullBody).toMatchObject({
       modelConfigured: true,
       apiProtected: true,
       modelProtected: true,
       modelBudgetProtected: true,
       modelEnabled: true,
-      modelBudget: {
-        spentUsd: 0.017336,
-        limitUsd: 100,
-        remainingUsd: 99.982664,
-      },
     });
+    expect(fullBody.modelBudget).toBeUndefined();
+    expect(fullBody.deployment).toBeUndefined();
+  });
+
+  it("reveals budget and deployment details only to the diagnostics key holder", async () => {
+    const env = {
+      OPENAI_API_KEY: "secret",
+      API_RATE_LIMITER: rateLimiter(true),
+      MODEL_RATE_LIMITER: rateLimiter(true),
+      MODEL_BUDGET: budgetNamespace(),
+      MODEL_BUDGET_USD: "100",
+      HEALTH_DIAGNOSTICS_KEY: "operator-key",
+      CF_VERSION_METADATA: { id: "v-1", tag: "", timestamp: "2026-07-14T12:00:00.000Z" },
+    };
+    const withKey = await worker.fetch(new Request("https://wayfinder.test/health?diagnostics=operator-key"), env);
+    const wrongKey = await worker.fetch(new Request("https://wayfinder.test/health?diagnostics=guess"), env);
+    const noKeyConfigured = await worker.fetch(new Request("https://wayfinder.test/health?diagnostics="), {
+      ...env,
+      HEALTH_DIAGNOSTICS_KEY: undefined,
+    });
+
+    await expect(withKey.json()).resolves.toMatchObject({
+      modelBudget: { spentUsd: 0.017336, limitUsd: 100, remainingUsd: 99.982664 },
+      deployment: { id: "v-1" },
+    });
+    const wrongBody = await wrongKey.json() as Record<string, unknown>;
+    expect(wrongBody.modelBudget).toBeUndefined();
+    expect(wrongBody.deployment).toBeUndefined();
+    const unconfiguredBody = await noKeyConfigured.json() as Record<string, unknown>;
+    expect(unconfiguredBody.modelBudget).toBeUndefined();
+    expect(unconfiguredBody.deployment).toBeUndefined();
   });
 
   it("does not spend a model allowance on a focused deterministic question", async () => {
@@ -158,7 +185,10 @@ describe("public API request boundaries", () => {
     expect(limiter.limit).not.toHaveBeenCalled();
   });
 
-  it("checks the model allowance for specific contribution planning", async () => {
+  it("does not spend a model allowance when no implementation coordinate exists", async () => {
+    // The allowance is now charged immediately before the model call, so a
+    // specific contribution goal that ends deterministically (no credible
+    // implementation coordinate) never consumes it.
     const limiter = rateLimiter(false);
     const response = await worker.fetch(new Request("https://wayfinder.test/agent", {
       method: "POST",
@@ -175,7 +205,7 @@ describe("public API request boundaries", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "contribution" });
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "agent:203.0.113.10" });
+    expect(limiter.limit).not.toHaveBeenCalled();
   });
 
   it("does not spend a model allowance on an underspecified contribution", async () => {
@@ -224,6 +254,80 @@ describe("public API request boundaries", () => {
 
     await expect(medium.json()).resolves.toMatchObject({ reasoningEffort: "medium" });
     await expect(unsupported.json()).resolves.toMatchObject({ reasoningEffort: "low" });
+  });
+});
+
+describe("request body and failure boundaries", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects an oversized request body with 413", async () => {
+    const response = await worker.fetch(new Request("https://wayfinder.test/tour", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: '{"map":"' + "x".repeat(1_500_001) + '"}',
+    }), {});
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ error: "request_too_large", code: "request-failed" });
+  });
+
+  it("caps the streamed body even when no Content-Length header is present", async () => {
+    const oversized = new TextEncoder().encode('{"map":"' + "x".repeat(1_500_001) + '"}');
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let offset = 0; offset < oversized.byteLength; offset += 65_536) {
+          controller.enqueue(oversized.slice(offset, offset + 65_536));
+        }
+        controller.close();
+      },
+    });
+    const request = new Request("https://wayfinder.test/tour", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      // @ts-expect-error duplex is required for stream bodies but absent from the lib types
+      duplex: "half",
+    });
+    expect(request.headers.get("content-length")).toBeNull();
+
+    const response = await worker.fetch(request, {});
+    expect(response.status).toBe(413);
+  });
+
+  it("returns 503 when the request guard is unavailable", async () => {
+    const limiter = {
+      limit: vi.fn().mockRejectedValue(new Error("guard down")),
+    } as unknown as RateLimit;
+    const response = await worker.fetch(new Request("https://wayfinder.test/tour", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ map: validMap() }),
+    }), { API_RATE_LIMITER: limiter });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ code: "upstream-unavailable" });
+  });
+
+  it("does not echo internal error detail for uncaught failures", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/repos/acme/widget")) {
+        return Response.json({ default_branch: "main", description: null, homepage: null, language: null, stargazers_count: 1 });
+      }
+      if (url.includes("/commits/")) return Response.json({ sha: "a".repeat(40) });
+      if (url.includes("/git/trees/")) return Response.json({ sha: "a".repeat(40), truncated: false, tree: [] });
+      if (url.includes("/readme")) return Response.json({ content: "%%%not-base64%%%", encoding: "base64" });
+      return Response.json({ message: "not found" }, { status: 404 });
+    }));
+
+    const response = await post("/map", { owner: "acme", repo: "widget" });
+    expect(response.status).toBe(502);
+    const body = await response.json() as { error: string; message: string };
+    expect(body.error).toBe("map_failed");
+    expect(body.message).toBe("Wayfinder could not complete this request. Try again shortly.");
+    expect(body.message).not.toMatch(/invalid|character|atob/i);
   });
 });
 

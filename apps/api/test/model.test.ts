@@ -301,6 +301,93 @@ describe("synthesizeAgentAnswer", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("charges the model allowance immediately before the upstream call", async () => {
+    const authorize = vi.fn(async () => true);
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Authentication is handled in src/auth/session.ts.",
+      explanation: "Start with the exported session logic.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher, authorize })).resolves.toMatchObject({
+      mode: "gpt-5.6",
+    });
+    expect(authorize).toHaveBeenCalledOnce();
+    expect(authorize.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(fetcher).mock.invocationCallOrder[0]);
+  });
+
+  it("returns the deterministic answer without contacting the model when the allowance is exhausted", async () => {
+    const fetcher = vi.fn() as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, {
+      apiKey: "test-key",
+      fetcher,
+      authorize: async () => false,
+    })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "model-allowance-exhausted",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported commands suggested mid-sentence", async () => {
+    const fetcher = vi.fn(async () => modelResponse({
+      summary: "Authentication is handled in src/auth/session.ts.",
+      explanation: "After reading it you can then npm install lodash to continue.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "unsupported-command",
+    });
+  });
+
+  it("rejects shell-adjacent binaries missing from the original guard list", async () => {
+    const cases = [
+      "Prepare the environment, then bash setup.sh applies the settings.",
+      "The maintainers suggest you first chmod +x it before use.",
+      "Connect with ssh deploy@example.com to publish.",
+    ];
+    for (const explanation of cases) {
+      const fetcher = vi.fn(async () => modelResponse({
+        summary: "Authentication is handled in src/auth/session.ts.",
+        explanation,
+        evidencePaths: ["src/auth/session.ts"],
+        brief: [],
+      })) as unknown as typeof fetch;
+      await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
+        mode: "free",
+        modelFallbackReason: "unsupported-command",
+      });
+    }
+  });
+
+  it("rejects ambiguous binaries only when they carry a command-shaped argument", async () => {
+    const flagged = vi.fn(async () => modelResponse({
+      summary: "Authentication is handled in src/auth/session.ts.",
+      explanation: "The service starts once you go run it locally.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher: flagged })).resolves.toMatchObject({
+      mode: "free",
+      modelFallbackReason: "unsupported-command",
+    });
+
+    const safe = vi.fn(async () => modelResponse({
+      summary: "Authentication is handled in src/auth/session.ts.",
+      explanation: "Each node in the session graph holds one credential, so it helps to just read the file first.",
+      evidencePaths: ["src/auth/session.ts"],
+      brief: [],
+    })) as unknown as typeof fetch;
+    await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher: safe })).resolves.toMatchObject({
+      mode: "gpt-5.6",
+    });
+  });
+
   it("removes em dash characters from model prose", async () => {
     const fetcher = vi.fn(async () => modelResponse({
       summary: "Authentication\u2014start with the session file.",

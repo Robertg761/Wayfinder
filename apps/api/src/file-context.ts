@@ -6,7 +6,7 @@ import type {
   RepositoryFileKind,
 } from "@wayfinder/contracts";
 import { createFileFind, type FileFindOptions } from "./find";
-import { fetchRepoFile, isBlockingGitHubError } from "./github";
+import { fetchRepoFile, isBlockingGitHubError, type UpstreamFetchBudget } from "./github";
 
 const sourceExtensions = new Set([
   "c", "cc", "cjs", "cpp", "cs", "cts", "cxx", "go", "h", "hpp", "java", "js", "jsx", "kt", "mjs", "mts",
@@ -33,6 +33,7 @@ type Finder = (
 export interface FileContextRuntime {
   fetchFile?: FileFetcher;
   findFiles?: Finder;
+  budget?: UpstreamFetchBudget;
 }
 
 function extension(path: string): string {
@@ -396,7 +397,7 @@ export async function createFileContextAnswer(
   let content: string | null = null;
 
   try {
-    content = await fetchFile(map.repo, currentPath, map.sha, token);
+    content = await fetchFile(map.repo, currentPath, map.sha, token, runtime.budget);
   } catch (error) {
     if (isBlockingGitHubError(error)) throw error;
     warnings.push("The current file could not be inspected, so Wayfinder did not infer imports or relationships.");
@@ -419,12 +420,14 @@ export async function createFileContextAnswer(
       requiredEvidenceTerms: terms,
       requireInspectedContentEvidence: true,
       minimumConfidence: "likely",
+      budget: runtime.budget,
     }), currentPath);
   }
   if (kind === "source" && content && terms.length > 0 && (focus === "tests" || focus === "impact")) {
     tests = keepCredibleTests(await findFiles(map, testQuery, currentPath, token, {
       requiredEvidenceTerms: terms,
       minimumConfidence: "likely",
+      budget: runtime.budget,
     }));
   }
 

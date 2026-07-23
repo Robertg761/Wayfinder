@@ -40,8 +40,11 @@ Wayfinder turns those scattered clues into a navigable trail.
 
 The deterministic tools remain fully useful without an OpenAI key. When the
 Worker is configured for GPT-5.6 Luna, contribution plans can receive an
-additional structured synthesis. Any model path or shell command that is not
-present in the deterministic evidence is rejected before it reaches the user.
+additional structured synthesis. Structured model output (evidence paths and
+brief steps) is strictly validated against the deterministic evidence and the
+whole synthesis is rejected on any mismatch; free-form prose is additionally
+screened by heuristics for unsupported paths and command shapes, which blocks
+common cases but is not a guarantee.
 
 ## Try it locally
 

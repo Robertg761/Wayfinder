@@ -69,12 +69,15 @@ export interface InstallPrerequisite {
   confidence: InstallConfidence;
 }
 
+export type InstallCommandCaution = "elevated-privileges" | "pipe-to-shell" | "external-download";
+
 export interface InstallStep {
   order: number;
   title: string;
   command: string;
   evidence: InstallEvidence;
   confidence: InstallConfidence;
+  caution?: InstallCommandCaution;
 }
 
 export interface InstallGuide {

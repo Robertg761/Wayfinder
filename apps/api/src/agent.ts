@@ -4,6 +4,7 @@ import { createFileContextAnswer } from "./file-context";
 import { createInstallGuide } from "./install";
 import { generateTour } from "./tour";
 import { synthesizeAgentAnswer, type ModelOptions } from "./model";
+import type { UpstreamFetchBudget } from "./github";
 
 export { importedSpecifiers, keepCredibleCallers as keepLikelyCallers } from "./file-context";
 
@@ -91,17 +92,18 @@ async function createContributionTrail(
   goal: string,
   currentPath: string | null,
   token?: string,
+  budget?: UpstreamFetchBudget,
 ): Promise<ContributionTrail> {
   const concepts = contributionConcepts(goal).join(" ");
   const [guide, implementation, verification] = concepts
     ? await Promise.all([
-        createInstallGuide(map, token),
-        createFileFind(map, concepts + " primary implementation source", currentPath, token),
-        createFileFind(map, concepts + " tests specs", currentPath, token)
+        createInstallGuide(map, token, "develop", budget),
+        createFileFind(map, concepts + " primary implementation source", currentPath, token, { budget }),
+        createFileFind(map, concepts + " tests specs", currentPath, token, { budget })
           .then((candidate) => keepGoalLinkedVerification(candidate, goal)),
       ])
     : [
-        await createInstallGuide(map, token),
+        await createInstallGuide(map, token, "develop", budget),
         emptyContributionFind(
           map,
           goal,
@@ -165,12 +167,13 @@ export async function createAgentAnswer(
   currentPath: string | null,
   token?: string,
   modelOptions?: ModelOptions,
+  budget?: UpstreamFetchBudget,
 ): Promise<AgentAnswer> {
   const intent = classifyAgentIntent(query, currentPath);
   const generatedAt = new Date().toISOString();
 
   if (intent === "contribution") {
-    const trail = await createContributionTrail(map, query, currentPath, token);
+    const trail = await createContributionTrail(map, query, currentPath, token, budget);
     const specificGoal = hasSpecificContributionGoal(query);
     const answer: AgentAnswer = {
       repo: map.repo,
@@ -192,7 +195,7 @@ export async function createAgentAnswer(
 
   if (intent === "orientation") {
     const tour = generateTour(map);
-    const guide = await createInstallGuide(map, token, "develop");
+    const guide = await createInstallGuide(map, token, "develop", budget);
     const answer: AgentAnswer = {
       repo: map.repo,
       sha: map.sha,
@@ -210,7 +213,7 @@ export async function createAgentAnswer(
 
   if (intent === "installation") {
     const audience = installationAudience(query);
-    const guide = await createInstallGuide(map, token, audience);
+    const guide = await createInstallGuide(map, token, audience, budget);
     const answer: AgentAnswer = {
       repo: map.repo,
       sha: map.sha,
@@ -227,10 +230,10 @@ export async function createAgentAnswer(
 
   if (intent === "file-context") {
     if (!currentPath) throw new Error("Current-file context requires a repository path.");
-    return createFileContextAnswer(map, query, currentPath, token);
+    return createFileContextAnswer(map, query, currentPath, token, { budget });
   }
 
-  const finder = await createFileFind(map, query, currentPath, token);
+  const finder = await createFileFind(map, query, currentPath, token, { budget });
   const answer: AgentAnswer = {
     repo: map.repo,
     sha: map.sha,

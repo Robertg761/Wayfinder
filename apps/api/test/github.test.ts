@@ -10,7 +10,10 @@ import {
   githubFetch,
   GitHubApiError,
   isBlockingGitHubError,
+  publicReadOnlyToken,
+  resetTokenScopeCheckForTests,
   shouldIncludePath,
+  UpstreamFetchBudget,
 } from "../src/github";
 
 afterEach(() => {
@@ -218,5 +221,79 @@ describe("repository map partial failures", () => {
 
     await expect(createRepoMap("openai", "openai-node"))
       .rejects.toMatchObject({ code: "github-rate-limited", status: 429 });
+  });
+});
+
+describe("upstream fetch budget", () => {
+  it("caps the number of GitHub lookups a single request may trigger", async () => {
+    const budget = new UpstreamFetchBudget(2);
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetcher);
+
+    await githubFetch("/repos/a/b", undefined, { budget });
+    await githubFetch("/repos/a/b", undefined, { budget });
+    await expect(githubFetch("/repos/a/b", undefined, { budget }))
+      .rejects.toMatchObject({ code: "service-rate-limited", status: 429 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not limit requests that carry no budget", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetcher);
+
+    for (let index = 0; index < 45; index += 1) {
+      await githubFetch("/repos/a/b");
+    }
+    expect(fetcher).toHaveBeenCalledTimes(45);
+  });
+});
+
+describe("public read-only token guard", () => {
+  afterEach(() => {
+    resetTokenScopeCheckForTests();
+  });
+
+  function userEndpoint(scopes: string | null): typeof fetch {
+    return vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      expect(String(input)).toBe("https://api.github.com/user");
+      return new Response("{}", {
+        status: 200,
+        headers: scopes === null ? {} : { "x-oauth-scopes": scopes },
+      });
+    }) as unknown as typeof fetch;
+  }
+
+  it("refuses a classic token that can read private repositories", async () => {
+    await expect(publicReadOnlyToken("classic-token", userEndpoint("repo, read:user"))).resolves.toBeUndefined();
+  });
+
+  it("allows a classic token without the private-repo scope", async () => {
+    await expect(publicReadOnlyToken("classic-token", userEndpoint("public_repo"))).resolves.toBe("classic-token");
+  });
+
+  it("allows a fine-grained token, whose scopes are not introspectable", async () => {
+    await expect(publicReadOnlyToken("github_pat_x", userEndpoint(null))).resolves.toBe("github_pat_x");
+  });
+
+  it("passes through an absent token without calling GitHub", async () => {
+    const fetcher = vi.fn() as unknown as typeof fetch;
+    await expect(publicReadOnlyToken(undefined, fetcher)).resolves.toBeUndefined();
+    await expect(publicReadOnlyToken("   ", fetcher)).resolves.toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("checks a given token only once per isolate", async () => {
+    const fetcher = userEndpoint("");
+    await publicReadOnlyToken("classic-token", fetcher);
+    await publicReadOnlyToken("classic-token", fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails open when the scope check itself is unavailable", async () => {
+    const failing = vi.fn<typeof fetch>().mockRejectedValue(new Error("network down")) as unknown as typeof fetch;
+    await expect(publicReadOnlyToken("classic-token", failing)).resolves.toBe("classic-token");
+    // The failed check is not cached; the next request re-verifies.
+    const succeeding = userEndpoint("repo");
+    await expect(publicReadOnlyToken("classic-token", succeeding)).resolves.toBeUndefined();
   });
 });

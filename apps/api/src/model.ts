@@ -8,6 +8,9 @@ export interface ModelOptions {
   apiKey: string;
   reasoningEffort?: ReasoningEffort;
   fetcher?: typeof fetch;
+  // Charged immediately before the upstream model call so deterministic
+  // answers never consume the caller's model allowance.
+  authorize?: () => Promise<boolean>;
 }
 
 const synthesisSchema = z.object({
@@ -173,8 +176,22 @@ function unsupportedEvidenceReason(
     && !normalizedEvidence.includes(value.toLowerCase()));
   if (unsupportedCodeSpan) return "unsupported-code-span";
 
-  const unsupportedCommand = /(?:^|[\n.!?]\s+)(?:run|execute|type|use)?\s*(?:sudo\s+)?(?:rm|rmdir|del|format|mkfs|dd|git\s+(?:reset|clean)|curl|wget|npm|npx|pnpm|yarn|bun|deno|pip|pip3|pipx|poetry|uv|cargo|go|brew|apt|apt-get|docker|make|just|python|python3|node)\b/i;
-  if (unsupportedCommand.test(proseWithoutSupportedCommands)) return "unsupported-command";
+  // Tokens that only ever read as command binaries match anywhere in prose:
+  // no sentence-boundary anchor, so mid-sentence suggestions such as
+  // "then npm install foo" are caught. Privilege escalation always matches.
+  const unambiguousCommand = /(?:^|\s|[`'"(])(?:(?:sudo|doas)\s+\S|(?:rm|rmdir|mkfs|git\s+(?:reset|clean)|curl|wget|npm|npx|pnpm|yarn|deno|pip|pip3|pipx|poetry|cargo|rustup|brew|apt-get|dpkg|bash|zsh|powershell|pwsh|iex|irm|chmod|chown|ssh|scp)\s+\S)/i;
+  if (unambiguousCommand.test(proseWithoutSupportedCommands)) return "unsupported-command";
+  // Tokens that are also common English or prose words ("go", "make", "just",
+  // "node", "python", "docker", "apt", ...) need either the original
+  // sentence-command anchor or a command-shaped argument (flag, subcommand,
+  // path, script, or URL) before they count as an instruction.
+  const ambiguousBinary = "(?:apt|docker|python|python3|node|del|format|dd|sh|uv|bun|go|make|just)";
+  const commandShapedArgument = "(?:-{1,2}[a-z0-9][\\w=-]*|\\+[a-z]+|(?:install|uninstall|add|remove|run|build|compile|test|start|dev|serve|sync|clone|pull|push|fetch|update|upgrade|exec|create|init|i|ci)(?:\\s|$)|\\.{0,2}/\\S+|\\S+\\.(?:sh|bash|zsh|py|js|cjs|mjs|ts|rb|ps1)(?:\\s|$|[.,!?])|https?://\\S+)";
+  const anchoredCommand = new RegExp("(?:^|[\\n.!?]\\s+)(?:run|execute|type|use)?\\s*(?:sudo\\s+|doas\\s+)?" + ambiguousBinary + "\\s+\\S", "i");
+  const argumentShapedCommand = new RegExp("(?:^|\\s|[`'\"(])" + ambiguousBinary + "\\s+" + commandShapedArgument, "i");
+  if (anchoredCommand.test(proseWithoutSupportedCommands)) return "unsupported-command";
+  if (argumentShapedCommand.test(proseWithoutSupportedCommands)) return "unsupported-command";
+  if (/\|\s*(?:ba|z|da)?sh\b|\|\s*(?:iex|pwsh|powershell|python3?|node)\b/i.test(proseWithoutSupportedCommands)) return "unsupported-command";
   if (/(?:&&|\|\||\$\(|\s\|\s|\s>[>]?)\s*\S/.test(proseWithoutSupportedCommands)) return "unsupported-shell-operator";
   return null;
 }
@@ -247,6 +264,9 @@ export async function synthesizeAgentAnswer(
   let stage = "model-request";
 
   try {
+    if (options.authorize && !(await options.authorize())) {
+      return deterministicFallback(answer, "model-allowance-exhausted");
+    }
     const startedAt = Date.now();
     const response = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST",

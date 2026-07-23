@@ -1,5 +1,11 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
+  // Secrets (set with `wrangler secret put`):
+  // - GITHUB_TOKEN: must be a fine-grained PAT limited to PUBLIC READ access.
+  //   Classic tokens with the "repo" scope are refused at runtime because this
+  //   public Worker would expose private-repository reads. See SECURITY.md.
+  // - OPENAI_API_KEY: enables GPT-5.6 Luna synthesis.
+  // - HEALTH_DIAGNOSTICS_KEY: optional; unlocks budget/deployment details on /health.
   "name": "wayfinder-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-13",

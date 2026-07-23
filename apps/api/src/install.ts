@@ -1,4 +1,5 @@
 import type {
+  InstallCommandCaution,
   InstallConfidence,
   InstallEvidence,
   InstallGuide,
@@ -6,7 +7,7 @@ import type {
   InstallStep,
   RepoMap,
 } from "@wayfinder/contracts";
-import { fetchRepoFile, isBlockingGitHubError } from "./github";
+import { fetchRepoFile, isBlockingGitHubError, type UpstreamFetchBudget } from "./github";
 
 interface PackageJson {
   name?: string;
@@ -176,6 +177,28 @@ function commandReferencesProduct(command: string, aliases: Set<string>): boolea
   return false;
 }
 
+const githubDownloadHosts = new Set([
+  "github.com",
+  "raw.githubusercontent.com",
+  "objects.githubusercontent.com",
+  "codeload.github.com",
+]);
+
+// Documented commands come from the repository's own README, which Wayfinder
+// treats as evidence, not as vetted instructions. Shapes that grant elevated
+// privileges, pipe remote content into a shell, or download from outside
+// GitHub carry a caution the extension surfaces before the user runs them.
+export function commandCaution(command: string): InstallCommandCaution | undefined {
+  const lower = command.toLowerCase();
+  if (/(?:^|\s|\||&|;)(?:sudo|doas)\s/.test(lower)) return "elevated-privileges";
+  if (/\|\s*(?:(?:ba|z|da|fi)?sh|iex|pwsh|powershell|python3?|node|perl|ruby)\b/.test(lower)) return "pipe-to-shell";
+  for (const match of lower.matchAll(/https?:\/\/([^\s/'"]+)/g)) {
+    const host = match[1].split(":")[0];
+    if (!githubDownloadHosts.has(host)) return "external-download";
+  }
+  return undefined;
+}
+
 function titleForCommand(command: string): string {
   const lower = command.toLowerCase();
   if (lower.includes("git clone")) return "Clone the repository";
@@ -251,12 +274,14 @@ export function extractMarkdownCommands(markdown: string, path: string): Install
     if (seen.has(command)) continue;
     if (inFence && !relevantFence) continue;
     seen.add(command);
+    const caution = commandCaution(command);
     steps.push({
       order: steps.length + 1,
       title: titleForCommand(command),
       command,
       evidence: evidence(path, [index + 1, index + 1]),
       confidence: "documented",
+      ...(caution ? { caution } : {}),
     });
     if (steps.length >= 40) break;
   }
@@ -365,7 +390,10 @@ export function generateInstallGuide(
   const productAliases = normalizedProductAliases(map, files, packageJson);
   const consumerSteps = documentedSteps
     .filter((step) => isConsumerDistributionCommand(step.command) && commandReferencesProduct(step.command, productAliases))
-    .map((step) => ({ ...step, title: "Install the published package" }));
+    .map((step) => ({ ...step, title: "Install the published package" }))
+    // A clean package-manager install outranks a cautioned shape (sudo,
+    // pipe-to-shell, non-GitHub download) when both are documented.
+    .sort((left, right) => Number(Boolean(left.caution)) - Number(Boolean(right.caution)));
   const consumerCommands = new Set(consumerSteps.map((step) => step.command));
   const placeholderSteps = documentedSteps.filter((step) => /<[^>]+>/.test(step.command));
   const steps = audience === "use"
@@ -572,11 +600,12 @@ export async function createInstallGuide(
   map: RepoMap,
   token?: string,
   audience: "use" | "develop" = "develop",
+  budget?: UpstreamFetchBudget,
 ): Promise<InstallGuide> {
   const setupPaths = selectSetupPaths(map);
 
   const loaded = await Promise.all(setupPaths.map(async (path) => {
-    const content = await fetchRepoFile(map.repo, path, map.sha, token).catch((error) => {
+    const content = await fetchRepoFile(map.repo, path, map.sha, token, budget).catch((error) => {
       if (isBlockingGitHubError(error)) throw error;
       return null;
     });
