@@ -354,7 +354,7 @@ export async function synthesizeAgentAnswer(
     stage = "result-cleanup";
     return {
       ...answer,
-      mode: "gpt-5.6",
+      mode: "model",
       model: WAYFINDER_MODEL,
       reasoningEffort,
       usage: modelUsage(body, Date.now() - startedAt),

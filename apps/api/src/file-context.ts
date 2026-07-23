@@ -7,11 +7,7 @@ import type {
 } from "@wayfinder/contracts";
 import { createFileFind, type FileFindOptions } from "./find";
 import { fetchRepoFile, isBlockingGitHubError, type UpstreamFetchBudget } from "./github";
-
-const sourceExtensions = new Set([
-  "c", "cc", "cjs", "cpp", "cs", "cts", "cxx", "go", "h", "hpp", "java", "js", "jsx", "kt", "mjs", "mts",
-  "php", "py", "rb", "rs", "sh", "swift", "ts", "tsx", "vue",
-]);
+import { extension, isTestPath, sourceExtensions } from "./path-classify";
 
 const documentationExtensions = new Set(["adoc", "md", "mdx", "rst"]);
 const dataExtensions = new Set(["csv", "graphql", "jsonl", "sql", "txt", "xml"]);
@@ -36,11 +32,6 @@ export interface FileContextRuntime {
   budget?: UpstreamFetchBudget;
 }
 
-function extension(path: string): string {
-  const fileName = path.split("/").at(-1) ?? "";
-  return fileName.includes(".") ? fileName.split(".").at(-1)?.toLowerCase() ?? "" : "";
-}
-
 function fileName(path: string): string {
   return path.split("/").at(-1) ?? path;
 }
@@ -62,10 +53,6 @@ function humanize(value: string): string {
 
 function unique(values: string[], limit = 20): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].slice(0, limit);
-}
-
-function isTestPath(path: string): boolean {
-  return /(^|\/)(__tests__|test|tests|spec|specs|fixtures?)(\/|$)|\.(test|spec)\.|(^|\/)test_[^/]+\.[^.]+$|_test\.[^.]+$/i.test(path);
 }
 
 export function classifyRepositoryFile(map: RepoMap, path: string): RepositoryFileKind {
@@ -460,7 +447,7 @@ export async function createFileContextAnswer(
     sha: map.sha,
     query,
     intent: "file-context",
-    mode: "free",
+    mode: "deterministic",
     summary,
     explanation: explanationFor(focus, kind, map),
     suggestions: focus === "summary"

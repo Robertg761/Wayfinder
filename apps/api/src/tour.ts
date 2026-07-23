@@ -1,4 +1,5 @@
 import type { RepoMap, RepoTour, TourStop } from "@wayfinder/contracts";
+import { extension, sourceExtensions } from "./path-classify";
 
 interface TourCandidate {
   kind: "documentation" | "manifest" | "runtime" | "core" | "test" | "configuration" | "source";
@@ -8,30 +9,6 @@ interface TourCandidate {
   lookFor: string;
   lines: [number, number];
   why: string;
-}
-
-const sourceExtensions = new Set([
-  "c",
-  "cpp",
-  "cs",
-  "go",
-  "java",
-  "js",
-  "jsx",
-  "kt",
-  "php",
-  "py",
-  "rb",
-  "rs",
-  "swift",
-  "ts",
-  "tsx",
-  "vue",
-]);
-
-function extension(path: string): string {
-  const fileName = path.split("/").at(-1) ?? "";
-  return fileName.includes(".") ? fileName.split(".").at(-1)?.toLowerCase() ?? "" : "";
 }
 
 function selectPath(

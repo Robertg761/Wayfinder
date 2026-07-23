@@ -2,8 +2,9 @@ import type { AgentAnswer, RepoMap } from "@wayfinder/contracts";
 import { describe, expect, it } from "vitest";
 import { createAgentAnswer } from "../src/agent";
 import { synthesizeAgentAnswer, type ReasoningEffort, WAYFINDER_MODEL } from "../src/model";
+import { WAYFINDER_PROD_API_URL } from "@wayfinder/contracts";
 
-const apiUrl = process.env.WAYFINDER_API_URL ?? "https://wayfinder-api.hopit-robert.workers.dev";
+const apiUrl = process.env.WAYFINDER_API_URL ?? WAYFINDER_PROD_API_URL;
 const apiKey = process.env.OPENAI_API_KEY?.trim();
 const allowedEfforts = new Set<ReasoningEffort>(["low", "medium", "high"]);
 const requestedEfforts = (process.env.LUNA_EFFORTS ?? "low")
@@ -66,7 +67,7 @@ describe.skipIf(process.env.RUN_LUNA_EVAL !== "1" || !apiKey)("live Luna evaluat
         });
         const allowedPaths = validEvidencePaths(deterministic);
 
-        expect(answer.mode).toBe("gpt-5.6");
+        expect(answer.mode).toBe("model");
         expect(answer.model).toBe(WAYFINDER_MODEL);
         expect(answer.reasoningEffort).toBe(reasoningEffort);
         expect(answer.brief?.length).toBeGreaterThan(0);

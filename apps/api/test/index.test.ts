@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker, { createBudgetedModelFetcher } from "../src/index";
 import { reserveCostMicroUsd } from "../src/budget";
+import { CONTRACT_VERSION } from "@wayfinder/contracts";
 
 function validMap(overrides: Record<string, unknown> = {}) {
   return {
@@ -85,7 +86,7 @@ describe("public API request boundaries", () => {
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({ error: "not_found", code: "request-failed" });
-    expect(response.headers.get("X-Wayfinder-Contract-Version")).toBe("1");
+    expect(response.headers.get("X-Wayfinder-Contract-Version")).toBe(String(CONTRACT_VERSION));
   });
 
   it("gives contract violations a code and message alongside the issues", async () => {
@@ -200,7 +201,7 @@ describe("public API request boundaries", () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "orientation" });
+    await expect(response.json()).resolves.toMatchObject({ mode: "deterministic", intent: "orientation" });
     expect(limiter.limit).not.toHaveBeenCalled();
   });
 
@@ -223,7 +224,7 @@ describe("public API request boundaries", () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "contribution" });
+    await expect(response.json()).resolves.toMatchObject({ mode: "deterministic", intent: "contribution" });
     expect(limiter.limit).not.toHaveBeenCalled();
   });
 
@@ -243,7 +244,7 @@ describe("public API request boundaries", () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ mode: "free", intent: "contribution" });
+    await expect(response.json()).resolves.toMatchObject({ mode: "deterministic", intent: "contribution" });
     expect(limiter.limit).not.toHaveBeenCalled();
   });
 

@@ -49,5 +49,49 @@
         "period": 60
       }
     }
-  ]
+  ],
+  // Deploy experiments with `wrangler deploy --env dev`: a separate Worker
+  // name, budget ledger namespace, and rate-limit namespaces, so a staging
+  // push can never touch the production ledger or its rate-limit counters.
+  // The top-level (no --env) configuration remains production.
+  "env": {
+    "dev": {
+      "name": "wayfinder-api-dev",
+      "vars": {
+        "MODEL_BUDGET_USD": "5"
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "MODEL_BUDGET",
+            "class_name": "ModelBudget"
+          }
+        ]
+      },
+      "migrations": [
+        {
+          "tag": "v1",
+          "new_sqlite_classes": ["ModelBudget"]
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "MODEL_RATE_LIMITER",
+          "namespace_id": "3022311",
+          "simple": {
+            "limit": 10,
+            "period": 60
+          }
+        },
+        {
+          "name": "API_RATE_LIMITER",
+          "namespace_id": "3022312",
+          "simple": {
+            "limit": 60,
+            "period": 60
+          }
+        }
+      ]
+    }
+  }
 }

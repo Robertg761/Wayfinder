@@ -82,7 +82,7 @@ describe("contract round-trips", () => {
       sha: map.sha,
       query: "What is this?",
       intent: "orientation",
-      mode: "free",
+      mode: "deterministic",
       summary: "A TypeScript project.",
       suggestions: ["How do I install and run this?"],
       generatedAt: "2026-07-20T12:00:00.000Z",
@@ -94,7 +94,7 @@ describe("contract round-trips", () => {
       sha: map.sha,
       query: "Where is auth?",
       intent: "file-find",
-      mode: "gpt-5.6",
+      mode: "model",
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
       summary: "See src/index.ts.",
@@ -121,7 +121,7 @@ describe("contract round-trips", () => {
   it("rejects an answer with an unknown intent or missing variant payload", () => {
     expect(agentAnswerSchema.safeParse({ repo: "a/b", sha: "abc", intent: "surprise" }).success).toBe(false);
     expect(agentAnswerSchema.safeParse({
-      repo: map.repo, sha: map.sha, query: "q", intent: "orientation", mode: "free",
+      repo: map.repo, sha: map.sha, query: "q", intent: "orientation", mode: "deterministic",
       summary: "s", suggestions: [], generatedAt: "now",
     }).success).toBe(false);
   });

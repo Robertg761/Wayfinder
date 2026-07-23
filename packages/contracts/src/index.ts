@@ -3,7 +3,13 @@ import { z } from "zod";
 // Bumped whenever a wire shape changes incompatibly. Served by the Worker as
 // the X-Wayfinder-Contract-Version response header and a /health field; the
 // extension sends its own version as X-Wayfinder-Extension-Version.
-export const CONTRACT_VERSION = 1;
+export const CONTRACT_VERSION = 2;
+
+// Deployment endpoints shared by the extension build, tests, and scripts.
+// (Plain .mjs scripts that cannot import TypeScript keep their own copy —
+// update them together with these.)
+export const WAYFINDER_PROD_API_URL = "https://wayfinder-api.hopit-robert.workers.dev";
+export const WAYFINDER_DEV_API_URL = "http://localhost:8787";
 
 // --- Extension-side navigation types (not wire shapes) ---------------------
 
@@ -204,7 +210,10 @@ export const agentModelUsageSchema = z.object({
 export const fileContextFocusSchema = z.enum(["summary", "dependencies", "callers", "tests", "impact"]);
 export const repositoryFileKindSchema = z.enum(["source", "test", "documentation", "configuration", "data", "other"]);
 export const agentIntentSchema = z.enum(["orientation", "installation", "file-find", "file-context", "contribution"]);
-export const agentModeSchema = z.enum(["free", "gpt-5.6"]);
+// "deterministic" answers use only the repository tools; "model" answers
+// add a GPT synthesis. The specific model id travels in the `model` field so
+// the wire contract does not bake in a model name.
+export const agentModeSchema = z.enum(["deterministic", "model"]);
 
 const agentAnswerBaseShape = {
   repo: z.string(),
