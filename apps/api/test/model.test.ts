@@ -7,7 +7,7 @@ const freeAnswer: AgentAnswer = {
   sha: "abc1234567890",
   query: "Where is authentication handled?",
   intent: "file-find",
-  mode: "free",
+  mode: "deterministic",
   summary: "The strongest coordinate is src/auth/session.ts.",
   suggestions: ["How do I install and run this?"],
   generatedAt: "2026-07-13T00:00:00.000Z",
@@ -34,7 +34,7 @@ const installationAnswer: AgentAnswer = {
   sha: "abc1234567890",
   query: "How do I develop this repository?",
   intent: "installation",
-  mode: "free",
+  mode: "deterministic",
   summary: "Follow the documented local setup.",
   suggestions: [],
   generatedAt: "2026-07-13T00:00:00.000Z",
@@ -85,7 +85,7 @@ describe("synthesizeAgentAnswer", () => {
     const answer = await synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher });
 
     expect(answer).toMatchObject({
-      mode: "gpt-5.6",
+      mode: "model",
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
       evidencePaths: ["src/auth/session.ts"],
@@ -160,7 +160,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "unsupported-evidence-path",
     });
   });
@@ -174,7 +174,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "unsupported-prose-path:src/invented.ts",
     });
   });
@@ -188,7 +188,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "gpt-5.6",
+      mode: "model",
       summary: "In example/trail, authentication is handled in src/auth/session.ts.",
     });
   });
@@ -202,7 +202,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "gpt-5.6",
+      mode: "model",
     });
   });
 
@@ -215,7 +215,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "unsupported-code-span",
     });
   });
@@ -229,7 +229,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "unsupported-command",
     });
   });
@@ -243,7 +243,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(installationAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "gpt-5.6",
+      mode: "model",
     });
   });
 
@@ -268,7 +268,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(possibleAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "unsupported-evidence-path",
     });
   });
@@ -276,7 +276,7 @@ describe("synthesizeAgentAnswer", () => {
   it("falls back to the free answer when OpenAI is unavailable", async () => {
     const fetcher = vi.fn(async () => new Response("unavailable", { status: 503 })) as unknown as typeof fetch;
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "model-http-503",
     });
   });
@@ -290,7 +290,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "exception-response-body-TypeError",
     });
   });
@@ -311,7 +311,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher, authorize })).resolves.toMatchObject({
-      mode: "gpt-5.6",
+      mode: "model",
     });
     expect(authorize).toHaveBeenCalledOnce();
     expect(authorize.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(fetcher).mock.invocationCallOrder[0]);
@@ -325,7 +325,7 @@ describe("synthesizeAgentAnswer", () => {
       fetcher,
       authorize: async () => false,
     })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "model-allowance-exhausted",
     });
     expect(fetcher).not.toHaveBeenCalled();
@@ -340,7 +340,7 @@ describe("synthesizeAgentAnswer", () => {
     })) as unknown as typeof fetch;
 
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "unsupported-command",
     });
   });
@@ -359,7 +359,7 @@ describe("synthesizeAgentAnswer", () => {
         brief: [],
       })) as unknown as typeof fetch;
       await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher })).resolves.toMatchObject({
-        mode: "free",
+        mode: "deterministic",
         modelFallbackReason: "unsupported-command",
       });
     }
@@ -373,7 +373,7 @@ describe("synthesizeAgentAnswer", () => {
       brief: [],
     })) as unknown as typeof fetch;
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher: flagged })).resolves.toMatchObject({
-      mode: "free",
+      mode: "deterministic",
       modelFallbackReason: "unsupported-command",
     });
 
@@ -384,7 +384,7 @@ describe("synthesizeAgentAnswer", () => {
       brief: [],
     })) as unknown as typeof fetch;
     await expect(synthesizeAgentAnswer(freeAnswer, { apiKey: "test-key", fetcher: safe })).resolves.toMatchObject({
-      mode: "gpt-5.6",
+      mode: "model",
     });
   });
 

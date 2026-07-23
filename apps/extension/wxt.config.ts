@@ -1,4 +1,5 @@
 import { defineConfig } from 'wxt';
+import { WAYFINDER_DEV_API_URL, WAYFINDER_PROD_API_URL } from '@wayfinder/contracts';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -10,8 +11,8 @@ export default defineConfig({
       'https://github.com/*',
       // The local Worker origin is a development convenience only; production
       // builds must not request access to anything on localhost.
-      ...(mode === 'development' ? ['http://localhost:8787/*'] : []),
-      'https://wayfinder-api.hopit-robert.workers.dev/*',
+      ...(mode === 'development' ? [`${WAYFINDER_DEV_API_URL}/*`] : []),
+      `${WAYFINDER_PROD_API_URL}/*`,
     ],
   }),
 });

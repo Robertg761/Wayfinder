@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FileFindResponse, RepoMap } from "@wayfinder/contracts";
-import { classifyAgentIntent, contributionConcepts, createAgentAnswer, importedSpecifiers, installationAudience, keepGoalLinkedVerification, keepLikelyCallers } from "../src/agent";
+import { classifyAgentIntent, contributionConcepts, createAgentAnswer, installationAudience, keepGoalLinkedVerification } from "../src/agent";
+import { importedSpecifiers, keepCredibleCallers } from "../src/file-context";
 
 describe("classifyAgentIntent", () => {
   it.each([
@@ -97,7 +98,7 @@ describe("generic contribution requests", () => {
   });
 });
 
-describe("keepLikelyCallers", () => {
+describe("keepCredibleCallers", () => {
   it("keeps production candidates and drops the current file and non-production surfaces", () => {
     const finder: FileFindResponse = {
       repo: "example/trail",
@@ -114,7 +115,7 @@ describe("keepLikelyCallers", () => {
       generatedAt: "2026-07-15T00:00:00.000Z",
     };
 
-    expect(keepLikelyCallers(finder, "src/pagination.ts").results.map((result) => result.path)).toEqual(["src/client.ts"]);
+    expect(keepCredibleCallers(finder, "src/pagination.ts").results.map((result) => result.path)).toEqual(["src/client.ts"]);
   });
 });
 

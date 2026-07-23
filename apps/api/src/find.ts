@@ -7,6 +7,7 @@ import type {
   RepoTreeEntry,
 } from "@wayfinder/contracts";
 import { fetchRepoFile, isBlockingGitHubError, type UpstreamFetchBudget } from "./github";
+import { extension, isTestPath, sourceExtensions } from "./path-classify";
 
 interface RankedCandidate {
   entry: RepoTreeEntry;
@@ -96,17 +97,8 @@ const inspectableExtensions = new Set([
   "md", "mjs", "php", "py", "rb", "rs", "sh", "swift", "toml", "ts", "tsx", "vue", "yaml", "yml",
 ]);
 
-const sourceExtensions = new Set([
-  "c", "cc", "cjs", "cpp", "cs", "go", "h", "hpp", "java", "js", "jsx", "kt", "mjs", "php", "py",
-  "rb", "rs", "sh", "swift", "ts", "tsx", "vue",
-]);
-
 const implementationQuestion = /\b(implementation|implemented|source|defined|definition|handled|handles)\b/i;
 const testVocabulary = new Set(["fixture", "fixtures", "spec", "specs", "test", "tests", "testing"]);
-
-function isTestPath(path: string): boolean {
-  return /(^|\/)(__tests__|test|tests|spec|specs|fixtures?)(\/|$)|\.(test|spec)\.|(^|\/)test_[^/]+\.[^.]+$|_test\.[^.]+$/i.test(path);
-}
 
 function isAuxiliaryPath(path: string): boolean {
   return /(^|\/)(examples?|demos?|evals?|bench(?:es)?|benchmarks?|fixtures?|templates?|playgrounds?)(\/|$)/i.test(path);
@@ -137,11 +129,6 @@ function expandedTerms(terms: string[]): string[] {
     group?.forEach((alias) => expanded.add(alias));
   }
   return [...expanded];
-}
-
-function extension(path: string): string {
-  const fileName = path.split("/").at(-1) ?? "";
-  return fileName.includes(".") ? fileName.split(".").at(-1)?.toLowerCase() ?? "" : "";
 }
 
 function currentDirectory(path: string | null): string | null {

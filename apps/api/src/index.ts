@@ -375,7 +375,10 @@ export default {
       try {
         const input = agentRequestSchema.parse(await readBoundedJson(request));
         const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
-        const allowedModel = classifyAgentIntent(input.query) === "contribution" && hasSpecificContributionGoal(input.query)
+        // The intent is classified exactly once here, and the same value
+        // gates the model allowance and drives the answer.
+        const intent = classifyAgentIntent(input.query, input.currentPath ?? null);
+        const allowedModel = intent === "contribution" && hasSpecificContributionGoal(input.query)
           ? modelOptions(request, env, ctx)
           : undefined;
         return json(await createAgentAnswer(
@@ -385,6 +388,7 @@ export default {
           token,
           allowedModel,
           new UpstreamFetchBudget(),
+          intent,
         ));
       } catch (error) {
         return requestFailure(error, "agent_answer_failed");

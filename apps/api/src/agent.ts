@@ -6,8 +6,6 @@ import { generateTour } from "./tour";
 import { synthesizeAgentAnswer, type ModelOptions } from "./model";
 import type { UpstreamFetchBudget } from "./github";
 
-export { importedSpecifiers, keepCredibleCallers as keepLikelyCallers } from "./file-context";
-
 const fileQuestion = /\b(where|which|locate|find|file|directory|folder|implementation|implemented|defined|definition|source)\b/i;
 const testLocationQuestion = /\bwhere\b.*\b(tests?|specs?|fixtures?)\b|\b(tests?|specs?|fixtures?)\b.*\b(where|located|live)\b/i;
 const installationQuestion = /\b(install|installation|setup|set up|prerequisite|dependencies|dependency|package manager|environment|env file|build|compile|start|serve|run locally|develop locally)\b/i;
@@ -168,8 +166,8 @@ export async function createAgentAnswer(
   token?: string,
   modelOptions?: ModelOptions,
   budget?: UpstreamFetchBudget,
+  intent: AgentIntent = classifyAgentIntent(query, currentPath),
 ): Promise<AgentAnswer> {
-  const intent = classifyAgentIntent(query, currentPath);
   const generatedAt = new Date().toISOString();
 
   if (intent === "contribution") {
@@ -180,7 +178,7 @@ export async function createAgentAnswer(
       sha: map.sha,
       query,
       intent,
-      mode: "free",
+      mode: "deterministic",
       summary: contributionSummary(trail),
       suggestions: specificGoal
         ? ["Explain the strongest implementation coordinate", "Where is the project configuration?"]
@@ -201,7 +199,7 @@ export async function createAgentAnswer(
       sha: map.sha,
       query,
       intent,
-      mode: "free",
+      mode: "deterministic",
       summary: tour.summary,
       suggestions: ["How do I install and run this?", "Where is the main entry point?"],
       generatedAt,
@@ -219,7 +217,7 @@ export async function createAgentAnswer(
       sha: map.sha,
       query,
       intent,
-      mode: "free",
+      mode: "deterministic",
       summary: installationSummary(guide.steps.length, guide.warnings.length, audience),
       suggestions: ["Where is the configuration?", "Where are the tests?"],
       generatedAt,
@@ -239,7 +237,7 @@ export async function createAgentAnswer(
     sha: map.sha,
     query,
     intent: "file-find",
-    mode: "free",
+    mode: "deterministic",
     summary: finderSummary(finder.results.length, finder.results[0]?.path),
     suggestions: ["What does this repository do?", "How do I install and run this?"],
     generatedAt,
