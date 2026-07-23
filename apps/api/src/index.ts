@@ -202,21 +202,24 @@ export function createBudgetedModelFetcher(
   limitMicroUsd: number,
   upstreamFetcher: typeof fetch = fetch,
   reservationIdFactory: () => string = () => crypto.randomUUID(),
+  waitUntil?: (promise: Promise<unknown>) => void,
 ): typeof fetch {
   return async (input, init) => {
     const requestBody = typeof init?.body === "string" ? init.body : "";
     const reservationId = reservationIdFactory();
     const amountMicroUsd = reserveCostMicroUsd(requestBody);
-    const settleReservation = async (actualMicroUsd: number) => {
-      try {
-        await budget.fetch("https://budget.internal/settle", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reservationId, actualMicroUsd }),
-        });
-      } catch {
-        // A failed settlement intentionally remains conservatively reserved.
-      }
+    const settleReservation = (actualMicroUsd: number) => {
+      const settlement = budget.fetch("https://budget.internal/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reservationId, actualMicroUsd }),
+      }).then(() => undefined, () => {
+        // A failed settlement expires into spend via the reservation TTL.
+      });
+      // Registering the settlement keeps it running even when the client
+      // disconnects and the request handler is torn down.
+      waitUntil?.(settlement);
+      return settlement;
     };
 
     let reservation: Response;
@@ -255,7 +258,7 @@ export function createBudgetedModelFetcher(
   };
 }
 
-function modelOptions(request: Request, env: Env): {
+function modelOptions(request: Request, env: Env, ctx?: ExecutionContext): {
   apiKey: string;
   reasoningEffort: ReasoningEffort;
   fetcher: typeof fetch;
@@ -274,7 +277,13 @@ function modelOptions(request: Request, env: Env): {
   try {
     const budgetId = env.MODEL_BUDGET.idFromName(MODEL_BUDGET_LEDGER_NAME);
     const budget = env.MODEL_BUDGET.get(budgetId);
-    const fetcher = createBudgetedModelFetcher(budget, budgetLimitMicroUsd(env.MODEL_BUDGET_USD));
+    const fetcher = createBudgetedModelFetcher(
+      budget,
+      budgetLimitMicroUsd(env.MODEL_BUDGET_USD),
+      fetch,
+      undefined,
+      ctx ? (promise) => ctx.waitUntil(promise) : undefined,
+    );
 
     // The per-client allowance is charged immediately before the model call,
     // so answers that end deterministically never consume it.
@@ -294,7 +303,7 @@ function modelOptions(request: Request, env: Env): {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
     const url = new URL(request.url);
@@ -396,7 +405,7 @@ export default {
         const input = agentRequestSchema.parse(await readBoundedJson(request));
         const token = await publicReadOnlyToken(env.GITHUB_TOKEN);
         const allowedModel = classifyAgentIntent(input.query) === "contribution" && hasSpecificContributionGoal(input.query)
-          ? modelOptions(request, env)
+          ? modelOptions(request, env, ctx)
           : undefined;
         return json(await createAgentAnswer(
           input.map as RepoMap,

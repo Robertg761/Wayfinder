@@ -219,7 +219,14 @@ function markdownSectionAudience(markdown: string, lineNumber: number | undefine
   if (!lineNumber) return "neutral";
   const lines = markdown.split(/\r?\n/).slice(0, Math.max(0, lineNumber - 1));
   let heading = "";
+  let inFence = false;
   for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    // A "# comment" inside a fenced shell block is not a Markdown heading.
+    if (inFence) continue;
     const match = line.match(/^#{1,6}\s+(.+)$/);
     if (match) heading = match[1].toLowerCase();
   }
@@ -409,15 +416,25 @@ export function generateInstallGuide(
     warnings.push("Published-package and placeholder commands were omitted because this guide prepares the repository for local contribution.");
   }
 
+  // Lockfiles are partitioned by ecosystem so a Python lock (uv.lock,
+  // poetry.lock) can never drive Node install or script commands.
+  const nodeManagers = new Set(["npm", "pnpm", "yarn", "bun"]);
+  const pythonManagers = new Set(["uv", "poetry"]);
   const lockManagers = map.setupFiles
     .filter((path) => !path.includes("/"))
     .map(managerFromLock)
     .filter((manager): manager is string => manager !== null);
+  const nodeLockManagers = lockManagers.filter((manager) => nodeManagers.has(manager));
+  const pythonLockManagers = lockManagers.filter((manager) => pythonManagers.has(manager));
   const declaredManager = packageJson?.packageManager?.split("@")[0] || null;
-  const packageManager = declaredManager ?? lockManagers[0] ?? (packagePath ? "npm" : null);
-  const managerSet = new Set([...(declaredManager ? [declaredManager] : []), ...lockManagers]);
-  if (managerSet.size > 1) {
-    warnings.push("Multiple root package-manager signals were found: " + [...managerSet].join(", ") + ". Follow the README when they conflict.");
+  const nodePackageManager = declaredManager ?? nodeLockManagers[0] ?? (packagePath ? "npm" : null);
+  const packageManager = nodePackageManager ?? pythonLockManagers[0] ?? null;
+  const nodeManagerSet = new Set([...(declaredManager ? [declaredManager] : []), ...nodeLockManagers]);
+  if (nodeManagerSet.size > 1) {
+    warnings.push("Multiple root package-manager signals were found: " + [...nodeManagerSet].join(", ") + ". Follow the README when they conflict.");
+  }
+  if (pythonLockManagers.length > 1) {
+    warnings.push("Multiple Python dependency locks were found: " + pythonLockManagers.join(", ") + ". Follow the README when they conflict.");
   }
 
   if (audience === "use") {
@@ -472,12 +489,12 @@ export function generateInstallGuide(
 
   const hasKind = (title: string) => steps.some((step) => commandKind(step.command) === title);
 
-  if (packagePath && packageManager) {
+  if (packagePath && nodePackageManager) {
     const normalizedInstalls = new Set([
-      packageManager + " install",
-      packageManager + " i",
-      ...(packageManager === "npm" ? ["npm ci"] : []),
-      ...(packageManager === "yarn" ? ["yarn"] : []),
+      nodePackageManager + " install",
+      nodePackageManager + " i",
+      ...(nodePackageManager === "npm" ? ["npm ci"] : []),
+      ...(nodePackageManager === "yarn" ? ["yarn"] : []),
     ]);
     const hasWorkspaceInstall = steps.some((step) => normalizedInstalls.has(step.command.toLowerCase().trim()));
     if (!hasWorkspaceInstall) {
@@ -485,7 +502,7 @@ export function generateInstallGuide(
         steps,
         seenCommands,
         "Install dependencies",
-        packageManager + " install",
+        nodePackageManager + " install",
         evidence(packagePath, lineFor(files[packagePath], '"packageManager"')),
         "inferred",
       );
@@ -504,7 +521,7 @@ export function generateInstallGuide(
         steps,
         seenCommands,
         title,
-        packageCommand(packageManager, script),
+        packageCommand(nodePackageManager, script),
         evidence(packagePath, lineFor(files[packagePath], '"' + script + '"')),
         "inferred",
       );
@@ -514,11 +531,12 @@ export function generateInstallGuide(
   const pyprojectPath = shallowestPath(paths, "pyproject.toml");
   if (pyprojectPath && !hasKind("Install dependencies")) {
     runtimes.add("Python");
+    const pythonManager = pythonLockManagers[0] ?? null;
     addUniqueStep(
       steps,
       seenCommands,
       "Install the project for development",
-      packageManager === "uv" ? "uv sync" : packageManager === "poetry" ? "poetry install" : "python -m pip install -e .",
+      pythonManager === "uv" ? "uv sync" : pythonManager === "poetry" ? "poetry install" : "python -m pip install -e .",
       evidence(pyprojectPath, [1, 1]),
       "inferred",
     );

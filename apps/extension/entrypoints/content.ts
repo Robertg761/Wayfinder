@@ -712,8 +712,8 @@ function visibleBranchRef(): string | null {
   return element?.textContent?.trim().split(/\s*\n\s*/)[0] || null;
 }
 
-function guideStops(): GuideStop[] {
-  const location = parseGitHubUrl(window.location.href, visibleBranchRef());
+function guideStops(knownRefs: Array<string | null | undefined> = []): GuideStop[] {
+  const location = parseGitHubUrl(window.location.href, visibleBranchRef(), knownRefs);
   if (!location) return [];
 
   const candidates: Array<Omit<GuideStop, 'target'> & { selectors: string[] }> = location.view === 'blob'
@@ -803,6 +803,15 @@ export default defineContentScript({
     let surface: 'welcome' | 'tour' | 'agent' | 'context' | 'complete' = 'welcome';
     let currentLocation: RepoLocation | null = null;
     let repository: RepositoryBundle | null = null;
+    // Refs Wayfinder has already resolved for this repository; they let the
+    // URL parser split slash-containing branch names correctly when the
+    // visible branch control has not rendered yet.
+    const knownRepositoryRefs = (): Array<string | null | undefined> => [
+      repository?.map.requestedRef,
+      repository?.map.resolvedRef,
+      repository?.map.defaultBranch,
+      repository?.map.sha,
+    ];
     let activeQuestion = '';
     let repositoryCachedAt: string | null = null;
     let answerCachedAt: string | null = null;
@@ -1633,7 +1642,7 @@ export default defineContentScript({
         landmarkRefreshTimer = 0;
         if (expectedGeneration !== navigationGeneration || expectedUrl !== window.location.href || !currentLocation) return;
         landmarkRefreshAttempts += 1;
-        const refreshedStops = guideStops();
+        const refreshedStops = guideStops(knownRepositoryRefs());
         if (refreshedStops.length > 0) {
           stops = refreshedStops;
           landmarkRefreshAttempts = 0;
@@ -1980,7 +1989,7 @@ export default defineContentScript({
     };
 
     const showWelcome = (focus?: string | null) => {
-      stops = guideStops();
+      stops = guideStops(knownRepositoryRefs());
       renderWelcome(focus);
       if (experienceMode === 'guided' && stops.length === 0) scheduleLandmarkRefresh();
     };
@@ -2009,7 +2018,7 @@ export default defineContentScript({
     };
 
     const startGuidedTour = async (forceRefresh = false) => {
-      stops = guideStops();
+      stops = guideStops(knownRepositoryRefs());
       if (stops.length === 0) {
         showWelcome();
         return;
@@ -2024,7 +2033,7 @@ export default defineContentScript({
       try {
         await ensureRepository(operation, forceRefresh);
         assertOperationCurrent(operation);
-        stops = guideStops();
+        stops = guideStops(knownRepositoryRefs());
         if (stops.length === 0) {
           renderWelcome();
           return;
@@ -2292,7 +2301,9 @@ export default defineContentScript({
     close.addEventListener('click', dismissHelper);
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.altKey && event.shiftKey && event.key.toLowerCase() === 'w') {
+      // event.code identifies the physical key: on macOS, Option+Shift+W
+      // produces a special character in event.key and would never match 'w'.
+      if (event.altKey && event.shiftKey && event.code === 'KeyW') {
         if (host.hidden || !currentLocation) return;
         event.preventDefault();
         helper.click();
@@ -2307,7 +2318,7 @@ export default defineContentScript({
     const publishLocation = (force = false) => {
       scheduled = false;
       const publishedUrl = window.location.href;
-      const nextLocation = parseGitHubUrl(publishedUrl, visibleBranchRef());
+      const nextLocation = parseGitHubUrl(publishedUrl, visibleBranchRef(), knownRepositoryRefs());
       const locationChanged = !sameLocation(currentLocation, nextLocation);
       if (!force && !locationChanged) {
         return;
@@ -2376,12 +2387,12 @@ export default defineContentScript({
         if (generation !== navigationGeneration || window.location.href !== publishedUrl) return;
         void loadPreferences().then(async () => {
           if (generation !== navigationGeneration || window.location.href !== publishedUrl) return;
-          const settledLocation = parseGitHubUrl(publishedUrl, visibleBranchRef());
+          const settledLocation = parseGitHubUrl(publishedUrl, visibleBranchRef(), knownRepositoryRefs());
           if (!sameLocation(currentLocation, settledLocation)) {
             schedulePublish(true);
             return;
           }
-          stops = guideStops();
+          stops = guideStops(knownRepositoryRefs());
           if (experienceMode === 'guided' && stops.length === 0) scheduleLandmarkRefresh();
           const normalizedRepo = nextRepo?.toLowerCase() ?? null;
           const seen = normalizedRepo ? seenRepos.includes(normalizedRepo) : false;

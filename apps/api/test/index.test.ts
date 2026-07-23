@@ -310,6 +310,42 @@ describe("request body and failure boundaries", () => {
     await expect(response.json()).resolves.toMatchObject({ code: "upstream-unavailable" });
   });
 
+  it("round-trips a freshly built map through downstream endpoint validation", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/repos/acme/widget")) {
+        return Response.json({
+          default_branch: "main",
+          description: "d".repeat(600),
+          homepage: null,
+          language: "TypeScript",
+          stargazers_count: 3,
+        });
+      }
+      if (url.includes("/commits/")) return Response.json({ sha: "a".repeat(40) });
+      if (url.includes("/git/trees/")) {
+        return Response.json({
+          sha: "a".repeat(40),
+          truncated: false,
+          tree: [
+            { path: "src/index.ts", type: "blob", size: 10 },
+            { path: "docs/" + "p".repeat(1_100) + ".md", type: "blob", size: 10 },
+          ],
+        });
+      }
+      if (url.includes("/readme")) return Response.json({ content: btoa("# Widget"), encoding: "base64" });
+      return Response.json({ message: "not found" }, { status: 404 });
+    }));
+
+    const mapResponse = await post("/map", { owner: "acme", repo: "widget" });
+    expect(mapResponse.status).toBe(200);
+    const map = await mapResponse.json();
+
+    vi.unstubAllGlobals();
+    const tourResponse = await post("/tour", { map });
+    expect(tourResponse.status).toBe(200);
+  });
+
   it("does not echo internal error detail for uncaught failures", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -369,6 +405,23 @@ describe("budgeted model fetcher", () => {
 
     expect(response.status).toBe(400);
     expect(requestBody(budget.fetch.mock.calls[1])).toEqual({ reservationId: "request-2", actualMicroUsd: 0 });
+  });
+
+  it("registers settlements with waitUntil so they survive client disconnects", async () => {
+    const budget = recordingBudget();
+    const registered: Promise<unknown>[] = [];
+    const upstream = vi.fn(async () => Response.json({
+      usage: { input_tokens: 100, output_tokens: 10 },
+    })) as unknown as typeof fetch;
+    const fetcher = createBudgetedModelFetcher(budget, 100_000_000, upstream, () => "request-w", (promise) => {
+      registered.push(promise);
+    });
+
+    await fetcher("https://api.openai.com/v1/responses", { method: "POST", body: "{}" });
+
+    expect(registered).toHaveLength(1);
+    await registered[0];
+    expect(budget.fetch).toHaveBeenCalledTimes(2);
   });
 
   it("charges the conservative reservation after an ambiguous upstream failure", async () => {

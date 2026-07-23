@@ -44,6 +44,39 @@ describe('parseGitHubUrl', () => {
     });
   });
 
+  it('falls back to known repository refs when the visible label is unavailable', () => {
+    expect(parseGitHubUrl(
+      'https://github.com/example/project/blob/feature/navigation/src/index.ts',
+      null,
+      ['main', 'feature/navigation'],
+    )).toMatchObject({
+      ref: 'feature/navigation',
+      path: 'src/index.ts',
+    });
+  });
+
+  it('prefers the longest known ref match for nested branch names', () => {
+    expect(parseGitHubUrl(
+      'https://github.com/example/project/tree/release/2026/07/docs',
+      undefined,
+      ['release/2026/07', 'release/2026'],
+    )).toMatchObject({
+      ref: 'release/2026/07',
+      path: 'docs',
+    });
+  });
+
+  it('still commits to the first segment when no ref evidence matches', () => {
+    expect(parseGitHubUrl(
+      'https://github.com/example/project/blob/main/src/index.ts',
+      null,
+      ['feature/navigation'],
+    )).toMatchObject({
+      ref: 'main',
+      path: 'src/index.ts',
+    });
+  });
+
   it('does not treat issue and pull request routes as repository paths', () => {
     expect(parseGitHubUrl('https://github.com/example/project/issues/42')).toMatchObject({
       view: 'other',

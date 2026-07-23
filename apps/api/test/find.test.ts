@@ -85,6 +85,28 @@ describe("rankFileCandidates", () => {
     expect(results[0].signals).toContain("current-directory");
   });
 
+  it("does not treat every root file as a current-directory neighbor", () => {
+    const results = rankFileCandidates(map, "find the handler", "src/features/payments/checkout.ts");
+    for (const result of results) {
+      if (!result.entry.path.includes("/")) {
+        expect(result.signals).not.toContain("current-directory");
+      }
+    }
+  });
+
+  it("requires segment-aligned directories for the neighborhood boost", () => {
+    const alignedMap = {
+      ...map,
+      tree: [
+        { path: "src/auth/session.ts", type: "blob" as const },
+        { path: "src/auth-tokens/mint.ts", type: "blob" as const },
+      ],
+    };
+    const results = rankFileCandidates(alignedMap, "session handling", "src/auth/session.ts");
+    const partialPrefix = results.find((result) => result.entry.path === "src/auth-tokens/mint.ts");
+    expect(partialPrefix?.signals).not.toContain("current-directory");
+  });
+
   it("expands framework routing vocabulary", () => {
     const results = rankFileCandidates(map, "where is routing implemented");
     expect(results.find((result) => result.entry.path === "src/framework/scaffold.ts")?.signals)

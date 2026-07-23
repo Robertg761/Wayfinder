@@ -10,10 +10,70 @@ const RESERVATION_SAFETY_MULTIPLIER = 1.25;
 // $0.030782 reservation. Treating both as spent keeps the lifetime cap conservative.
 const VERIFIED_PRE_V3_SPEND_MICRO_USD = 100_299;
 
+// A settlement should arrive well within one request lifetime (the model call
+// itself times out at 30s). Anything older is stranded — its request died
+// without settling — and is conservatively converted to spend.
+export const RESERVATION_TTL_MS = 2 * 60 * 1_000;
+
+export interface ModelBudgetReservation {
+  amountMicroUsd: number;
+  createdAt: string;
+}
+
 export interface ModelBudgetLedger {
   spentMicroUsd: number;
   reservedMicroUsd: number;
-  reservations: Record<string, number>;
+  reservations: Record<string, ModelBudgetReservation>;
+}
+
+// The v3 ledger stored reservations as bare amounts. Legacy entries get an
+// epoch timestamp so the next expiry pass sweeps them into spend — this is
+// the one-time migration for the known stranded reservation.
+export function normalizeLedger(raw: unknown): ModelBudgetLedger {
+  if (!raw || typeof raw !== "object") return emptyLedger();
+  const candidate = raw as {
+    spentMicroUsd?: unknown;
+    reservedMicroUsd?: unknown;
+    reservations?: Record<string, unknown>;
+  };
+  const reservations: Record<string, ModelBudgetReservation> = {};
+  for (const [id, value] of Object.entries(candidate.reservations ?? {})) {
+    if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+      reservations[id] = { amountMicroUsd: value, createdAt: new Date(0).toISOString() };
+    } else if (
+      value && typeof value === "object" &&
+      Number.isSafeInteger((value as ModelBudgetReservation).amountMicroUsd) &&
+      typeof (value as ModelBudgetReservation).createdAt === "string"
+    ) {
+      reservations[id] = value as ModelBudgetReservation;
+    }
+  }
+  return {
+    spentMicroUsd: typeof candidate.spentMicroUsd === "number" ? candidate.spentMicroUsd : VERIFIED_PRE_V3_SPEND_MICRO_USD,
+    reservedMicroUsd: typeof candidate.reservedMicroUsd === "number" ? candidate.reservedMicroUsd : 0,
+    reservations,
+  };
+}
+
+// Stranded reservations (no settlement within the TTL) are charged as spend:
+// the model call may have succeeded, so releasing them could under-count the
+// lifetime cap. This mirrors how the ambiguous-disconnect path settles.
+export function expireStaleReservations(ledger: ModelBudgetLedger, nowMs: number): ModelBudgetLedger {
+  const stale = Object.entries(ledger.reservations)
+    .filter(([, reservation]) => nowMs - Date.parse(reservation.createdAt) > RESERVATION_TTL_MS);
+  if (stale.length === 0) return ledger;
+
+  const reservations = { ...ledger.reservations };
+  let expiredMicroUsd = 0;
+  for (const [id, reservation] of stale) {
+    expiredMicroUsd += reservation.amountMicroUsd;
+    delete reservations[id];
+  }
+  return {
+    spentMicroUsd: ledger.spentMicroUsd + expiredMicroUsd,
+    reservedMicroUsd: Math.max(0, ledger.reservedMicroUsd - expiredMicroUsd),
+    reservations,
+  };
 }
 
 interface UsageBody {
@@ -69,6 +129,7 @@ export function reserveBudget(
   reservationId: string,
   amountMicroUsd: number,
   limitMicroUsd: number,
+  nowMs: number = Date.now(),
 ): { success: boolean; ledger: ModelBudgetLedger } {
   if (!reservationId || !Number.isSafeInteger(amountMicroUsd) || amountMicroUsd <= 0) {
     return { success: false, ledger };
@@ -83,7 +144,10 @@ export function reserveBudget(
     ledger: {
       ...ledger,
       reservedMicroUsd: ledger.reservedMicroUsd + amountMicroUsd,
-      reservations: { ...ledger.reservations, [reservationId]: amountMicroUsd },
+      reservations: {
+        ...ledger.reservations,
+        [reservationId]: { amountMicroUsd, createdAt: new Date(nowMs).toISOString() },
+      },
     },
   };
 }
@@ -99,7 +163,7 @@ export function settleBudget(
   delete reservations[reservationId];
   return {
     spentMicroUsd: ledger.spentMicroUsd + actualMicroUsd,
-    reservedMicroUsd: Math.max(0, ledger.reservedMicroUsd - reserved),
+    reservedMicroUsd: Math.max(0, ledger.reservedMicroUsd - reserved.amountMicroUsd),
     reservations,
   };
 }
@@ -111,11 +175,15 @@ export class ModelBudget {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/status") {
       const limitMicroUsd = budgetLimitMicroUsd(url.searchParams.get("limitUsd") ?? undefined);
-      const ledger = await this.state.storage.get<ModelBudgetLedger>("ledger") ?? emptyLedger();
-      return Response.json({
-        ...ledger,
-        limitMicroUsd,
-        remainingMicroUsd: Math.max(0, limitMicroUsd - ledger.spentMicroUsd - ledger.reservedMicroUsd),
+      return this.state.storage.transaction(async (transaction) => {
+        const stored = normalizeLedger(await transaction.get("ledger"));
+        const ledger = expireStaleReservations(stored, Date.now());
+        if (ledger !== stored) await transaction.put("ledger", ledger);
+        return Response.json({
+          ...ledger,
+          limitMicroUsd,
+          remainingMicroUsd: Math.max(0, limitMicroUsd - ledger.spentMicroUsd - ledger.reservedMicroUsd),
+        });
       });
     }
 
@@ -127,9 +195,11 @@ export class ModelBudget {
       const amountMicroUsd = typeof input.amountMicroUsd === "number" ? input.amountMicroUsd : 0;
       const limitMicroUsd = typeof input.limitMicroUsd === "number" ? input.limitMicroUsd : 0;
       return this.state.storage.transaction(async (transaction) => {
-        const ledger = await transaction.get<ModelBudgetLedger>("ledger") ?? emptyLedger();
-        const result = reserveBudget(ledger, reservationId, amountMicroUsd, limitMicroUsd);
-        if (result.success) await transaction.put("ledger", result.ledger);
+        const nowMs = Date.now();
+        const stored = normalizeLedger(await transaction.get("ledger"));
+        const ledger = expireStaleReservations(stored, nowMs);
+        const result = reserveBudget(ledger, reservationId, amountMicroUsd, limitMicroUsd, nowMs);
+        if (result.success || ledger !== stored) await transaction.put("ledger", result.ledger);
         return Response.json({ success: result.success });
       });
     }
@@ -137,7 +207,7 @@ export class ModelBudget {
     if (url.pathname === "/settle") {
       const actualMicroUsd = typeof input.actualMicroUsd === "number" ? input.actualMicroUsd : -1;
       return this.state.storage.transaction(async (transaction) => {
-        const ledger = await transaction.get<ModelBudgetLedger>("ledger") ?? emptyLedger();
+        const ledger = normalizeLedger(await transaction.get("ledger"));
         const settled = settleBudget(ledger, reservationId, actualMicroUsd);
         if (settled !== ledger) await transaction.put("ledger", settled);
         return Response.json({ success: settled !== ledger });

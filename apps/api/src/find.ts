@@ -219,9 +219,21 @@ export function rankFileCandidates(map: RepoMap, query: string, currentPath: str
         score -= 45;
       }
 
-      if (currentDir && (path.startsWith(currentDir.toLowerCase() + "/") || currentDir.toLowerCase().startsWith(path.split("/").slice(0, -1).join("/")))) {
-        score += 13;
-        addSignal(signals, "current-directory");
+      if (currentDir) {
+        // Segment-aligned neighborhood check: the candidate lives inside the
+        // current directory's subtree, or its own directory is a real
+        // ancestor of the current directory. Root-level files share no
+        // directory signal (an empty prefix matches everything), and partial
+        // segment matches like src/auth vs src/auth-tokens do not count.
+        const lowerCurrentDir = currentDir.toLowerCase();
+        const candidateDir = path.split("/").slice(0, -1).join("/");
+        const insideCurrentDirectory = path.startsWith(lowerCurrentDir + "/");
+        const inAncestorDirectory = candidateDir.length > 0 &&
+          (lowerCurrentDir === candidateDir || lowerCurrentDir.startsWith(candidateDir + "/"));
+        if (insideCurrentDirectory || inAncestorDirectory) {
+          score += 13;
+          addSignal(signals, "current-directory");
+        }
       }
 
       if (preferredExtensions.has(extension(path))) {

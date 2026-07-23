@@ -1,4 +1,5 @@
 import type { RepoMap, RepoTreeEntry, WayfinderErrorCode } from "@wayfinder/contracts";
+import { z } from "zod";
 
 export class GitHubApiError extends Error {
   constructor(
@@ -117,6 +118,18 @@ export function describeGitHubFailure(
       message: "This repository was not found or is private. Free mode currently reads public repositories only.",
     };
   }
+  if (status === 409) {
+    return {
+      code: "repository-unavailable",
+      message: "This repository is empty, so there is no commit to map yet.",
+    };
+  }
+  if (status === 422) {
+    return {
+      code: "repository-unavailable",
+      message: "The requested branch, tag, or commit was not found in this repository.",
+    };
+  }
   if (status === 401) {
     return {
       code: "github-auth-failed",
@@ -145,37 +158,53 @@ export function isBlockingGitHubError(error: unknown): boolean {
   return error instanceof GitHubApiError && error.status !== 404;
 }
 
-interface GitHubRepoResponse {
-  default_branch: string;
-  description: string | null;
-  homepage: string | null;
-  language: string | null;
-  stargazers_count: number;
-}
+// GitHub's response shapes are validated instead of trusted: a malformed or
+// truncated upstream body becomes a typed upstream-unavailable failure rather
+// than an uncaught exception surfacing as a raw 500.
+const repoResponseSchema = z.object({
+  default_branch: z.string().min(1),
+  description: z.string().nullable().catch(null),
+  homepage: z.string().nullable().catch(null),
+  language: z.string().nullable().catch(null),
+  stargazers_count: z.number().int().nonnegative().catch(0),
+});
 
-interface GitHubTreeResponse {
-  sha: string;
-  truncated: boolean;
-  tree: Array<{
-    path: string;
-    type: "blob" | "tree" | "commit";
-    size?: number;
-  }>;
-}
+const treeResponseSchema = z.object({
+  sha: z.string().min(1),
+  truncated: z.boolean().catch(false),
+  tree: z.array(z.object({
+    path: z.string(),
+    type: z.string(),
+    size: z.number().int().nonnegative().optional().catch(undefined),
+  })).catch([]),
+});
 
-interface GitHubCommitResponse {
-  sha: string;
-}
+const commitResponseSchema = z.object({
+  sha: z.string().regex(/^[a-f0-9]{7,64}$/i),
+});
 
-interface GitHubReadmeResponse {
-  content: string;
-  encoding: string;
-}
+const fileContentResponseSchema = z.object({
+  content: z.string(),
+  encoding: z.string(),
+  size: z.number().int().nonnegative().catch(0),
+});
 
-interface GitHubContentResponse {
-  content: string;
-  encoding: string;
-  size: number;
+const readmeResponseSchema = z.object({
+  content: z.string(),
+  encoding: z.string(),
+});
+
+type GitHubRepoResponse = z.infer<typeof repoResponseSchema>;
+type GitHubTreeResponse = z.infer<typeof treeResponseSchema>;
+
+function parseUpstream<Schema extends z.ZodTypeAny>(schema: Schema, body: unknown, resource: string): z.infer<Schema> {
+  const result = schema.safeParse(body);
+  if (result.success) return result.data;
+  throw new GitHubApiError(
+    "upstream-unavailable",
+    "GitHub returned an unexpected " + resource + " response. Try the survey again shortly.",
+    502,
+  );
 }
 
 const ignoredSegments = new Set([
@@ -374,12 +403,16 @@ export async function githubFetch<T>(
         ? { cache: "no-store" as const }
         : {
             cf: {
+              // cacheTtlByStatus is honored on the Enterprise plan and
+              // ignored elsewhere, where requests simply pass through
+              // uncached. Negative TTLs mark error responses as uncacheable
+              // so a transient GitHub failure is never served from the edge.
               cacheEverything: true,
               cacheTtlByStatus: {
                 "200-299": githubCacheTtl(path),
                 "300-399": 0,
-                "400-499": 0,
-                "500-599": 0,
+                "400-499": -1,
+                "500-599": -1,
               },
             },
           }),
@@ -422,15 +455,25 @@ export async function fetchRepoFile(
 
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   const prefix = "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(name);
-  const response = await githubFetch<GitHubContentResponse>(
+  const response = parseUpstream(fileContentResponseSchema, await githubFetch(
     prefix + "/contents/" + encodedPath + "?ref=" + encodeURIComponent(ref),
     token,
     { budget },
-  );
+  ), "file-content");
 
   if (response.encoding !== "base64") throw new Error("GitHub returned an unsupported file encoding.");
   if (response.size > 1_000_000) throw new Error("Setup file is too large to inspect safely.");
   return decodeBase64(response.content).slice(0, 80_000);
+}
+
+// Mirrors the public API's repositoryPathSchema so /map output always
+// satisfies what downstream endpoints will accept back.
+export function isNormalizedRepositoryPath(path: string): boolean {
+  return path.length >= 1 &&
+    path.length <= 1_000 &&
+    !path.startsWith("/") &&
+    !/[\u0000-\u001f\u007f]/.test(path) &&
+    path.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
 }
 
 export async function createRepoMap(
@@ -441,34 +484,50 @@ export async function createRepoMap(
   budget?: UpstreamFetchBudget,
 ): Promise<RepoMap> {
   const prefix = "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo);
-  const metadata = await githubFetch<GitHubRepoResponse>(prefix, token, { budget });
+  const metadata = parseUpstream(repoResponseSchema, await githubFetch(prefix, token, { budget }), "repository");
   const resolvedRef = requestedRef?.trim() || metadata.default_branch;
-  const commit = await githubFetch<GitHubCommitResponse>(prefix + "/commits/" + encodeURIComponent(resolvedRef), token, { budget });
+  const commit = parseUpstream(
+    commitResponseSchema,
+    await githubFetch(prefix + "/commits/" + encodeURIComponent(resolvedRef), token, { budget }),
+    "commit",
+  );
   const pinnedRef = commit.sha;
 
   const [tree, readme] = await Promise.all([
-    githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef) + "?recursive=1", token, { budget }),
-    githubFetch<GitHubReadmeResponse>(prefix + "/readme?ref=" + encodeURIComponent(pinnedRef), token, { budget }).catch((error) => {
-      if (error instanceof GitHubApiError && error.code === "repository-unavailable") return null;
-      throw error;
-    }),
+    githubFetch(prefix + "/git/trees/" + encodeURIComponent(pinnedRef) + "?recursive=1", token, { budget })
+      .then((body) => parseUpstream(treeResponseSchema, body, "tree")),
+    githubFetch(prefix + "/readme?ref=" + encodeURIComponent(pinnedRef), token, { budget })
+      .then((body) => parseUpstream(readmeResponseSchema, body, "readme"))
+      .catch((error) => {
+        if (error instanceof GitHubApiError && error.code === "repository-unavailable") return null;
+        throw error;
+      }),
   ]);
 
   const rootTree = tree.truncated || tree.tree.length > 4_000
-    ? await githubFetch<GitHubTreeResponse>(prefix + "/git/trees/" + encodeURIComponent(pinnedRef), token, { budget })
+    ? parseUpstream(
+        treeResponseSchema,
+        await githubFetch(prefix + "/git/trees/" + encodeURIComponent(pinnedRef), token, { budget }),
+        "tree",
+      )
     : null;
-  const filteredTree = compactTree(dedupeTree(filterTree([...(rootTree?.tree ?? []), ...tree.tree])));
-  const setupFiles = collectSetupFiles([...(rootTree?.tree ?? []), ...tree.tree]);
+  // Paths that would fail the public API's own request validation (control
+  // characters, dot segments, over-long) never enter the map, so /map output
+  // always round-trips through /tour, /find, and /agent.
+  const conformingEntries = [...(rootTree?.tree ?? []), ...tree.tree]
+    .filter((entry) => isNormalizedRepositoryPath(entry.path));
+  const filteredTree = compactTree(dedupeTree(filterTree(conformingEntries)));
+  const setupFiles = collectSetupFiles(conformingEntries);
 
   return {
     repo: owner + "/" + repo,
     sha: commit.sha,
     requestedRef: requestedRef?.trim() || null,
     resolvedRef,
-    defaultBranch: metadata.default_branch,
-    description: metadata.description,
-    homepage: metadata.homepage,
-    language: metadata.language,
+    defaultBranch: metadata.default_branch.slice(0, 255),
+    description: metadata.description?.slice(0, 500) ?? null,
+    homepage: metadata.homepage?.slice(0, 2_048) ?? null,
+    language: metadata.language?.slice(0, 100) ?? null,
     stars: metadata.stargazers_count,
     readme: readme?.encoding === "base64" ? decodeBase64(readme.content).slice(0, 16_000) : null,
     tree: filteredTree,
