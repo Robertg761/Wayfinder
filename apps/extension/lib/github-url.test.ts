@@ -88,4 +88,14 @@ describe('parseGitHubUrl', () => {
     expect(parseGitHubUrl('https://github.com/settings/profile')).toBeNull();
     expect(parseGitHubUrl('https://example.com/openai/openai-node')).toBeNull();
   });
+
+  it('rejects platform routes that look like owner/repo pairs', () => {
+    expect(parseGitHubUrl('https://github.com/trending/typescript')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/apps/dependabot')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/stars/someone/lists')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/codespaces/new')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/dashboard/index')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/readme/topics')).toBeNull();
+    expect(parseGitHubUrl('https://github.com/account/settings')).toBeNull();
+  });
 });

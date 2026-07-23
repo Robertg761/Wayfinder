@@ -3,9 +3,12 @@ import {
   agentCacheTtl,
   agentResponseCacheKey,
   getCached,
+  reconcileCacheIndex,
   repositoryCacheKey,
   repositoryCacheTtl,
   setCached,
+  trailCacheKey,
+  trailCacheTtl,
   type CacheStorage,
 } from '@/lib/cache';
 import { copyText } from '@/lib/copy-text';
@@ -57,10 +60,6 @@ interface PendingGuide {
   createdAt: string;
 }
 
-function trailKey(repo: string): string {
-  return `wayfinder:trail:${repo.toLowerCase()}`;
-}
-
 class WayfinderRequestError extends Error {
   constructor(
     message: string,
@@ -80,7 +79,8 @@ function requestErrorLabels(error: WayfinderRequestError): [string, string] {
     'upstream-unavailable': ['Connection interrupted', 'Check your connection. A cached answer will be used automatically when one is available.'],
     'request-failed': ['Survey interrupted', 'Try the request again or ask a narrower question.'],
   };
-  return labels[error.code];
+  // A newer Worker may introduce codes this build does not know about.
+  return labels[error.code] ?? labels['request-failed'];
 }
 
 const apiUrl = import.meta.env.WXT_WAYFINDER_API_URL
@@ -782,7 +782,7 @@ function guideStops(knownRefs: Array<string | null | undefined> = []): GuideStop
 export default defineContentScript({
   matches: ['https://github.com/*'],
   runAt: 'document_idle',
-  main() {
+  main(ctx) {
     let scheduled = false;
     let forceScheduled = false;
     let publishTimer = 0;
@@ -894,21 +894,22 @@ export default defineContentScript({
       if (persist) void savePreferences({ seenRepos });
     };
 
+    // Trails live in the shared LRU cache index, so saving a trail evicts the
+    // oldest entries instead of accumulating one orphaned key per repository.
     const saveTrail = async () => {
       if (!activeAnswer) return;
-      await storage.set({
-        [trailKey(activeAnswer.repo)]: {
-          question: activeQuestion,
-          answer: activeAnswer,
-          savedAt: new Date().toISOString(),
-        } satisfies SavedTrail,
-      }).catch(() => undefined);
+      const trail: SavedTrail = {
+        question: activeQuestion,
+        answer: activeAnswer,
+        savedAt: new Date().toISOString(),
+      };
+      await setCached(storage, trailCacheKey(activeAnswer.repo), activeAnswer.repo.toLowerCase(), 'trail', trail, trailCacheTtl)
+        .catch(() => undefined);
     };
 
     const loadTrail = async (repo: string): Promise<SavedTrail | null> => {
-      const key = trailKey(repo);
-      const values: Record<string, unknown> = await storage.get(key).catch(() => ({}));
-      const stored = values[key] as SavedTrail | undefined;
+      const cached = await getCached<SavedTrail>(storage, trailCacheKey(repo)).catch(() => null);
+      const stored = cached?.value;
       if (!stored?.answer || stored.answer.repo.toLowerCase() !== repo.toLowerCase()) return null;
       return stored;
     };
@@ -1814,7 +1815,14 @@ export default defineContentScript({
       installPlatform = platform;
       installArchitecture = architecture ?? detectArchitectureFamily(navigator.userAgent, navigator.platform);
       const assets = releaseAssetLinks(`${currentLocation.owner}/${currentLocation.repo}`);
-      const recommendation = preferredReleaseAsset(assets, platform, navigator.userAgent, installArchitecture);
+      let recommendation = preferredReleaseAsset(assets, platform, navigator.userAgent, installArchitecture);
+      // An explicit Apple-silicon pick with no arm64 or universal build is
+      // not a dead end: the Intel installer runs through Rosetta 2.
+      let rosettaFallback = false;
+      if (!recommendation && platform === 'macos' && installArchitecture === 'arm64') {
+        recommendation = preferredReleaseAsset(assets, platform, navigator.userAgent, 'x64');
+        rosettaFallback = Boolean(recommendation);
+      }
       const target = recommendation
         ? assets.find((asset) => asset.href === recommendation.href)?.anchor ?? null
         : null;
@@ -1832,7 +1840,9 @@ export default defineContentScript({
         label: 'Installation',
         progressLabel: 'Step 2 of 2',
         title: recommendation.name,
-        explanation: `Download this highlighted file for ${platformName(platform)}. It is a packaged app, not the source-code archive.`,
+        explanation: rosettaFallback
+          ? 'The latest release has no Apple-silicon build, so this is the Intel (x64) installer. Modern Macs run it automatically through Rosetta 2.'
+          : `Download this highlighted file for ${platformName(platform)}. It is a packaged app, not the source-code archive.`,
         target,
         primaryAction: { action: 'download-release', label: 'Download this file' },
         secondaryAction: { action: 'choose-platform', label: 'Different OS' },
@@ -2053,6 +2063,9 @@ export default defineContentScript({
     copy.addEventListener('click', (event) => {
       const link = (event.target as Element).closest<HTMLAnchorElement>('a[data-guide-kind="file"]');
       if (link && currentLocation) {
+        // Modified clicks (new tab, new window, download) keep the browser's
+        // native behavior; only a plain left click becomes a guided step.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         const guide: PendingGuide = {
           repo: `${currentLocation.owner}/${currentLocation.repo}`,
@@ -2268,8 +2281,12 @@ export default defineContentScript({
         return;
       }
       if (!preferencesLoaded) {
-        bubbleOpen = true;
-        bubble.classList.add('open');
+        // A real loading view keeps the bubble positioned and announced while
+        // preferences load, instead of an empty panel toggled open.
+        commitBubbleView(
+          '<div class="wf-answer" aria-busy="true"><div class="wf-kicker"><span>Wayfinder</span></div><p class="wf-tip">Preparing your guide…</p></div>',
+          { focus: null, announce: 'Preparing Wayfinder.' },
+        );
         void loadPreferences().then(() => {
           if (!bubbleOpen || host.hidden) return;
           welcomeShown = true;
@@ -2310,6 +2327,11 @@ export default defineContentScript({
         return;
       }
       if (event.key !== 'Escape' || (!bubbleOpen && !tourMoving && activeStep < 0)) return;
+      // Escape belongs to whichever surface owns focus. When the user is in
+      // GitHub's own UI (a dialog, the command palette, a file filter), the
+      // page keeps its Escape behavior; Wayfinder only claims the key while
+      // focus is inside its shadow root.
+      if (shadow.activeElement === null && document.activeElement !== host) return;
       event.preventDefault();
       dismissHelper();
     };
@@ -2462,7 +2484,15 @@ export default defineContentScript({
 
     mountHelper();
 
-    return () => {
+    // Reconcile the cache index once the page has settled: orphaned
+    // wayfinder:* keys (crashed writes, legacy trails, retired hash formats)
+    // are removed so extension storage stays bounded.
+    const reconcileTimer = window.setTimeout(() => {
+      void reconcileCacheIndex(storage).catch(() => undefined);
+    }, 4_000);
+
+    const teardown = () => {
+      window.clearTimeout(reconcileTimer);
       window.clearTimeout(movementTimer);
       window.clearTimeout(arrivalTimer);
       window.clearTimeout(dockSettleTimer);
@@ -2474,7 +2504,6 @@ export default defineContentScript({
       announcementGeneration += 1;
       openStateObserver.disconnect();
       window.cancelAnimationFrame(viewportFrame);
-      document.removeEventListener('DOMContentLoaded', mountHelper);
       window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('turbo:load', handleTurboLoad);
       document.removeEventListener('keydown', closeOnEscape, true);
@@ -2482,5 +2511,9 @@ export default defineContentScript({
       window.removeEventListener('scroll', syncViewport, { capture: true });
       host.remove();
     };
+    // WXT never invokes a content script's returned value; the context's
+    // invalidation callback is the only teardown hook that actually fires
+    // (when the extension is updated, reloaded, or disabled).
+    ctx.onInvalidated(teardown);
   },
 });

@@ -16,16 +16,22 @@ export default defineContentScript({
   runAt: 'document_start',
   world: 'MAIN',
   main() {
+    const guardedHosts = new WeakSet<HTMLElement>();
     const markEditorHost = (event: KeyboardEvent) => {
       const host = event.target;
-      if (!(host instanceof HTMLElement) || host.id !== helperHostId || !editorIsFocused(host)) return;
+      if (!(host instanceof HTMLElement) || host.id !== helperHostId || guardedHosts.has(host)) return;
 
       // Open-shadow keyboard events are retargeted to the host by the time
       // GitHub's document listener sees them. @github/hotkey calls
-      // target.isContentEditable to decide whether to ignore a keystroke. An
-      // own JS property gives that guard the correct answer without making the
-      // host an actual editing surface or changing textarea input behavior.
-      Object.defineProperty(host, 'isContentEditable', { configurable: true, value: true });
+      // target.isContentEditable to decide whether to ignore a keystroke. A
+      // getter recomputes the answer from the live focus state on every
+      // keystroke — a latched `true` would permanently disable GitHub's
+      // hotkeys after the first time the helper's editor took focus.
+      guardedHosts.add(host);
+      Object.defineProperty(host, 'isContentEditable', {
+        configurable: true,
+        get: () => editorIsFocused(host),
+      });
     };
 
     let readyObserver: MutationObserver | null = null;

@@ -13,7 +13,7 @@ export interface CachedValue<T> {
 interface CacheEnvelope<T> extends CachedValue<T> {
   version: 1;
   repo: string;
-  kind: "repository" | "agent";
+  kind: "repository" | "agent" | "trail";
 }
 
 interface CacheIndexEntry {
@@ -30,18 +30,25 @@ const agentAnswerCacheVersion = "v3";
 
 export const repositoryCacheTtl = 15 * 60 * 1_000;
 export const agentCacheTtl = 30 * 60 * 1_000;
+export const trailCacheTtl = 30 * 24 * 60 * 60 * 1_000;
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// Two independent 32-bit hashes (FNV-1a and djb2) combined into one key.
+// A single 32-bit hash makes cross-question cache collisions plausible for a
+// heavy user; the combined 64 bits make them negligible.
 function hashText(value: string): string {
-  let hash = 2_166_136_261;
+  let fnv = 2_166_136_261;
+  let djb = 5_381;
   for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16_777_619);
+    const code = value.charCodeAt(index);
+    fnv ^= code;
+    fnv = Math.imul(fnv, 16_777_619);
+    djb = (Math.imul(djb, 33) ^ code) | 0;
   }
-  return (hash >>> 0).toString(36);
+  return (fnv >>> 0).toString(36) + "-" + (djb >>> 0).toString(36);
 }
 
 export function repositoryCacheKey(owner: string, repo: string, ref?: string | null): string {
@@ -51,6 +58,10 @@ export function repositoryCacheKey(owner: string, repo: string, ref?: string | n
 export function agentResponseCacheKey(repo: string, sha: string, query: string, currentPath: string | null): string {
   const identity = [agentAnswerCacheVersion, normalize(repo), sha, normalize(query), normalize(currentPath ?? "root")].join("|");
   return "wayfinder:agent:" + agentAnswerCacheVersion + ":" + normalize(repo) + ":" + hashText(identity);
+}
+
+export function trailCacheKey(repo: string): string {
+  return "wayfinder:trail:v2:" + normalize(repo);
 }
 
 function isEnvelope(value: unknown): value is CacheEnvelope<unknown> {
@@ -87,7 +98,7 @@ export async function setCached<T>(
   storage: CacheStorage | null,
   key: string,
   repo: string,
-  kind: "repository" | "agent",
+  kind: "repository" | "agent" | "trail",
   value: T,
   ttl: number,
   now = Date.now(),
@@ -106,6 +117,26 @@ export async function setCached<T>(
 
   await storage.set({ [key]: envelope, [indexKey]: nextIndex });
   if (dropped.length > 0) await storage.remove(dropped);
+}
+
+// Keys these prefixes own are managed exclusively through the LRU index;
+// anything on disk outside the index is an orphan (a write raced a crash, an
+// old extension version, or a legacy un-indexed trail) and gets swept.
+const managedPrefixes = ["wayfinder:repository:", "wayfinder:agent:", "wayfinder:trail:"];
+
+export async function reconcileCacheIndex(storage: CacheStorage | null, now = Date.now()): Promise<void> {
+  if (!storage) return;
+  const everything = await storage.get(null);
+  const storedIndex = cacheIndex(everything[indexKey]);
+  const liveIndex = storedIndex.filter((entry) => Date.parse(entry.expiresAt) > now);
+  const liveKeys = new Set(liveIndex.map((entry) => entry.key));
+  const orphaned = Object.keys(everything).filter((key) =>
+    managedPrefixes.some((prefix) => key.startsWith(prefix)) && !liveKeys.has(key),
+  );
+
+  if (orphaned.length === 0 && liveIndex.length === storedIndex.length) return;
+  await storage.set({ [indexKey]: liveIndex });
+  if (orphaned.length > 0) await storage.remove(orphaned);
 }
 
 export async function clearRepositoryCache(storage: CacheStorage | null, repo: string): Promise<void> {
